@@ -151,18 +151,38 @@ class Artifact:
         return copy.deepcopy(self)
     
     @staticmethod
-    def generate(lvl=0, slot=None):
+    def generate(lvl=0, slot=None, source='domain'):
         """Randomly generate a single artifact.
 
         Args:
             lvl (int, optional): Generated artifact's level. Defaults to 0.
             slot (_type_, optional): Generated artifact's slot. If None,
             randomly assign a slot. Defaults to None.
+            source (str, optional): The source of the artifact, which
+            affects the probability of getting 4 substats at level 0.
+            Defaults to 'domain'.
+
+        Raises:
+            ValueError: If source is invalid.
 
         Returns:
             Artifact: Randomly generated artifact
         """
-        num_substats = 4 if random.random() < 0.2 else 3
+        match source:
+            case 'domain':
+                prob = 0.2
+            case 'normal boss':
+                prob = 1/3
+            case 'weekly boss':
+                prob = 1/3
+            case 'strongbox':
+                prob = 1/3
+            case 'domain reliquary':
+                prob = 1/3
+            case _:
+                raise ValueError('Invalid artifact source.')
+            
+        num_substats = 4 if random.random() < prob else 3
         
         if slot is None:
             slot = random.choice(['flower', 'plume', 'sands', 'goblet', 'circlet'])

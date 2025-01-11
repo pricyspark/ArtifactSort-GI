@@ -260,7 +260,8 @@ class Artifact:
         base_prob = (1 / 4) ** num_upgrades
 
         # Generate permutations and calculate probabilities
-        possibilities = {}
+        # TODO: verify all the copies are necessary
+        possibilities = {self.copy(): 0}
         total_prob = 0
         for counts in generate_permutations(num_upgrades, 4):
             prob = calculate_probability(counts, base_prob)
@@ -380,7 +381,7 @@ class Artifact:
     # TODO: maybe fix this code duplication, but it would make it 2x
     # slower without caching
     @staticmethod
-    def distro_std_dev(distro: dict, targets: dict):
+    def score_std_dev(distro: dict, targets: dict):
         """Calculate the standard deviation of scores of an artifact
         distribution.
 
@@ -411,6 +412,25 @@ class Artifact:
         variance = second_moment - (mean ** 2)
 
         return math.sqrt(variance) 
+
+    # TODO: test this, no idea if it actually works
+    @staticmethod
+    def std_dev_diff(distro: dict, targets: dict):
+        current_std_dev = Artifact.score_std_dev(distro, targets)
+
+        for artifact, prob in distro.items():
+            if prob == 0:
+                current_artifact = artifact
+                break
+
+        new_std_dev = 0
+        single_distro = Artifact.upgrade_distro(current_artifact, 4 * ((current_artifact.lvl // 4) + 1))
+        for artifact, prob in single_distro.items():
+            sub_distro = Artifact.upgrade_distro(artifact, 20)
+            sub_std_dev = Artifact.score_std_dev(sub_distro, targets)
+            new_std_dev += sub_std_dev * prob
+        
+        return current_std_dev - new_std_dev
 
     @staticmethod
     def sort_potential(artifacts, targets_list, special_targets_list=None, 

@@ -80,6 +80,29 @@ sub_values = {
     'critDMG_': 7.77
 }
 
+artifact_req_exp = [0,
+    3000,
+    6725,
+    11150,
+    16300,
+    22200,
+    28875,
+    36375,
+    44725,
+    53950,
+    64075,
+    75125,
+    87150,
+    100175,
+    115325,
+    132925,
+    153300,
+    176800,
+    203850,
+    234900,
+    270475
+]
+
 # Generate all possible counts of increments that sum to time_steps
 def generate_permutations(total, count):
     if count == 1:
@@ -444,6 +467,15 @@ class Artifact:
             new_std_dev += sub_std_dev * prob
         
         return current_std_dev - new_std_dev
+
+    def upgrade_req_exp(self):
+        """Estimate how much EXP is needed to upgrade once.
+
+        Returns:
+            int: Required EXP
+        """
+        upgrade_lvl = 4 * ((self.lvl // 4) + 1)
+        return artifact_req_exp[upgrade_lvl] - artifact_req_exp[self.lvl]
 
     @staticmethod
     def sort_potential(artifacts, targets_list, special_targets_list=None, 

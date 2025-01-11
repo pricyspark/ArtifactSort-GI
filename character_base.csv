@@ -1,0 +1,92 @@
+name,element,weapon,region,hp,atk,def,ascension stat,ascension value,scaling stat
+albedo,geo,sword,mondstadt,13225,251,876,geo_dmg_,0.288,def
+alhaitham,dendro,sword,sumeru,13348,313,781,dendro_dmg_,0.288,none
+aloy,cryo,bow,none,10898,233,676,cryo_dmg_,0.288,atk
+amber,pyro,bow,mondstadt,9461,223,600,atk_,0.24,atk
+arataki itto,geo,claymore,inazuma,12858,227,959,critRate_,0.192,none
+arlecchino,pyro,polearm,snezhnaya,13103,342,764,critDMG_,0.384,atk
+baizhu,dendro,catalyst,liyue,13348,192,499,hp_,0.288,na
+barbara,hydro,catalyst,mondstadt,9787,159,668,hp_,0.24,hp
+beidou,electro,claymore,liyue,13049,225,648,electro_dmg_,0.24,atk
+bennett,pyro,sword,mondstadt,12397,191,771,enerRech_,0.268,na
+candance,hydro,polearm,sumeru,10874,212,682,hp_,0.24,na
+charlotte,cryo,catalyst,fontaine,10766,173,546,atk_,0.24,na
+chevreuse,pryo,polearm,fontaine,
+chiori,geo,sword,inazuma,
+chongyun,cryo,claymore,liyue,
+clorinde,electro,sword,fontaine,
+collei,dendro,bow,sumeru,
+cyno,electro,polearm,sumeru,
+dehya,pyro,claymore,sumeru,
+diluc,pyro,claymore,mondstadt,
+diona,cryo,bow,mondstadt,
+dori,electro,claymore,sumeru,
+emilie,dendro,polearm,fontaine,
+eula,cryo,claymore,mondstadt,
+faruzan,anemo,bow,sumeru,
+fischl,electro,bow,mondstadt,
+freminet,cryo,claymore,fontaine,
+furina,hydro,sword,fontaine,
+gaming,pyro,claymore,liyue,
+ganyu,cryo,bow,liyue,
+gorou,geo,bow,inazuma,
+hu tao,pyro,polearm,liyue,
+jean,anemo,sword,mondstadt,
+kaedehara kazuha,anemo,sword,inazuma,
+kaeya,cryo,sword,mondstadt,
+kamisato ayaka,cryo,sword,inazuma,
+kamisato ayato,hydro,sword,inazuma,
+kaveh,dendro,claymore,sumeru,
+keqing,electro,sword,liyue,
+kirara,dendro,sword,inazuma,
+klee,pyro,catalyst,mondstadt,
+kujou sara,electro,bow,inazuma,
+kuki shinobu,electro,sword,inazuma,
+layla,cryo,sword,sumeru,
+lisa,electro,catalyst,mondstadt,
+lynette,anemo,sword,fontaine,
+lyney,pyro,bow,fontaine,
+mika,cryo,polearm,mondstadt,
+mona,hydro,catalyst,mondstadt,
+nahida,dendro,catalyst,sumeru,
+navia,geo,claymore,fontaine,
+neuvillette,hydro,catalyst,fontaine,
+nilou,hydro,sword,sumeru,
+ningguang,geo,catalyst,liyue,
+noelle,geo,claymore,mondstadt,
+qiqi,cryo,sword,liyue,
+raiden shogun,electro,polearm,inazuma,
+razor,electro,claymore,mondstadt,
+rosaria,cryo,polearm,mondstadt,
+sangonomiya kokomi,hydro,catalyst,inazuma,
+sayu,anemo,claymore,inazuma,
+sethos,electro,bow,sumeru,
+shenhe,cryo,polearm,liyue,
+shikanoin heizou,anemo,catalyst,inazuma,
+sigewinne,hydro,bow,fontaine,
+sucrose,anemo,catalyst,mondstadt,
+tartaglia,hydro,bow,snezhnaya,
+thoma,pyro,polearm,inazuma,
+tighnari,dendro,bow,sumeru,
+pyro traveler,pyro,sword,none,10874,212,682,atk_,0.24
+electro traveler,electro,sword,none,10874,212,682,atk_,0.24
+cryo traveler,cryo,sword,none,10874,212,682,atk_,0.24
+hydro traveler,hydro,sword,none,10874,212,682,atk_,0.24
+dendro traveler,dendro,sword,none,10874,212,682,atk_,0.24
+anemo traveler,anemo,sword,none,10874,212,682,atk_,0.24
+geo traveler,geo,sword,none,10874,212,682,atk_,0.24
+venti,anemo,bow,mondstadt,
+wanderer,anemo,catalyst,inazuma,
+wriothesley,cryo,catalyst,fontaine,
+xiangling,pyro,polearm,liyue,
+xianyun,anemo,catalyst,liyue,
+xiao,anemo,polearm,liyue,
+xingqiu,hydro,sword,liyue,
+xinyan,pyro,claymore,liyue,
+yae miko,electro,catalyst,inazuma,
+yanfei,pyro,catalyst,liyue,
+yaoyao,dendro,polearm,liyue,
+yelan,hydro,bow,liyue,
+yoimiya,pyro,bow,inazuma,
+yun jin,geo,polearm,liyue,
+zhongli,geo,polearm,liyue,

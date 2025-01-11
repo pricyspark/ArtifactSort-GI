@@ -288,9 +288,9 @@ class Artifact:
         score = 0
         if self.main in targets:
             if self.main == 'hp' or self.main == 'atk':
-                score += 16/3 * targets[self.main]
+                score = 16/3 * targets[self.main]
             else:
-                score += 8 * targets[self.main] # TODO: make sure this is correct
+                score = 8 * targets[self.main] # TODO: make sure this is correct
 
         for substat, value in self.substats.items():
             if substat not in targets:

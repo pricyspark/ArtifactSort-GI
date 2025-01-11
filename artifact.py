@@ -174,7 +174,7 @@ class Artifact:
         return copy.deepcopy(self)
     
     @staticmethod
-    def generate(lvl=0, slot=None, source='domain'):
+    def generate(set, lvl=0, slot=None, source='domain'):
         """Randomly generate a single artifact.
 
         Args:
@@ -221,9 +221,9 @@ class Artifact:
 
         substats = {}
         for sub in sub_stats:
-            substats[sub] = 1
+            substats[str(sub)] = random.choice([0.7, 0.8, 0.9, 1.0])
 
-        artifact = Artifact(0, slot, main_stat, substats)
+        artifact = Artifact(set, 0, slot, main_stat, substats)
         num_upgrades = lvl // 4 # TODO: find a better way to do this
         for _ in range(num_upgrades):
             artifact.random_upgrade()
@@ -476,6 +476,14 @@ class Artifact:
         """
         upgrade_lvl = 4 * ((self.lvl // 4) + 1)
         return artifact_req_exp[upgrade_lvl] - artifact_req_exp[self.lvl]
+
+    def salvage_exp(self):
+        """Estimate how much EXP given when salvaged.
+
+        Returns:
+            int: Salvaged EXP
+        """
+        return int(3780 + 0.8 * artifact_req_exp[self.lvl])
 
     @staticmethod
     def sort_potential(artifacts, targets_list, special_targets_list=None, 

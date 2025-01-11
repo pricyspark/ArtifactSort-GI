@@ -1,0 +1,7 @@
+*
+!.gitignore
+!artifact.py
+!character_base.csv
+!enums.py
+!simulate.ipynb
+!weapons.csv

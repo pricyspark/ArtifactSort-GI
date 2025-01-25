@@ -344,13 +344,13 @@ class Artifact:
                     artifact.substats[sub] = artifact.substats[None]
                     artifact.substats.pop(None, None)
                     possibilities.append((artifact, sub_prob * artifact_prob))
-                    
+
         return possibilities
     
     @staticmethod
     def sample_distro(distro: list):
-        possibilities = list(distro.keys())
-        probs = distro.values()
+        possibilities = [t[0] for t in distro]
+        probs = [t[1] for t in distro]
         return random.choices(possibilities, weights=probs, k=1)[0]
     
     # TODO: maybe store scores for each (artifact, targets) pair to avoid

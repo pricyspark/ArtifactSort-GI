@@ -277,17 +277,18 @@ class Artifact:
             lvl (int): Target level after upgrading
 
         Returns:
-            dict: Dictionary with a key for every possible resulting
-            artifact after upgrading. The value is the key's
-            corresponding probability.
+            list: List of tuples of (possibility, probability) after
+            upgrading.
         """
+        # Calculate the number of upgrades needed
         num_upgrades = (lvl // 4) - (self.lvl // 4)
 
+        # Check if currently only 3 substats
         add_substat = False
         if len(self.substats) == 3:
             num_upgrades -= 1
             add_substat = True
-            self.substats[None] = 1
+            self.substats[None] = 0.85
 
         # Base probability for each sequence
         base_prob = (1 / 4) ** num_upgrades
@@ -307,47 +308,47 @@ class Artifact:
             possibilities.append((temp, prob))
             #possibilities[temp] = prob
             total_prob += prob
-        
+        #print(self)
+        #print()
+        #print(possibilities)
         if add_substat:
-            temp_possibilities = possibilities.copy()
-            possibilities = []
+            # Pop the first artifact, which is a copy of the original
+            # artifact
+            possibilities.pop(0)
+
+            # Create list of possible extra substat
             copy_SUB_PROBS = SUB_PROBS.copy()
             copy_SUB_PROBS.pop(self.main, None)
             for substat in self.substats.keys():
                 copy_SUB_PROBS.pop(substat, None)
-            probs = np.array(list(copy_SUB_PROBS.values()), dtype=float)
-            probs /= np.sum(probs)
-            for idx, sub in enumerate(copy_SUB_PROBS.keys()):
-                for artifact, prob in temp_possibilities:
-                    possibilities.append(artifact, prob * probs[idx])
-            '''
+            total = sum(copy_SUB_PROBS.values())
+            for substat in copy_SUB_PROBS:
+                copy_SUB_PROBS[substat] /= total
 
+            # Create a backup of the original possibiilities to base new
+            # copies off of
+            original_possibilities = possibilities.copy()
 
-            total_prob = 0
-            temp_possibilities = {}
+            # Add back original artifact
+            possibilities = [(self, 0)]
 
-            for possibility, prob in possibilities.items():
-                copy_SUB_PROBS = SUB_PROBS.copy()
-                copy_SUB_PROBS.pop(possibility.main, None)
-                for substat in possibility.substats.keys():
-                    copy_SUB_PROBS.pop(substat, None)
-                probs = np.array(list(copy_SUB_PROBS.values()), dtype=float)
-                probs /= np.sum(probs)
-                for idx, sub in enumerate(copy_SUB_PROBS.keys()):
-                    temp = possibility.copy()
-                    temp.substats.pop(None, None)
-                    temp.substats[sub] = possibility.substats[None]
-                    temp_possibilities[temp] = prob * probs[idx]
-                    total_prob += prob * probs[idx]
-            
-            possibilities = temp_possibilities
-            self.substats.pop(None, None)
-
-            '''
+            # For each possible new substat
+            for sub, sub_prob in copy_SUB_PROBS.items():
+                # For each possible artifact
+                for (artifact, artifact_prob) in original_possibilities:
+                    # Create a new copy and replace the placeholder None
+                    # substat with the real one. Multiply by the substat
+                    # probability coefficient and append to the final
+                    # list of possibilities
+                    artifact = artifact.copy()
+                    artifact.substats[sub] = artifact.substats[None]
+                    artifact.substats.pop(None, None)
+                    possibilities.append((artifact, sub_prob * artifact_prob))
+                    
         return possibilities
     
     @staticmethod
-    def sample_distro(distro: dict):
+    def sample_distro(distro: list):
         possibilities = list(distro.keys())
         probs = distro.values()
         return random.choices(possibilities, weights=probs, k=1)[0]

@@ -3,8 +3,9 @@ import math
 import numpy as np
 import copy
 import json
+import functools
 
-main_probs = {
+MAIN_PROBS = {
     'flower' : {'hp': 1},
     'plume'  : {'atk': 1},
     'sands'  : {'hp_': 8,
@@ -33,7 +34,7 @@ main_probs = {
                 'eleMas': 2}
 }
 
-sub_probs = {
+SUB_PROBS = {
     'hp': 6,
     'atk': 6,
     'def': 6,
@@ -46,7 +47,7 @@ sub_probs = {
     'critDMG_': 3
 }
 
-main_values = {
+MAIN_VALUES = {
     'hp': 4780,
     'atk': 311,
     'hp_': 46.6,
@@ -67,7 +68,7 @@ main_values = {
     'heal_': 34.9
 }
 
-sub_values = {
+SUB_VALUES = {
     'hp': 298.75,
     'atk': 19.45,
     'def': 23.13,
@@ -80,7 +81,8 @@ sub_values = {
     'critDMG_': 7.77
 }
 
-artifact_req_exp = [0,
+ARTIFACT_REQ_EXP = [
+    0,
     3000,
     6725,
     11150,
@@ -149,12 +151,14 @@ class Artifact:
         for substat in json_dict['substats']:
             stat = substat['key']
             value = substat['value']
-            coef = round(value / sub_values[stat], 1)
+            coef = round(value / SUB_VALUES[stat], 1)
             substats[substat['key']] = coef
         lock = json_dict['lock']
 
         return Artifact(set, lvl, slot, main, substats, lock=lock)
 
+    # TODO: round substat floats when printing, maybe by modifying or
+    # just the displayed value
     def __str__(self):
         return f'set: {self.set}\nlvl: {self.lvl}\nslot: {self.slot}\nmain: {self.main}\nsub: {str(self.substats)}'
     
@@ -174,7 +178,7 @@ class Artifact:
         return copy.deepcopy(self)
     
     @staticmethod
-    def generate(set, lvl=0, slot=None, source='domain'):
+    def generate(set, lvl=0, slot=None, main=None, source='domain'):
         """Randomly generate a single artifact.
 
         Args:
@@ -187,6 +191,7 @@ class Artifact:
 
         Raises:
             ValueError: If source is invalid.
+            ValueError: If main stat is invalid.
 
         Returns:
             Artifact: Randomly generated artifact
@@ -210,18 +215,23 @@ class Artifact:
         if slot is None:
             slot = random.choice(['flower', 'plume', 'sands', 'goblet', 'circlet'])
             
-        main_options = main_probs[slot]
-        main_stat = random.choices(list(main_options.keys()), weights=main_options.values())[0]
+        if main is None:
+            main_options = MAIN_PROBS[slot]
+            main_stat = random.choices(list(main_options.keys()), weights=main_options.values())[0]
+        else:
+            if main not in MAIN_PROBS[slot].keys():
+                raise ValueError('Invalid main stat.')
+            main_stat = main
 
-        copy_sub_probs = sub_probs.copy()
-        copy_sub_probs.pop(main_stat, None)
-        prob = np.array(list(copy_sub_probs.values()), dtype=float)
+        copy_SUB_PROBS = SUB_PROBS.copy()
+        copy_SUB_PROBS.pop(main_stat, None)
+        prob = np.array(list(copy_SUB_PROBS.values()), dtype=float)
         prob /= np.sum(prob)
-        sub_stats = np.random.choice(list(copy_sub_probs.keys()), size=num_substats, replace=False, p=prob)
+        sub_stats = np.random.choice(list(copy_SUB_PROBS.keys()), size=num_substats, replace=False, p=prob)
 
         substats = {}
         for sub in sub_stats:
-            substats[str(sub)] = random.choice([0.7, 0.8, 0.9, 1.0])
+            substats[str(sub)] = random.choice((0.7, 0.8, 0.9, 1.0))
 
         artifact = Artifact(set, 0, slot, main_stat, substats)
         num_upgrades = lvl // 4 # TODO: find a better way to do this
@@ -240,14 +250,14 @@ class Artifact:
             raise ValueError('Cannot upgrade level 20 artifact')
         
         if len(self.substats.keys()) == 3:
-            copy_sub_probs = sub_probs.copy()
-            copy_sub_probs.pop(self.main, None)
+            copy_SUB_PROBS = SUB_PROBS.copy()
+            copy_SUB_PROBS.pop(self.main, None)
             for substat in self.substats.keys():
-                copy_sub_probs.pop(substat, None)
-            probs = np.array(list(copy_sub_probs.values()), dtype=float)
+                copy_SUB_PROBS.pop(substat, None)
+            probs = np.array(list(copy_SUB_PROBS.values()), dtype=float)
             probs /= np.sum(probs)
-            new_sub = random.choices(list(copy_sub_probs.keys()), weights=probs)[0]
-            self.substats[new_sub] = 1 # TODO: add coef
+            new_sub = random.choices(list(copy_SUB_PROBS.keys()), weights=probs)[0]
+            self.substats[new_sub] = random.choice((0.7, 0.8, 0.9, 1.0))
 
         else:
             temp = random.randint(0, 15)
@@ -258,6 +268,7 @@ class Artifact:
         
         self.lvl = (self.lvl // 4) * 4 + 4
 
+    @functools.cache
     def upgrade_distro(self, lvl):
         """Calculate the artifact's possible upgrades and their
         probability distribution.
@@ -272,11 +283,10 @@ class Artifact:
         """
         num_upgrades = (lvl // 4) - (self.lvl // 4)
 
-        if self.lvl == 12:
-            pass
-
+        add_substat = False
         if len(self.substats) == 3:
             num_upgrades -= 1
+            add_substat = True
             self.substats[None] = 1
 
         # Base probability for each sequence
@@ -284,30 +294,46 @@ class Artifact:
 
         # Generate permutations and calculate probabilities
         # TODO: verify all the copies are necessary
-        possibilities = {self.copy(): 0}
+        #possibilities = {self: 0}
+        possibilities = [(self, 0)]
         total_prob = 0
         for counts in generate_permutations(num_upgrades, 4):
             prob = calculate_probability(counts, base_prob)
             temp = self.copy()
             temp.lvl = lvl
             for idx, substat in enumerate(temp.substats.keys()):
-                temp.substats[substat] += counts[idx] * 0.85
+                temp.substats[substat] += counts[idx] * 0.85 # TODO: maybe add random upgrade coefs
             
-            possibilities[temp] = prob
+            possibilities.append((temp, prob))
+            #possibilities[temp] = prob
             total_prob += prob
         
-        if None in self.substats:
+        if add_substat:
+            temp_possibilities = possibilities.copy()
+            possibilities = []
+            copy_SUB_PROBS = SUB_PROBS.copy()
+            copy_SUB_PROBS.pop(self.main, None)
+            for substat in self.substats.keys():
+                copy_SUB_PROBS.pop(substat, None)
+            probs = np.array(list(copy_SUB_PROBS.values()), dtype=float)
+            probs /= np.sum(probs)
+            for idx, sub in enumerate(copy_SUB_PROBS.keys()):
+                for artifact, prob in temp_possibilities:
+                    possibilities.append(artifact, prob * probs[idx])
+            '''
+
+
             total_prob = 0
             temp_possibilities = {}
 
             for possibility, prob in possibilities.items():
-                copy_sub_probs = sub_probs.copy()
-                copy_sub_probs.pop(possibility.main, None)
+                copy_SUB_PROBS = SUB_PROBS.copy()
+                copy_SUB_PROBS.pop(possibility.main, None)
                 for substat in possibility.substats.keys():
-                    copy_sub_probs.pop(substat, None)
-                probs = np.array(list(copy_sub_probs.values()), dtype=float)
+                    copy_SUB_PROBS.pop(substat, None)
+                probs = np.array(list(copy_SUB_PROBS.values()), dtype=float)
                 probs /= np.sum(probs)
-                for idx, sub in enumerate(copy_sub_probs.keys()):
+                for idx, sub in enumerate(copy_SUB_PROBS.keys()):
                     temp = possibility.copy()
                     temp.substats.pop(None, None)
                     temp.substats[sub] = possibility.substats[None]
@@ -317,7 +343,14 @@ class Artifact:
             possibilities = temp_possibilities
             self.substats.pop(None, None)
 
+            '''
         return possibilities
+    
+    @staticmethod
+    def sample_distro(distro: dict):
+        possibilities = list(distro.keys())
+        probs = distro.values()
+        return random.choices(possibilities, weights=probs, k=1)[0]
     
     # TODO: maybe store scores for each (artifact, targets) pair to avoid
     # repeat calculations
@@ -346,6 +379,7 @@ class Artifact:
 
         return score
 
+    #@functools.cache
     @staticmethod
     def score_mean(distro: dict, targets: dict):
         """Calculate the average score if randomly upgrading an
@@ -367,13 +401,14 @@ class Artifact:
         mean = 0
 
         if not math.isclose(sum(distro.values()), 1):
-            raise ValueError('Distribution doesn\'t add to 1.')
+            raise ValueError('Distribution does not add to 1.')
 
         for artifact, prob in distro.items():
             mean += artifact.score(targets) * prob
 
         return mean
     
+    #@functools.cache
     @staticmethod
     def score_second_moment(distro: dict, targets: dict):
         """Calculate the second moment of an artifact distribution.
@@ -386,13 +421,13 @@ class Artifact:
             base the score. 
 
         Raises:
-            ValueError: Distribution doesn't add to 1.
+            ValueError: Distribution does not add to 1.
 
         Returns:
             float: Second moment of score
         """
         if not math.isclose(sum(distro.values()), 1):
-            raise ValueError('Distribution doesn\'t add to 1.')
+            raise ValueError('Distribution does not add to 1.')
         
         second_moment = 0
         
@@ -403,6 +438,7 @@ class Artifact:
 
     # TODO: maybe fix this code duplication, but it would make it 2x
     # slower without caching
+    #@functools.cache
     @staticmethod
     def score_std_dev(distro: dict, targets: dict):
         """Calculate the standard deviation of scores of an artifact
@@ -416,13 +452,13 @@ class Artifact:
             base the score. 
 
         Raises:
-            ValueError: Distribution doesn't add to 1.
+            ValueError: Distribution does not add to 1.
 
         Returns:
             float: Standard deviation of score
         """
         if not math.isclose(sum(distro.values()), 1):
-            raise ValueError('Distribution doesn\'t add to 1.')
+            raise ValueError(f'Distribution does not add to 1.')
         
         mean = 0
         second_moment = 0
@@ -452,6 +488,9 @@ class Artifact:
         Returns:
             float: Difference in standard deviation of score
         """
+        if len(distro) == 1:
+            raise ValueError('Maxed artifacts cannot be upgraded.')
+
         current_std_dev = Artifact.score_std_dev(distro, targets)
 
         for artifact, prob in distro.items():
@@ -475,7 +514,7 @@ class Artifact:
             int: Required EXP
         """
         upgrade_lvl = 4 * ((self.lvl // 4) + 1)
-        return artifact_req_exp[upgrade_lvl] - artifact_req_exp[self.lvl]
+        return ARTIFACT_REQ_EXP[upgrade_lvl] - ARTIFACT_REQ_EXP[self.lvl]
 
     def salvage_exp(self):
         """Estimate how much EXP given when salvaged.
@@ -483,7 +522,7 @@ class Artifact:
         Returns:
             int: Salvaged EXP
         """
-        return int(3780 + 0.8 * artifact_req_exp[self.lvl])
+        return int(3780 + 0.8 * ARTIFACT_REQ_EXP[self.lvl])
 
     @staticmethod
     def sort_potential(artifacts, targets_list, special_targets_list=None, 

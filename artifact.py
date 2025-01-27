@@ -263,8 +263,8 @@ class Artifact:
         else:
             temp = random.randint(0, 15)
             upgrade_idx = temp // 4
-            # upgrade_coef = [0.7, 0.8, 0.9, 1][temp % 4] TODO: add coef
-            upgrade_coef = 1
+            upgrade_coef = [0.7, 0.8, 0.9, 1][temp % 4]
+            #upgrade_coef = 1
             self.substats[list(self.substats.keys())[upgrade_idx]] += upgrade_coef
         
         self.lvl = (self.lvl // 4) * 4 + 4

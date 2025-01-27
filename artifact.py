@@ -304,7 +304,7 @@ class Artifact:
             temp = copy.deepcopy(self)
             temp.lvl = lvl
             for idx, substat in enumerate(temp.substats.keys()):
-                temp.substats[substat] += counts[idx] * 0.85 # TODO: maybe add random upgrade coefs
+                temp.substats[substat] += counts[idx] * 0.85 # TODO: add random upgrade coefs
             
             possibilities.append((temp, prob))
             #possibilities[temp] = prob
@@ -319,7 +319,7 @@ class Artifact:
 
             # Create list of possible extra substat
             copy_SUB_PROBS = SUB_PROBS.copy()
-            copy_SUB_PROBS.pop(self.main, None)
+            copy_SUB_PROBS.pop(self.main, None) # TODO: raise KeyErrors
             for substat in self.substats.keys():
                 copy_SUB_PROBS.pop(substat, None)
             total = sum(copy_SUB_PROBS.values())
@@ -341,7 +341,7 @@ class Artifact:
                     # substat with the real one. Multiply by the substat
                     # probability coefficient and append to the final
                     # list of possibilities
-                    artifact = copy.deepcopy(original_artifact) # TODO: check
+                    artifact = copy.deepcopy(original_artifact)
                     artifact.substats[sub] = artifact.substats[None]
                     artifact.substats.pop(None, None)
                     possibilities.append((artifact, sub_prob * artifact_prob))
@@ -375,7 +375,13 @@ class Artifact:
             else:
                 score = 8 * targets[self.main] # TODO: make sure this is correct
 
-        for substat, value in self.substats.items():
+        if 'crit_' in targets:
+            if 'critRate_' in self.substats:
+                score += self.substats['critRate_'] * targets['crit_']
+            if 'critDMG_' in self.substats:
+                score += self.substats['critDMG_'] * targets['crit_']
+
+        for substat, value in self.substats.items():            
             if substat not in targets:
                 continue
 
@@ -410,6 +416,7 @@ class Artifact:
 
         for artifact, prob in distro:
             mean += artifact.score(targets) * prob
+            print(artifact.score(targets) * prob)
 
         return mean
     

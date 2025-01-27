@@ -168,7 +168,7 @@ class Artifact:
         return f'set: {self.set}\nlvl: {self.lvl}\nslot: {self.slot}\nmain: {self.main}\nsub: {str(self.substats)}'
     
     def __hash__(self):
-        return hash((self.lvl, self.slot, self.main, str(self.substats)))
+        return hash((self.lvl, self.slot, self.main, tuple(sorted(self.substats.items()))))
     
     def __eq__(self, other):
         return (self.lvl, self.slot, self.main, self.substats) == (other.lvl, other.slot, other.main, other.substats)
@@ -356,6 +356,15 @@ class Artifact:
         probs = [t[1] for t in distro]
         return random.choices(possibilities, weights=probs, k=1)[0]
     
+    @staticmethod
+    def fix_targets(targets: dict):
+        if not 'crit_' in targets:
+            return
+        
+        targets['critRate_'] = targets['crit_']
+        targets['critDMG_'] = targets['crit_']
+        targets.pop('crit_', None)
+
     # TODO: maybe store scores for each (artifact, targets) pair to avoid
     # repeat calculations
     def score(self, targets: dict):
@@ -416,7 +425,6 @@ class Artifact:
 
         for artifact, prob in distro:
             mean += artifact.score(targets) * prob
-            print(artifact.score(targets) * prob)
 
         return mean
     

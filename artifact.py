@@ -4,7 +4,9 @@ import numpy as np
 import copy
 import json
 import functools
+from memory_profiler import profile
 
+cache_size = 2000
 MAIN_PROBS = {
     'flower' : {'hp': 1},
     'plume'  : {'atk': 1},
@@ -174,9 +176,6 @@ class Artifact:
     def __ne__(self, other):
         return not (self == other)
 
-    def copy(self):
-        return copy.deepcopy(self)
-    
     @staticmethod
     def generate(set, lvl=0, slot=None, main=None, source='domain'):
         """Randomly generate a single artifact.
@@ -254,8 +253,10 @@ class Artifact:
             copy_SUB_PROBS.pop(self.main, None)
             for substat in self.substats.keys():
                 copy_SUB_PROBS.pop(substat, None)
+
             probs = np.array(list(copy_SUB_PROBS.values()), dtype=float)
             probs /= np.sum(probs)
+
             new_sub = random.choices(list(copy_SUB_PROBS.keys()), weights=probs)[0]
             self.substats[new_sub] = random.choice((0.7, 0.8, 0.9, 1.0))
 
@@ -268,7 +269,7 @@ class Artifact:
         
         self.lvl = (self.lvl // 4) * 4 + 4
 
-    @functools.cache
+    @functools.lru_cache(maxsize=cache_size)
     def upgrade_distro(self, lvl):
         """Calculate the artifact's possible upgrades and their
         probability distribution.
@@ -296,11 +297,11 @@ class Artifact:
         # Generate permutations and calculate probabilities
         # TODO: verify all the copies are necessary
         #possibilities = {self: 0}
-        possibilities = [(self, 0)]
+        possibilities = [(copy.deepcopy(self), 0)]
         total_prob = 0
         for counts in generate_permutations(num_upgrades, 4):
             prob = calculate_probability(counts, base_prob)
-            temp = self.copy()
+            temp = copy.deepcopy(self)
             temp.lvl = lvl
             for idx, substat in enumerate(temp.substats.keys()):
                 temp.substats[substat] += counts[idx] * 0.85 # TODO: maybe add random upgrade coefs
@@ -335,15 +336,17 @@ class Artifact:
             # For each possible new substat
             for sub, sub_prob in copy_SUB_PROBS.items():
                 # For each possible artifact
-                for (artifact, artifact_prob) in original_possibilities:
+                for (original_artifact, artifact_prob) in original_possibilities:
                     # Create a new copy and replace the placeholder None
                     # substat with the real one. Multiply by the substat
                     # probability coefficient and append to the final
                     # list of possibilities
-                    artifact = artifact.copy()
+                    artifact = copy.deepcopy(original_artifact) # TODO: check
                     artifact.substats[sub] = artifact.substats[None]
                     artifact.substats.pop(None, None)
                     possibilities.append((artifact, sub_prob * artifact_prob))
+
+            self.substats.pop(None, None)
 
         return possibilities
     
@@ -380,7 +383,7 @@ class Artifact:
 
         return score
 
-    #@functools.cache
+    #@functools.lru_cache(maxsize=cache_size)
     @staticmethod
     def score_mean(distro: list, targets: dict):
         """Calculate the average score if randomly upgrading an
@@ -410,7 +413,7 @@ class Artifact:
 
         return mean
     
-    #@functools.cache
+    #@functools.lru_cache(maxsize=cache_size)
     @staticmethod
     def score_second_moment(distro: list, targets: dict):
         """Calculate the second moment of an artifact distribution.
@@ -441,9 +444,9 @@ class Artifact:
 
     # TODO: maybe fix this code duplication, but it would make it 2x
     # slower without caching
-    #@functools.cache
+    #@functools.lru_cache(maxsize=cache_size)
     @staticmethod
-    def score_std_dev(distro: dict, targets: dict):
+    def score_std_dev(distro: list, targets: dict):
         """Calculate the standard deviation of scores of an artifact
         distribution.
 
@@ -478,7 +481,7 @@ class Artifact:
 
     # TODO: test this, no idea if it actually works
     @staticmethod
-    def std_dev_diff(distro: dict, targets: dict):
+    def std_dev_diff(distro: list, targets: dict):
         """Calculate the decrease in standard deviation of scores if
         upgrading the source artifact for a distribution.
 

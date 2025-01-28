@@ -45,7 +45,119 @@ def lru_cache_with_numpy(maxsize=128):
         return wrapper
     return decorator
 
+def lru_cache_two_numpy(maxsize=128):
+    """
+    A decorator that caches function calls using functools.lru_cache.
+    It handles functions with two NumPy array arguments by converting the arrays 
+    into hashable forms (dtype, shape, and data bytes).
 
+    Parameters:
+    - maxsize (int): The maximum size of the cache. Defaults to 128.
+
+    Returns:
+    - Decorated function with caching capability.
+    """
+    def decorator(func):
+        # Define the cached helper function
+        @functools.lru_cache(maxsize=maxsize)
+        def cached_func(dtype_str1, shape1, array_data1,
+                       dtype_str2, shape2, array_data2):
+            # Reconstruct the first NumPy array from cached data
+            dtype1 = np.dtype(dtype_str1)
+            array1 = np.frombuffer(array_data1, dtype=dtype1).reshape(shape1)
+            
+            # Reconstruct the second NumPy array from cached data
+            dtype2 = np.dtype(dtype_str2)
+            array2 = np.frombuffer(array_data2, dtype=dtype2).reshape(shape2)
+            
+            return func(array1, array2)
+        
+        @functools.wraps(func)
+        def wrapper(array1, array2):
+            # Validate input types
+            if not isinstance(array1, np.ndarray) or not isinstance(array2, np.ndarray):
+                raise TypeError("Both arguments must be NumPy arrays.")
+            
+            # Extract hashable components from the first NumPy array
+            dtype_str1 = array1.dtype.str
+            shape1 = array1.shape
+            array_data1 = array1.tobytes()
+            
+            # Extract hashable components from the second NumPy array
+            dtype_str2 = array2.dtype.str
+            shape2 = array2.shape
+            array_data2 = array2.tobytes()
+            
+            return cached_func(dtype_str1, shape1, array_data1,
+                               dtype_str2, shape2, array_data2)
+        
+        return wrapper
+    return decorator
+
+def lru_cache_nested_numpy(maxsize=128):
+    """
+    A decorator that caches function calls using functools.lru_cache.
+    It handles functions with parameters structured as ((numpy array, numpy array), numpy array)
+    by converting each NumPy array into hashable forms (dtype, shape, and data bytes).
+
+    Parameters:
+    - maxsize (int): The maximum size of the cache. Defaults to 128.
+
+    Returns:
+    - Decorated function with caching capability.
+    """
+    def decorator(func):
+        # Define the cached helper function
+        @functools.lru_cache(maxsize=maxsize)
+        def cached_func(dtype_str1, shape1, array_data1,
+                       dtype_str2, shape2, array_data2,
+                       dtype_str3, shape3, array_data3):
+            # Reconstruct the first NumPy array from cached data
+            dtype1 = np.dtype(dtype_str1)
+            array1 = np.frombuffer(array_data1, dtype=dtype1).reshape(shape1)
+            
+            # Reconstruct the second NumPy array from cached data
+            dtype2 = np.dtype(dtype_str2)
+            array2 = np.frombuffer(array_data2, dtype=dtype2).reshape(shape2)
+            
+            # Reconstruct the third NumPy array from cached data
+            dtype3 = np.dtype(dtype_str3)
+            array3 = np.frombuffer(array_data3, dtype=dtype3).reshape(shape3)
+            
+            return func((array1, array2), array3)
+        
+        @functools.wraps(func)
+        def wrapper(pair, array3):
+            # Validate input types
+            if not (isinstance(pair, tuple) and len(pair) == 2):
+                raise TypeError("The first argument must be a tuple of two NumPy arrays.")
+            array1, array2 = pair
+            if not isinstance(array1, np.ndarray) or not isinstance(array2, np.ndarray):
+                raise TypeError("Both elements in the first tuple must be NumPy arrays.")
+            if not isinstance(array3, np.ndarray):
+                raise TypeError("The second argument must be a NumPy array.")
+            
+            # Extract hashable components from the first NumPy array
+            dtype_str1 = array1.dtype.str
+            shape1 = array1.shape
+            array_data1 = array1.tobytes()
+            
+            # Extract hashable components from the second NumPy array
+            dtype_str2 = array2.dtype.str
+            shape2 = array2.shape
+            array_data2 = array2.tobytes()
+            
+            # Extract hashable components from the third NumPy array
+            dtype_str3 = array3.dtype.str
+            shape3 = array3.shape
+            array_data3 = array3.tobytes()
+            
+            return cached_func(dtype_str1, shape1, array_data1,
+                               dtype_str2, shape2, array_data2,
+                               dtype_str3, shape3, array_data3)
+        
+        return wrapper
+    return decorator
 
 
 
@@ -199,14 +311,25 @@ def calculate_probability(counts, base_prob):
     return multinomial_coeff * base_prob
 
 class FastArtifact:
-    def __init__(self, set, lvl, slot, main, substats, lock=False):
+    def __init__(self, set, lvl, slot, main=None, substats=None, stats=None, lock=False):
 
         self.set: str = set
         self.lvl: int = lvl
         self.slot: str = slot
+        self.lock = lock
+        self.last_score = None
 
-        #if array is not None:
-        #    self.main = np.argmax(array)
+        if stats is not None:
+            mask = stats == 16/3
+            if np.any(mask):
+                self.main = np.argmax(stats == 16/3)
+            else:
+                self.main = np.argmax(stats)
+
+            self.substats = list(np.nonzero(stats))
+            self.substats.remove(self.main)
+            self.stats = stats
+            return
 
         self.main: int = STAT_2_NUM[main]
         self.substats: list = [STAT_2_NUM[substat] for substat in substats.keys()]
@@ -220,8 +343,6 @@ class FastArtifact:
         for substat, value in substats.items():
             self.stats[STAT_2_NUM[substat]] = value
 
-        self.lock = lock
-        self.last_score = None
 
 
     @staticmethod
@@ -381,8 +502,10 @@ class FastArtifact:
 
         self.lvl = (self.lvl // 4) * 4 + 4
 
-    @functools.lru_cache(maxsize=CACHE_SIZE)
-    def upgrade_distro(self, lvl):
+    #@functools.lru_cache(maxsize=CACHE_SIZE)
+    @staticmethod
+    @lru_cache_with_numpy(maxsize=CACHE_SIZE)
+    def upgrade_distro(num_upgrades, stats):
         """Calculate the artifact's possible upgrades and their
         probability distribution.
 
@@ -393,86 +516,71 @@ class FastArtifact:
             list: List of tuples of (possibility, probability) after
             upgrading.
         """
-        # Calculate the number of upgrades needed
-        num_upgrades = (lvl // 4) - (self.lvl // 4)
+
+        mask = stats == 16/3
+        if np.any(mask):
+            main = np.argmax(stats == 16/3)
+        else:
+            main = np.argmax(stats)
+
+        substats = np.nonzero(stats)[0].tolist()
+        substats.remove(main)
 
         # Check if currently only 3 substats
         add_substat = False
-        if len(self.substats) == 3:
+        if len(substats) == 3:
             num_upgrades -= 1
+            permutations = list(generate_permutations(num_upgrades, 4))
             add_substat = True
-            self.substats.append(-1)
-            new_coefs = []
+
+            # Create list of possible extra substat
+            copy_SUB_PROBS = SUB_PROBS.copy()
+            copy_SUB_PROBS.pop(NUM_2_STAT[main], None)
+            for substat_idx in substats:
+                copy_SUB_PROBS.pop(NUM_2_STAT[substat_idx], None)
+            total = sum(copy_SUB_PROBS.values())
+            for substat in copy_SUB_PROBS:
+                copy_SUB_PROBS[substat] /= total
+            
+            num_possibilities = len(permutations) * len(copy_SUB_PROBS)
+        else:
+            permutations = list(generate_permutations(num_upgrades, 4))
+            num_possibilities = len(permutations)
+        
+        possibilities = np.tile(stats, (1 + num_possibilities, 1))
+        probs = np.zeros(1 + num_possibilities)
 
         # Base probability for each sequence
         base_prob = (1 / 4) ** num_upgrades
 
-        # Generate permutations and calculate probabilities
-        # TODO: verify all the copies are necessary
-        #possibilities = {self: 0}
-        possibilities = [(self, 0)]
-        total_prob = 0
-        for counts in generate_permutations(num_upgrades, 4):
+        counter = 1
+
+        for idx, counts in enumerate(permutations): # For each permutation
             prob = calculate_probability(counts, base_prob)
-            temp = copy.deepcopy(self)
-            temp.lvl = lvl
-            temp.last_score = None
-            for idx, substat_idx in enumerate(temp.substats):
-                if substat_idx == -1:
-                    new_coefs.append(0.85 * (1 + counts[idx])) # TODO: add random upgrade coefs
+            for i, substat_idx in enumerate(substats): # Fill in its columns
+                if add_substat:
+                    possibilities[counter:counter+len(copy_SUB_PROBS), substat_idx] += counts[i] * 0.85
+                    #probs[counter:counter+len(copy_SUB_PROBS)] = prob * np.array(copy_SUB_PROBS.values())
                 else:
-                    temp.stats[substat_idx] += counts[idx] * 0.85 # TODO: add random upgrade coefs
-            
-            possibilities.append((temp, prob))
-            #possibilities[temp] = prob
-            total_prob += prob
-        #print(self)
-        #print()
-        #print(possibilities)
-        if add_substat:
-            # Pop the first artifact, which is a copy of the original
-            # artifact
-            possibilities.pop(0)
+                    possibilities[counter, substat_idx] += 0.85 * counts[i]
+                    probs[counter] = prob
+                    
+            if add_substat:
+                for substat, sub_prob in copy_SUB_PROBS.items():
+                    possibilities[counter, STAT_2_NUM[substat]] += 0.85 * (counts[3] + 1)
+                    probs[counter] = prob * sub_prob
+                    counter += 1
+            else:
+                counter += 1
 
-            # Create list of possible extra substat
-            copy_SUB_PROBS = SUB_PROBS.copy()
-            copy_SUB_PROBS.pop(NUM_2_STAT[self.main], KeyError)
-            for substat_idx in self.substats:
-                copy_SUB_PROBS.pop(NUM_2_STAT[substat_idx], KeyError)
-            total = sum(copy_SUB_PROBS.values())
-            for substat in copy_SUB_PROBS:
-                copy_SUB_PROBS[substat] /= total
-
-            # Create a backup of the original possibiilities to base new
-            # copies off of
-            original_possibilities = possibilities.copy()
-
-            # Add back original artifact
-            possibilities = [(self, 0)]
-
-            # For each possible new substat
-            for sub, sub_prob in copy_SUB_PROBS.items():
-                # For each possible artifact
-                for idx, (original_artifact, artifact_prob) in enumerate(original_possibilities):
-                    # Create a new copy and replace the placeholder None
-                    # substat with the real one. Multiply by the substat
-                    # probability coefficient and append to the final
-                    # list of possibilities
-                    artifact = copy.deepcopy(original_artifact)
-                    artifact.substats.append(STAT_2_NUM[sub])
-                    artifact.stats[STAT_2_NUM[sub]] = new_coefs[idx]
-                    artifact.substats.remove(-1)
-                    possibilities.append((artifact, sub_prob * artifact_prob))
-
-            self.substats.remove(-1)
-
-        return tuple(possibilities)
+        return possibilities, probs
     
     @staticmethod
     def sample_distro(distro: list):
-        possibilities = [t[0] for t in distro]
-        probs = [t[1] for t in distro]
-        return random.choices(possibilities, weights=probs, k=1)[0]
+        possibilities = distro[0]
+        probs = distro[1]
+        row = np.random.choice(possibilities.shape[0], p=probs)
+        return possibilities[row, :]
     
     @staticmethod
     def vectorize_targets(targets: dict):
@@ -508,7 +616,7 @@ class FastArtifact:
 
     #@functools.lru_cache(maxsize=CACHE_SIZE)
     @staticmethod
-    @lru_cache_with_numpy(maxsize=CACHE_SIZE)
+    @lru_cache_nested_numpy(maxsize=CACHE_SIZE)
     def score_mean(distro: list, targets: dict):
         """Calculate the average score if randomly upgrading an
         artifact.
@@ -525,21 +633,12 @@ class FastArtifact:
         Returns:
             float: Average score
         """
-        mean = 0
-
-        probs = [t[1] for t in distro]
-
-        if not math.isclose(sum(probs), 1):
-            raise ValueError('Distribution does not add to 1.')
-
-        for artifact, prob in distro:
-            mean += artifact.score(targets) * prob
-
-        return mean
+        possibilities, probs = distro
+        return (possibilities @ targets) @ probs
     
     #@functools.lru_cache(maxsize=CACHE_SIZE)
     @staticmethod
-    @lru_cache_with_numpy(maxsize=CACHE_SIZE)
+    @lru_cache_nested_numpy(maxsize=CACHE_SIZE)
     def score_second_moment(distro: list, targets: dict):
         """Calculate the second moment of an artifact distribution.
 
@@ -555,17 +654,8 @@ class FastArtifact:
         Returns:
             float: Second moment of score
         """
-        probs = [t[1] for t in distro]
-
-        if not math.isclose(sum(probs), 1):
-            raise ValueError('Distribution does not add to 1.')
-        
-        second_moment = 0
-        
-        for artifact, prob in distro:
-            second_moment += (artifact.score(targets) ** 2) * prob
-
-        return math.sqrt(second_moment) 
+        possibilities, probs = distro
+        return np.square(possibilities @ targets) @ probs
 
     # TODO: maybe fix this code duplication, but it would make it 2x
     # slower without caching
@@ -588,26 +678,12 @@ class FastArtifact:
         Returns:
             float: Standard deviation of score
         """
-        probs = [t[1] for t in distro]
+        return math.sqrt(FastArtifact.score_second_moment(distro, targets) - (FastArtifact.score_mean(distro, targets) ** 2))
 
-        if not math.isclose(sum(probs), 1):
-            raise ValueError(f'Distribution does not add to 1.')
-        
-        mean = 0
-        second_moment = 0
-        
-        for artifact, prob in distro:
-            score = artifact.score(targets)
-            mean += score * prob
-            second_moment += (score ** 2) * prob
-
-        variance = second_moment - (mean ** 2)
-
-        return math.sqrt(variance) 
-
+    '''
     # TODO: test this, no idea if it actually works
     @staticmethod
-    @lru_cache_with_numpy(maxsize=CACHE_SIZE)
+    @lru_cache_nested_numpy(maxsize=CACHE_SIZE)
     def std_dev_diff(distro: list, targets: dict):
         """Calculate the decrease in standard deviation of scores if
         upgrading the source artifact for a distribution.
@@ -621,24 +697,25 @@ class FastArtifact:
         Returns:
             float: Difference in standard deviation of score
         """
-        if len(distro) == 1:
+        possibilities, probs = distro
+
+        if len(distro) == 1: # TODO: make sure this works or is needed
             raise ValueError('Maxed artifacts cannot be upgraded.')
 
         current_std_dev = FastArtifact.score_std_dev(distro, targets)
 
-        for artifact, prob in distro:
-            if prob == 0:
-                current_artifact = artifact
-                break
-
+        single_possibilities, single_probs = FastArtifact.upgrade_distro(1, possibilities[0, :])
         new_std_dev = 0
-        single_distro = FastArtifact.upgrade_distro(current_artifact, 4 * ((current_artifact.lvl // 4) + 1))
+        for artifact in single_possibilities:
+            new_std_dev += FastArtifact.score_std_dev()
+        
         for artifact, prob in single_distro:
             sub_distro = FastArtifact.upgrade_distro(artifact, 20)
             sub_std_dev = FastArtifact.score_std_dev(sub_distro, targets)
             new_std_dev += sub_std_dev * prob
         
         return current_std_dev - new_std_dev
+    '''
 
     def upgrade_req_exp(self):
         """Estimate how much EXP is needed to upgrade once.
@@ -840,9 +917,3 @@ class FastArtifact:
                     raise ValueError('Invalid artifact level')
 
         return zeros, fours, eights, twelves, sixteens, twenties
-    
-targets = {'atk_': 1, 'atk': 1/3, 'crit_': 4/3}
-targets_vector = FastArtifact.vectorize_targets(targets)
-
-asdf = FastArtifact('set', 0, 'flower', 'hp', {'atk': 0.8, 'def': 0.7, 'atk_': 0.9})
-asdf.upgrade_distro(20)

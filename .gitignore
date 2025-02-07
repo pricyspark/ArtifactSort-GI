@@ -6,4 +6,6 @@
 !simulate.ipynb
 !weapons.csv
 !benchmark.ipynb
-!fast_artifact.py
+!fast.py
+!seed.py
+!multiprocess.py

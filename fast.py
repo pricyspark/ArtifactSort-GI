@@ -128,14 +128,15 @@ def lru_cache_nested_numpy(maxsize=128):
         
         @functools.wraps(func)
         def wrapper(pair, array3):
+            # TODO: maybe put the safety checks back in, but thats slower
             # Validate input types
-            if not (isinstance(pair, tuple) and len(pair) == 2):
-                raise TypeError("The first argument must be a tuple of two NumPy arrays.")
+            #if not (isinstance(pair, tuple) and len(pair) == 2):
+            #    raise TypeError("The first argument must be a tuple of two NumPy arrays.")
             array1, array2 = pair
-            if not isinstance(array1, np.ndarray) or not isinstance(array2, np.ndarray):
-                raise TypeError("Both elements in the first tuple must be NumPy arrays.")
-            if not isinstance(array3, np.ndarray):
-                raise TypeError("The second argument must be a NumPy array.")
+            #if not isinstance(array1, np.ndarray) or not isinstance(array2, np.ndarray):
+            #    raise TypeError("Both elements in the first tuple must be NumPy arrays.")
+            #if not isinstance(array3, np.ndarray):
+            #    raise TypeError("The second argument must be a NumPy array.")
             
             # Extract hashable components from the first NumPy array
             dtype_str1 = array1.dtype.str
@@ -221,7 +222,9 @@ MAIN_PROBS = {
                 'eleMas': 2}
 }
 
-SUB_PROBS = {
+SUB_PROBS = [6, 6, 6, 4, 4, 4, 4, 4, 3, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+
+SUB_PROBS_DICT = {
     'hp': 6,
     'atk': 6,
     'def': 6,
@@ -326,7 +329,7 @@ class FastArtifact:
             else:
                 self.main = np.argmax(stats)
 
-            self.substats = list(np.nonzero(stats))
+            self.substats = np.nonzero(stats)[0].tolist()
             self.substats.remove(self.main)
             self.stats = stats
             return
@@ -407,7 +410,7 @@ class FastArtifact:
         return not (self == other)
 
     @staticmethod
-    def generate(set, lvl=0, slot=None, main=None, source='domain'):
+    def generate(set, lvl=0, slot=None, main=None, source='domain', seed=None):
         """Randomly generate a single artifact.
 
         Args:
@@ -452,17 +455,23 @@ class FastArtifact:
                 raise ValueError('Invalid main stat.')
             main_stat = main
 
-        copy_SUB_PROBS = SUB_PROBS.copy()
-        copy_SUB_PROBS.pop(main_stat, KeyError)
-        prob = np.array(list(copy_SUB_PROBS.values()), dtype=FLOAT_DTYPE)
-        prob /= np.sum(prob)
-        sub_stats = np.random.choice(list(copy_SUB_PROBS.keys()), size=num_substats, replace=False, p=prob)
+        stats = np.zeros(19, dtype=FLOAT_DTYPE)
+        main_idx = STAT_2_NUM[main_stat]
+        if main_idx < 3:
+            stats[main_idx] = 16/3
+        else:
+            stats[main_idx] = 8
 
-        substats = {}
+        copy_SUB_PROBS = np.array(SUB_PROBS)
+        copy_SUB_PROBS[main_idx] = 0
+        probs = copy_SUB_PROBS / np.sum(copy_SUB_PROBS)
+
+        sub_stats = np.random.choice(19, size=num_substats, replace=False, p=probs)
+        
         for sub in sub_stats:
-            substats[str(sub)] = random.choice((0.7, 0.8, 0.9, 1.0))
+            stats[sub] = random.choice((0.7, 0.8, 0.9, 1.0))
 
-        artifact = FastArtifact(set, 0, slot, main_stat, substats)
+        artifact = FastArtifact(set, 0, slot, stats=stats)
         num_upgrades = lvl // 4 # TODO: find a better way to do this
         for _ in range(num_upgrades):
             artifact.random_upgrade()
@@ -481,15 +490,15 @@ class FastArtifact:
         self.last_score = None
 
         if len(self.substats) == 3:
-            copy_SUB_PROBS = SUB_PROBS.copy()
-            copy_SUB_PROBS.pop(self.main, KeyError)
+            copy_SUB_PROBS_DICT = SUB_PROBS_DICT.copy()
+            copy_SUB_PROBS_DICT.pop(self.main, None)
             for substat in self.substats:
-                copy_SUB_PROBS.pop(NUM_2_STAT[substat], KeyError)
+                copy_SUB_PROBS_DICT.pop(NUM_2_STAT[substat], None)
 
-            probs = np.array(list(copy_SUB_PROBS.values()), dtype=FLOAT_DTYPE)
+            probs = np.array(list(copy_SUB_PROBS_DICT.values()), dtype=FLOAT_DTYPE)
             probs /= np.sum(probs)
 
-            new_sub = random.choices(list(copy_SUB_PROBS.keys()), weights=probs)[0]
+            new_sub = random.choices(list(copy_SUB_PROBS_DICT.keys()), weights=probs)[0]
             self.substats.append(STAT_2_NUM[new_sub])
             self.stats[STAT_2_NUM[new_sub]] = random.choice((0.7, 0.8, 0.9, 1.0))
 
@@ -534,15 +543,15 @@ class FastArtifact:
             add_substat = True
 
             # Create list of possible extra substat
-            copy_SUB_PROBS = SUB_PROBS.copy()
-            copy_SUB_PROBS.pop(NUM_2_STAT[main], None)
+            copy_SUB_PROBS_DICT = SUB_PROBS_DICT.copy()
+            copy_SUB_PROBS_DICT.pop(NUM_2_STAT[main], None)
             for substat_idx in substats:
-                copy_SUB_PROBS.pop(NUM_2_STAT[substat_idx], None)
-            total = sum(copy_SUB_PROBS.values())
-            for substat in copy_SUB_PROBS:
-                copy_SUB_PROBS[substat] /= total
+                copy_SUB_PROBS_DICT.pop(NUM_2_STAT[substat_idx], None)
+            total = sum(copy_SUB_PROBS_DICT.values())
+            for substat in copy_SUB_PROBS_DICT:
+                copy_SUB_PROBS_DICT[substat] /= total
             
-            num_possibilities = len(permutations) * len(copy_SUB_PROBS)
+            num_possibilities = len(permutations) * len(copy_SUB_PROBS_DICT)
         else:
             permutations = list(generate_permutations(num_upgrades, 4))
             num_possibilities = len(permutations)
@@ -559,14 +568,14 @@ class FastArtifact:
             prob = calculate_probability(counts, base_prob)
             for i, substat_idx in enumerate(substats): # Fill in its columns
                 if add_substat:
-                    possibilities[counter:counter+len(copy_SUB_PROBS), substat_idx] += counts[i] * 0.85
-                    #probs[counter:counter+len(copy_SUB_PROBS)] = prob * np.array(copy_SUB_PROBS.values())
+                    possibilities[counter:counter+len(copy_SUB_PROBS_DICT), substat_idx] += counts[i] * 0.85
+                    #probs[counter:counter+len(copy_SUB_PROBS_DICT)] = prob * np.array(copy_SUB_PROBS_DICT.values())
                 else:
                     possibilities[counter, substat_idx] += 0.85 * counts[i]
                     probs[counter] = prob
                     
             if add_substat:
-                for substat, sub_prob in copy_SUB_PROBS.items():
+                for substat, sub_prob in copy_SUB_PROBS_DICT.items():
                     possibilities[counter, STAT_2_NUM[substat]] += 0.85 * (counts[3] + 1)
                     probs[counter] = prob * sub_prob
                     counter += 1

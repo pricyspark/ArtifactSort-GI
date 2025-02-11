@@ -28,20 +28,21 @@ def worker(q, x, shm_scores_name, scores_shape, scores_dtype, shm_finals_name, f
     shm_finals_array = np.ndarray(finals_shape, dtype=finals_dtype, buffer=existing_shm_finals.buf)
 
     y = simulate(x, shm_scores_array, shm_finals_array).reshape((-1, 1))
-    row = np.hstack((x, y))
+    subarray = np.hstack((x, y))
 
-    q.put(row)
+    q.put(subarray)
     t1 = time.time()
     print(t1 - t0)
 
-def aggregator(q, final_array, num_workers):
-    count = 0
-    while count < num_workers:
-        new_row = q.get()
-        final_array = np.vstack((final_array, new_row))
-        count += 1
+def aggregator(q, num_samples):
+    final = np.zeros((num_samples, 3)) # TODO: don't hardcode 3
+    idx = 0
+    while not q.empty():
+        new_subarray = q.get()
+        final[idx:idx+new_subarray.shape[0]] = new_subarray
+        idx += new_subarray.shape[0]
     # final_array now has all rows appended
-    return final_array
+    return final
 
 def simulate(X, scores, finals):
     y = np.full(X.shape[0], -1, dtype=float)
@@ -167,15 +168,15 @@ class SeededInventory:
         for p in processes:
             p.join()
 
-        results = np.zeros((0, 3), dtype=float)
-        results = aggregator(q, results, 4)
-        print(results)
+        results = aggregator(q, X.shape[0])
 
         shm_scores.close()
         shm_finals.close()
 
         shm_scores.unlink()
         shm_finals.unlink()
+
+        return results
 
 if __name__ == '__main__':
 
@@ -192,17 +193,25 @@ if __name__ == '__main__':
 
     print('initializing')
     t0 = time.time()
-    seeded = SeededInventory.load(targets, metrics, 1000, 200, 0, None, 0, 'flower')
+    seeded = SeededInventory.load(targets, metrics, 4000, 200, 0, None, 0, 'flower')
+    #seeded = SeededInventory(targets, metrics, 4000, 200, 0, None, 0, 'flower', 'domain')
     t1 = time.time()
     print(t1 - t0)
     #seeded = SeededInventory(targets, metrics, 1000, 200, 1, None, 0, 'flower', 'domain', True)
     print('initialized')
+    #seeded.save()
 
     stuff = np.load('seed.npy')
     print(seeded.upper_bound())
-    coefs = np.random.rand(100, 1)
-    x = np.hstack((coefs, 1 - coefs))
-    seeded.simulate_multi(x, 4)
+    
+    while True:
+        np.save('backup.npy', stuff)
+        coefs = np.random.rand(120, 1)
+        x = np.hstack((coefs, 1 - coefs))
+        results = seeded.simulate_multi(x, 6)
+        stuff = np.vstack((stuff, results))
+        np.save('seed.npy', stuff)
+
     ''' 
     while True:
         np.save('backup.npy', stuff)

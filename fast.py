@@ -196,30 +196,30 @@ CACHE_SIZE = 2000
 MAIN_PROBS = {
     'flower' : {'hp': 1},
     'plume'  : {'atk': 1},
-    'sands'  : {'hp_': 8,
-                'atk_': 8,
-                'def_': 8,
-                'enerRech_': 3,
-                'eleMas': 3},
-    'goblet' : {'hp_': 77,
-                'atk_': 77,
-                'def_': 76,
-                'pyro_dmg_': 20, 
-                'electro_dmg_': 20,
-                'cryo_dmg_': 20,
-                'hydro_dmg_': 20,
-                'dendro_dmg_': 20,
-                'anemo_dmg_': 20,
-                'geo_dmg_': 20,
-                'physical_dmg_': 20,
-                'eleMas': 10},
-    'circlet': {'hp_': 11,
-                'atk_': 11,
-                'def_': 11,
-                'critRate_': 5,
-                'critDMG_': 5,
-                'heal_': 5,
-                'eleMas': 2}
+    'sands'  : {'hp_': 8/30,
+                'atk_': 8/30,
+                'def_': 8/30,
+                'enerRech_': 3/30,
+                'eleMas': 3/30},
+    'goblet' : {'hp_': 77/400,
+                'atk_': 77/400,
+                'def_': 76/400,
+                'pyro_dmg_': 20/400,
+                'electro_dmg_': 20/400,
+                'cryo_dmg_': 20/400,
+                'hydro_dmg_': 20/400,
+                'dendro_dmg_': 20/400,
+                'anemo_dmg_': 20/400,
+                'geo_dmg_': 20/400,
+                'physical_dmg_': 20/400,
+                'eleMas': 10/400},
+    'circlet': {'hp_': 11/50,
+                'atk_': 11/50,
+                'def_': 11/50,
+                'critRate_': 5/50,
+                'critDMG_': 5/50,
+                'heal_': 5/50,
+                'eleMas': 2/50}
 }
 
 SUB_PROBS = [6, 6, 6, 4, 4, 4, 4, 4, 3, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0]
@@ -313,7 +313,13 @@ def calculate_probability(counts, base_prob):
     multinomial_coeff = numerator / denominator
     return multinomial_coeff * base_prob
 
+def top_x():
+    if FastArtifact.score_distro is None:
+        pass
+
 class FastArtifact:
+    score_distro = None
+
     def __init__(self, set, lvl, slot, main=None, substats=None, stats=None, lock=False):
 
         self.set: str = set
@@ -410,7 +416,7 @@ class FastArtifact:
         return not (self == other)
 
     @staticmethod
-    def generate(set, lvl=0, slot=None, main=None, source='domain', seed=None):
+    def generate(set, lvl=0, slot=None, main=None, source='domain', rng=None, seed=None):
         """Randomly generate a single artifact.
 
         Args:
@@ -428,6 +434,9 @@ class FastArtifact:
         Returns:
             FastArtifact: Randomly generated artifact
         """
+        if rng is None:
+            rng = np.random.default_rng(seed)
+
         match source:
             case 'domain':
                 prob = 0.2
@@ -442,17 +451,17 @@ class FastArtifact:
             case _:
                 raise ValueError('Invalid artifact source.')
             
-        num_substats = 4 if random.random() < prob else 3
+        num_substats = 4 if rng.random() < prob else 3
         
         if slot is None:
-            slot = random.choice(['flower', 'plume', 'sands', 'goblet', 'circlet'])
+            slot = rng.choice(('flower', 'plume', 'sands', 'goblet', 'circlet'))
             
         if main is None:
             main_options = MAIN_PROBS[slot]
-            main_stat = random.choices(list(main_options.keys()), weights=main_options.values())[0]
+            main_stat = rng.choice(list(main_options.keys()), p=list(main_options.values()))
         else:
             if main not in MAIN_PROBS[slot].keys():
-                raise ValueError('Invalid main stat.')
+                raise ValueError(f'Invalid main stat: {main}')
             main_stat = main
 
         stats = np.zeros(19, dtype=FLOAT_DTYPE)
@@ -466,10 +475,11 @@ class FastArtifact:
         copy_SUB_PROBS[main_idx] = 0
         probs = copy_SUB_PROBS / np.sum(copy_SUB_PROBS)
 
-        sub_stats = np.random.choice(19, size=num_substats, replace=False, p=probs)
+        sub_stats = rng.choice(19, size=num_substats, replace=False, p=probs)
+        #sub_stats = np.random.choice(19, size=num_substats, replace=False, p=probs)
         
         for sub in sub_stats:
-            stats[sub] = random.choice((0.7, 0.8, 0.9, 1.0))
+            stats[sub] = rng.choice((0.7, 0.8, 0.9, 1.0))
 
         artifact = FastArtifact(set, 0, slot, stats=stats)
         num_upgrades = lvl // 4 # TODO: find a better way to do this
@@ -478,7 +488,7 @@ class FastArtifact:
 
         return artifact
 
-    def random_upgrade(self):
+    def random_upgrade(self, rng=None, seed=None):
         """Randomly upgrade artifact in place a single time.
 
         Raises:
@@ -487,23 +497,21 @@ class FastArtifact:
         if self.lvl == 20:
             raise ValueError('Cannot upgrade level 20 artifact')
         
-        self.last_score = None
+        if rng is None:
+            rng = np.random.default_rng(seed)
 
         if len(self.substats) == 3:
-            copy_SUB_PROBS_DICT = SUB_PROBS_DICT.copy()
-            copy_SUB_PROBS_DICT.pop(self.main, None)
-            for substat in self.substats:
-                copy_SUB_PROBS_DICT.pop(NUM_2_STAT[substat], None)
-
-            probs = np.array(list(copy_SUB_PROBS_DICT.values()), dtype=FLOAT_DTYPE)
+            probs = np.array(list(SUB_PROBS_DICT.values()), dtype=FLOAT_DTYPE)
+            probs[self.main] = 0
             probs /= np.sum(probs)
 
-            new_sub = random.choices(list(copy_SUB_PROBS_DICT.keys()), weights=probs)[0]
+            new_sub = rng.choice(list(SUB_PROBS_DICT.keys()), p=probs)
+            #new_sub = random.choices(list(copy_SUB_PROBS_DICT.keys()), weights=probs)[0]
             self.substats.append(STAT_2_NUM[new_sub])
-            self.stats[STAT_2_NUM[new_sub]] = random.choice((0.7, 0.8, 0.9, 1.0))
+            self.stats[STAT_2_NUM[new_sub]] = rng.choice((0.7, 0.8, 0.9, 1.0))
 
         else:
-            temp = random.randint(0, 15)
+            temp = rng.integers(16)
             upgrade_idx = temp // 4
             upgrade_coef = [0.7, 0.8, 0.9, 1][temp % 4]
 
@@ -616,12 +624,8 @@ class FastArtifact:
         Returns:
             float: Score
         """
-        if self.last_score is not None:
-            return self.last_score
 
-        score = self.stats @ targets
-        self.last_score = score
-        return score
+        return self.stats @ targets
 
     #@functools.lru_cache(maxsize=CACHE_SIZE)
     @staticmethod
@@ -726,6 +730,11 @@ class FastArtifact:
         return current_std_dev - new_std_dev
     '''
 
+    @staticmethod
+    def static_upgrade_req_exp(lvl):
+        upgrade_lvl = 4 * ((lvl // 4) + 1)
+        return ARTIFACT_REQ_EXP[upgrade_lvl] - ARTIFACT_REQ_EXP[lvl]
+
     def upgrade_req_exp(self):
         """Estimate how much EXP is needed to upgrade once.
 
@@ -734,6 +743,10 @@ class FastArtifact:
         """
         upgrade_lvl = 4 * ((self.lvl // 4) + 1)
         return ARTIFACT_REQ_EXP[upgrade_lvl] - ARTIFACT_REQ_EXP[self.lvl]
+
+    @staticmethod
+    def static_salvage_exp(lvl):
+        return int(3780 + 0.8 * ARTIFACT_REQ_EXP[lvl])
 
     def salvage_exp(self):
         """Estimate how much EXP given when salvaged.

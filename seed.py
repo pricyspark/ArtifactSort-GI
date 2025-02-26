@@ -177,6 +177,9 @@ class SeededInventory:
         shm_finals.unlink()
 
         return results
+    
+    def explore_points(self, X, y):
+        pass
 
 if __name__ == '__main__':
 
@@ -201,7 +204,8 @@ if __name__ == '__main__':
     print('initialized')
     #seeded.save()
 
-    stuff = np.load('seed.npy')
+    stuff = np.load('data/4000_200_0.npy')
+    #stuff = np.zeros((0, 3), dtype=float)
     print(seeded.upper_bound())
     
     while True:
@@ -210,7 +214,8 @@ if __name__ == '__main__':
         x = np.hstack((coefs, 1 - coefs))
         results = seeded.simulate_multi(x, 6)
         stuff = np.vstack((stuff, results))
-        np.save('seed.npy', stuff)
+        print(stuff.shape)
+        np.save('data/4000_200_0.npy', stuff)
 
     ''' 
     while True:

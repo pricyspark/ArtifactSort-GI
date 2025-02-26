@@ -313,12 +313,8 @@ def calculate_probability(counts, base_prob):
     multinomial_coeff = numerator / denominator
     return multinomial_coeff * base_prob
 
-def top_x():
-    if FastArtifact.score_distro is None:
-        pass
-
 class FastArtifact:
-    score_distro = None
+    score_cdfs = {}
 
     def __init__(self, set, lvl, slot, main=None, substats=None, stats=None, lock=False):
 
@@ -326,7 +322,6 @@ class FastArtifact:
         self.lvl: int = lvl
         self.slot: str = slot
         self.lock = lock
-        self.last_score = None
 
         if stats is not None:
             mask = stats == 16/3
@@ -481,10 +476,8 @@ class FastArtifact:
         for sub in sub_stats:
             stats[sub] = rng.choice((0.7, 0.8, 0.9, 1.0))
 
-        artifact = FastArtifact(set, 0, slot, stats=stats)
-        num_upgrades = lvl // 4 # TODO: find a better way to do this
-        for _ in range(num_upgrades):
-            artifact.random_upgrade()
+        artifact = FastArtifact(set, 0, slot, main_stat, stats=stats)
+        artifact.upgrade_till(lvl, rng, seed)
 
         return artifact
 
@@ -502,7 +495,8 @@ class FastArtifact:
 
         if len(self.substats) == 3:
             probs = np.array(list(SUB_PROBS_DICT.values()), dtype=FLOAT_DTYPE)
-            probs[self.main] = 0
+            if self.main < 10:
+                probs[self.main] = 0
             probs /= np.sum(probs)
 
             new_sub = rng.choice(list(SUB_PROBS_DICT.keys()), p=probs)
@@ -518,6 +512,12 @@ class FastArtifact:
             self.stats[self.substats[upgrade_idx]] += upgrade_coef
 
         self.lvl = (self.lvl // 4) * 4 + 4
+
+    def upgrade_till(self, lvl, rng=None, seed=None):
+        while self.lvl // 4 < lvl // 4:
+            self.random_upgrade(rng, seed)
+
+        self.lvl = lvl
 
     #@functools.lru_cache(maxsize=CACHE_SIZE)
     @staticmethod
@@ -611,6 +611,15 @@ class FastArtifact:
             output[STAT_2_NUM[target]] = value
 
         return output
+    
+    @staticmethod
+    def unvectorize_targets(targets):
+        out_list = []
+        nonzero = np.nonzero(targets)[0]
+        for idx in nonzero:
+            out_list.append((idx, targets[idx]))
+        
+        return tuple(out_list)
 
     # TODO: maybe store scores for each (artifact, targets) pair to avoid
     # repeat calculations
@@ -729,6 +738,63 @@ class FastArtifact:
         
         return current_std_dev - new_std_dev
     '''
+
+    @classmethod
+    def class_top_x_per(cls, scores, slot, main, targets):
+        unvect_targets = FastArtifact.unvectorize_targets(targets)
+        key = slot + '_' + main
+
+        if unvect_targets not in FastArtifact.score_cdfs:
+            FastArtifact.score_cdfs[unvect_targets] = {}
+
+        if key not in FastArtifact.score_cdfs[unvect_targets]:
+            upgrades = np.load('distros/upgrades.npy') # Maybe don't repeat this
+            probs = np.load('distros/upgrade_probs.npy')
+            bases = np.load(f'distros/{key}.npy')
+            
+            main = STAT_2_NUM[main]
+            distro = {}
+            for idx, base in enumerate(bases):
+                for upgrade, prob in zip(upgrades, probs):
+                    stats = np.zeros(19, dtype=float)
+                    for id, coef in zip(range(4), upgrade):
+                        stats[int(base[id])] = coef / 10
+
+                    if stats[main] != 0: # TODO: Get rid of this once no problems
+                        raise ValueError
+                    if main < 3:
+                        stats[main] = 16/3
+                    else:
+                        stats[main] = 8
+
+                    score = stats @ targets
+                    total_prob = prob * base[-1]
+                    if score in distro:
+                        distro[score] += total_prob
+                    else:
+                        distro[score] = total_prob
+
+            cdf = np.zeros((len(distro), 2))
+            cdf[:, 0] = sorted(distro.keys())
+            # sorted_scores = np.array(sorted(distro.keys()))
+            total_probs = np.array([distro[score] for score in cdf[:, 0]])
+            cdf[:, 1] = np.cumsum(total_probs)
+
+            FastArtifact.score_cdfs[unvect_targets][key] = cdf
+
+        cdf = FastArtifact.score_cdfs[unvect_targets][key]
+        indices = np.searchsorted(cdf[:, 0], scores, side='left')
+
+        return 1 - cdf[:, 1][indices]
+    
+    def top_x_per(self, targets):
+        if self.lvl != 20:
+            raise ValueError('Can only rate maxed artifacts.')
+        
+        score = self.score(targets)
+        slot = self.slot
+        main = NUM_2_STAT[self.main]
+        return FastArtifact.class_top_x_per(score, slot, main, targets)
 
     @staticmethod
     def static_upgrade_req_exp(lvl):

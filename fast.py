@@ -757,69 +757,6 @@ class FastArtifact:
         return int(3780 + 0.8 * ARTIFACT_REQ_EXP[self.lvl])
 
     @staticmethod
-    def sort_potential(artifacts, targets_list, special_targets_list=None, 
-                       set_targets_list=None): # TODO: maybe think of better name
-        distros = []
-        for artifact in artifacts:
-            distros.append((artifact.upgrade_distro(20), artifact.set))
-
-        num_special_targets = 0 if special_targets_list is None else len(special_targets_list)
-        num_set_targets = 0 if set_targets_list is None else len(set_targets_list)
-        
-        means = np.zeros((len(artifacts), len(targets_list) + num_special_targets + num_set_targets))
-        sorted_idxs = np.zeros_like(means, dtype=int)
-
-        for idx, (targets, num) in enumerate(targets_list):
-            target_means = [FastArtifact.score_mean(distro, targets) for distro, _ in distros]
-
-            sorted_means = sorted(target_means, reverse=True)
-            sorted_idx = np.array([sorted_means.index(mean) for mean in target_means], dtype=int)
-            sorted_idx[sorted_idx >= num] = np.iinfo(sorted_idx.dtype).max
-            sorted_idxs[:, idx] = sorted_idx
-            means[:, idx] = target_means
-
-        if special_targets_list is not None:
-            for idx, (targets, num) in enumerate(special_targets_list):
-                idx += len(targets_list)
-                target_means = [FastArtifact.score_mean(distro, targets) for distro, _ in distros]
-
-                sorted_means = sorted(target_means, reverse=True)
-                sorted_idx = np.array([sorted_means.index(mean) for mean in target_means], dtype=int)
-                sorted_idx[sorted_idx >= num] = np.iinfo(sorted_idx.dtype).max
-                sorted_idxs[:, idx] = sorted_idx
-                means[:, idx] = target_means
-        
-        if set_targets_list is not None:
-            for idx, (set, targets, num) in enumerate(set_targets_list):
-                idx += len(targets_list) + num_special_targets
-                target_means = []
-                for distro, distro_set in distros:
-                    if set == distro_set:
-                        target_means.append(FastArtifact.score_mean(distro, targets))
-                    else:
-                        target_means.append(-1)
-
-                sorted_means = sorted(target_means, reverse=True)
-                sorted_idx = np.array([sorted_means.index(mean) for mean in target_means], dtype=int)
-                #sorted_idx[sorted_idx >= num] = np.iinfo(sorted_idx.dtype).max
-                sorted_idx[sorted_idx >= num] = np.iinfo(sorted_idx.dtype).max
-                try:
-                    if sorted_means.index(-1) < num:
-                        sorted_idx[sorted_idx >= sorted_means.index(-1)] = np.iinfo(sorted_idx.dtype).max
-                except:
-                    pass
-                sorted_idxs[:, idx] = sorted_idx
-                means[:, idx] = target_means
-
-        np.save('asdf.npy', sorted_idxs)
-        min_idx = list(np.min(sorted_idxs, axis=1))
-
-        #output = dict(zip(artifacts, zip(min_idx, means)))
-        #return dict(sorted(output.items(), key=lambda item: item[1][0], reverse=True))
-        output = dict(zip(artifacts, min_idx))
-        return dict(sorted(output.items(), key=lambda item: item[1], reverse=True))
-
-    @staticmethod
     def read_json(filename, split=False):
         """Read JSON of artifacts.
 

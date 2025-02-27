@@ -739,6 +739,13 @@ class FastArtifact:
         return current_std_dev - new_std_dev
     '''
 
+    # TODO: consolidate distro files of same slot into one file. Make
+    # first value in each row the main stat to differentiate. This is
+    # expensive, so also store the score distro in disk.
+    # This is because artifacts of other main stats still compete. An
+    # ATK goblet may be better than a DMG bonus. Can't greedily compute
+    # them separately. 
+
     @classmethod
     def class_top_x_per(cls, scores, slot, main, targets):
         unvect_targets = FastArtifact.unvectorize_targets(targets)
@@ -795,6 +802,15 @@ class FastArtifact:
         slot = self.slot
         main = NUM_2_STAT[self.main]
         return FastArtifact.class_top_x_per(score, slot, main, targets)
+    
+    # DON"T CALL YET UNTIL DISTROS ARE CONSOLIDATED
+    @classmethod
+    def avg_req_to_beat(cls, distro, targets, slot, main):
+        possibilities, probs = distro
+        scores = possibilities @ targets
+        percents = FastArtifact.class_top_x_per(scores, slot, main, targets)
+        num_req = 1 / percents
+        return num_req @ probs
 
     @staticmethod
     def static_upgrade_req_exp(lvl):

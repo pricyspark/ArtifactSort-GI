@@ -8,6 +8,7 @@ from memory_profiler import profile
 from numba import jit
 from numba.experimental import jitclass
 from collections.abc import Iterable
+from pathlib import Path
 
 def lru_cache_with_numpy(maxsize=128):
     """
@@ -61,7 +62,7 @@ def lru_cache_two_numpy(maxsize=128):
         # Define the cached helper function
         @functools.lru_cache(maxsize=maxsize)
         def cached_func(dtype_str1, shape1, array_data1,
-                       dtype_str2, shape2, array_data2):
+                        dtype_str2, shape2, array_data2):
             # Reconstruct the first NumPy array from cached data
             dtype1 = np.dtype(dtype_str1)
             array1 = np.frombuffer(array_data1, dtype=dtype1).reshape(shape1)
@@ -88,8 +89,8 @@ def lru_cache_two_numpy(maxsize=128):
             shape2 = array2.shape
             array_data2 = array2.tobytes()
             
-            return cached_func(dtype_str1, shape1, array_data1,
-                               dtype_str2, shape2, array_data2)
+            return cached_func( dtype_str1, shape1, array_data1,
+                                dtype_str2, shape2, array_data2 )
         
         return wrapper
     return decorator
@@ -110,8 +111,8 @@ def lru_cache_nested_numpy(maxsize=128):
         # Define the cached helper function
         @functools.lru_cache(maxsize=maxsize)
         def cached_func(dtype_str1, shape1, array_data1,
-                       dtype_str2, shape2, array_data2,
-                       dtype_str3, shape3, array_data3):
+                        dtype_str2, shape2, array_data2,
+                        dtype_str3, shape3, array_data3):
             # Reconstruct the first NumPy array from cached data
             dtype1 = np.dtype(dtype_str1)
             array1 = np.frombuffer(array_data1, dtype=dtype1).reshape(shape1)
@@ -153,9 +154,9 @@ def lru_cache_nested_numpy(maxsize=128):
             shape3 = array3.shape
             array_data3 = array3.tobytes()
             
-            return cached_func(dtype_str1, shape1, array_data1,
-                               dtype_str2, shape2, array_data2,
-                               dtype_str3, shape3, array_data3)
+            return cached_func( dtype_str1, shape1, array_data1,
+                                dtype_str2, shape2, array_data2,
+                                dtype_str3, shape3, array_data3 )
         
         return wrapper
     return decorator
@@ -510,9 +511,11 @@ class FastArtifact:
             probs = np.array(list(SUB_PROBS_DICT.values()), dtype=FLOAT_DTYPE)
             if self.main < 10:
                 probs[self.main] = 0
+            for sub in self.substats:
+                probs[sub] = 0
             probs /= np.sum(probs)
 
-            new_sub = rng.choice(list(SUB_PROBS_DICT.keys()), p=probs)
+            new_sub = rng.choice(list(SUB_PROBS_DICT.keys()), p=probs) # TODO: this doesn't need to use SUB_PROBS_DICT only SUB_PROB since it immediately converts the substat back to idx
             #new_sub = random.choices(list(copy_SUB_PROBS_DICT.keys()), weights=probs)[0]
             self.substats.append(STAT_2_NUM[new_sub])
             self.stats[STAT_2_NUM[new_sub]] = rng.choice((0.7, 0.8, 0.9, 1.0))
@@ -564,7 +567,7 @@ class FastArtifact:
             add_substat = True
 
             # Create list of possible extra substat
-            copy_SUB_PROBS_DICT = SUB_PROBS_DICT.copy()
+            copy_SUB_PROBS_DICT = SUB_PROBS_DICT.copy() # TODO: don't use SUB_PROBS_DICT since it gets converted to nums anyways
             copy_SUB_PROBS_DICT.pop(NUM_2_STAT[main], None)
             for substat_idx in substats:
                 copy_SUB_PROBS_DICT.pop(NUM_2_STAT[substat_idx], None)
@@ -766,41 +769,57 @@ class FastArtifact:
 
         if unvect_targets not in FastArtifact.score_cdfs:
             FastArtifact.score_cdfs[unvect_targets] = {}
+            print('Scores not loaded')
 
         if slot not in FastArtifact.score_cdfs[unvect_targets]:
-            upgrades = np.load('distros/upgrades.npy') # Maybe don't repeat this
-            probs = np.load('distros/upgrade_probs.npy')
-            bases = np.load(f'distros/{slot}.npy')
-            
-            distro = {}
-            for idx, base in enumerate(bases):
-                for upgrade, prob in zip(upgrades, probs):
-                    stats = np.zeros(19, dtype=float)
+            filename = 'distros/scores/'
+            for idx, coef in unvect_targets:
+                filename += str(idx) + '_' + str(coef) + '_'
 
-                    main = base[0]
-                    if main < 3:
-                        stats[main] = 16/3
-                    else:
-                        stats[main] = 8
+            filename = filename[:-1]
+            Path(filename).mkdir(parents=True, exist_ok=True)
+            filename += '/' + slot + '.npy'
+            try: # TODO: maybe check for the file to prevent nesting
+                FastArtifact.score_cdfs[unvect_targets][slot] = np.load(filename)
+                print('Scores loaded from file.')
+            except:
+                print('Scores not found. Generating...')
+                print(filename)
+                upgrades = np.load('distros/upgrades.npy') # Maybe don't repeat this
+                probs = np.load('distros/upgrade_probs.npy')
+                bases = np.load(f'distros/{slot}.npy')
+                
+                distro = {}
+                for idx, base in enumerate(bases):
+                    for upgrade, prob in zip(upgrades, probs):
+                        stats = np.zeros(19, dtype=float)
 
-                    for a, b in zip(base[1:], upgrade):
-                        stats[a] = b / 10
+                        main = base[0]
+                        if main < 3:
+                            stats[int(main)] = 16/3
+                        else:
+                            stats[int(main)] = 8
 
-                    score = stats @ targets
-                    
-                    total_prob = prob * base[-1]
-                    if score in distro:
-                        distro[score] += total_prob
-                    else:
-                        distro[score] = total_prob
+                        for a, b in zip(base[1:], upgrade):
+                            stats[int(a)] = b / 10
 
-            cdf = np.zeros((len(distro), 2))
-            cdf[:, 0] = sorted(distro.keys())
-            # sorted_scores = np.array(sorted(distro.keys()))
-            total_probs = np.array([distro[score] for score in cdf[:, 0]])
-            cdf[:, 1] = np.cumsum(total_probs)
+                        score = stats @ targets
+                        
+                        total_prob = prob * base[-1]
+                        if score in distro:
+                            distro[score] += total_prob
+                        else:
+                            distro[score] = total_prob
 
-            FastArtifact.score_cdfs[unvect_targets][slot] = cdf
+                cdf = np.zeros((len(distro), 2))
+                cdf[:, 0] = sorted(distro.keys())
+                # sorted_scores = np.array(sorted(distro.keys()))
+                total_probs = np.array([distro[score] for score in cdf[:, 0]])
+                cdf[:, 1] = np.cumsum(total_probs)
+
+                FastArtifact.score_cdfs[unvect_targets][slot] = cdf
+                np.save(filename, cdf)
+                print('Scores generated and saved.')
 
         cdf = FastArtifact.score_cdfs[unvect_targets][slot]
         indices = np.searchsorted(cdf[:, 0], scores, side='left')
@@ -813,15 +832,14 @@ class FastArtifact:
         
         score = self.score(targets)
         slot = self.slot
-        main = NUM_2_STAT[self.main]
-        return FastArtifact.class_top_x_per(score, slot, main, targets)
+        return FastArtifact.class_top_x_per(score, slot, targets)
     
     # DON"T CALL YET UNTIL DISTROS ARE CONSOLIDATED
     @classmethod
     def avg_req_to_beat(cls, distro, targets, slot, main):
         possibilities, probs = distro
         scores = possibilities @ targets
-        percents = FastArtifact.class_top_x_per(scores, slot, main, targets)
+        percents = FastArtifact.class_top_x_per(scores, slot, targets)
         num_req = 1 / percents
         return num_req @ probs
 

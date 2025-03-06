@@ -834,9 +834,8 @@ class FastArtifact:
         slot = self.slot
         return FastArtifact.class_top_x_per(score, slot, targets)
     
-    # DON"T CALL YET UNTIL DISTROS ARE CONSOLIDATED
     @classmethod
-    def avg_req_to_beat(cls, distro, targets, slot, main):
+    def avg_req_to_beat(cls, distro, targets, slot):
         possibilities, probs = distro
         scores = possibilities @ targets
         percents = FastArtifact.class_top_x_per(scores, slot, targets)

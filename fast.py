@@ -186,40 +186,53 @@ def lru_cache_nested_numpy(maxsize=128):
 
 FLOAT_DTYPE = np.float32
 
-NUM_2_STAT = ['hp', 'atk', 'def', 'hp_', 'atk_', 'def_', 'enerRech_', 'eleMas', 
-              'critRate_', 'critDMG_', 'pyro_dmg_', 'electro_dmg_', 'cryo_dmg_', 
-              'hydro_dmg_', 'dendro_dmg_', 'anemo_dmg_', 'geo_dmg_', 
-              'physical_dmg_', 'heal_']
+NUM_2_STAT = [
+    'hp', 'atk', 'def', 'hp_', 'atk_', 'def_', 'enerRech_', 'eleMas', 
+    'critRate_', 'critDMG_', 'pyro_dmg_', 'electro_dmg_', 'cryo_dmg_', 
+    'hydro_dmg_', 'dendro_dmg_', 'anemo_dmg_', 'geo_dmg_', 'physical_dmg_', 
+    'heal_'
+]
+
 STAT_2_NUM = {stat: index for index, stat in enumerate(NUM_2_STAT)}
 
 CACHE_SIZE = 2000
 MAIN_PROBS = {
-    'flower' : {'hp': 1},
-    'plume'  : {'atk': 1},
-    'sands'  : {'hp_': 8/30,
-                'atk_': 8/30,
-                'def_': 8/30,
-                'enerRech_': 3/30,
-                'eleMas': 3/30},
-    'goblet' : {'hp_': 77/400,
-                'atk_': 77/400,
-                'def_': 76/400,
-                'pyro_dmg_': 20/400,
-                'electro_dmg_': 20/400,
-                'cryo_dmg_': 20/400,
-                'hydro_dmg_': 20/400,
-                'dendro_dmg_': 20/400,
-                'anemo_dmg_': 20/400,
-                'geo_dmg_': 20/400,
-                'physical_dmg_': 20/400,
-                'eleMas': 10/400},
-    'circlet': {'hp_': 11/50,
-                'atk_': 11/50,
-                'def_': 11/50,
-                'critRate_': 5/50,
-                'critDMG_': 5/50,
-                'heal_': 5/50,
-                'eleMas': 2/50}
+    'flower' : {
+        'hp': 1
+    },
+    'plume'  : {
+        'atk': 1
+    },
+    'sands'  : {
+        'hp_': 8/30,
+        'atk_': 8/30,
+        'def_': 8/30,
+        'enerRech_': 3/30,
+        'eleMas': 3/30
+    },
+    'goblet' : {
+        'hp_': 77/400,
+        'atk_': 77/400,
+        'def_': 76/400,
+        'pyro_dmg_': 20/400,
+        'electro_dmg_': 20/400,
+        'cryo_dmg_': 20/400,
+        'hydro_dmg_': 20/400,
+        'dendro_dmg_': 20/400,
+        'anemo_dmg_': 20/400,
+        'geo_dmg_': 20/400,
+        'physical_dmg_': 20/400,
+        'eleMas': 10/400
+    },
+    'circlet': {
+        'hp_': 11/50,
+        'atk_': 11/50,
+        'def_': 11/50,
+        'critRate_': 5/50,
+        'critDMG_': 5/50,
+        'heal_': 5/50,
+        'eleMas': 2/50
+    }
 }
 
 SUB_PROBS = [6, 6, 6, 4, 4, 4, 4, 4, 3, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0]
@@ -406,7 +419,7 @@ class FastArtifact:
             self.main == other.main and
             np.array_equal(self.substats, other.substats)
         )
- 
+    
     def __ne__(self, other):
         return not (self == other)
 
@@ -747,34 +760,34 @@ class FastArtifact:
     # them separately. 
 
     @classmethod
-    def class_top_x_per(cls, scores, slot, main, targets):
+    def class_top_x_per(cls, scores, slot, targets):
         unvect_targets = FastArtifact.unvectorize_targets(targets)
-        key = slot + '_' + main
+        # key = slot + '_' + main
 
         if unvect_targets not in FastArtifact.score_cdfs:
             FastArtifact.score_cdfs[unvect_targets] = {}
 
-        if key not in FastArtifact.score_cdfs[unvect_targets]:
+        if slot not in FastArtifact.score_cdfs[unvect_targets]:
             upgrades = np.load('distros/upgrades.npy') # Maybe don't repeat this
             probs = np.load('distros/upgrade_probs.npy')
-            bases = np.load(f'distros/{key}.npy')
+            bases = np.load(f'distros/{slot}.npy')
             
-            main = STAT_2_NUM[main]
             distro = {}
             for idx, base in enumerate(bases):
                 for upgrade, prob in zip(upgrades, probs):
                     stats = np.zeros(19, dtype=float)
-                    for id, coef in zip(range(4), upgrade):
-                        stats[int(base[id])] = coef / 10
 
-                    if stats[main] != 0: # TODO: Get rid of this once no problems
-                        raise ValueError
+                    main = base[0]
                     if main < 3:
                         stats[main] = 16/3
                     else:
                         stats[main] = 8
 
+                    for a, b in zip(base[1:], upgrade):
+                        stats[a] = b / 10
+
                     score = stats @ targets
+                    
                     total_prob = prob * base[-1]
                     if score in distro:
                         distro[score] += total_prob
@@ -787,9 +800,9 @@ class FastArtifact:
             total_probs = np.array([distro[score] for score in cdf[:, 0]])
             cdf[:, 1] = np.cumsum(total_probs)
 
-            FastArtifact.score_cdfs[unvect_targets][key] = cdf
+            FastArtifact.score_cdfs[unvect_targets][slot] = cdf
 
-        cdf = FastArtifact.score_cdfs[unvect_targets][key]
+        cdf = FastArtifact.score_cdfs[unvect_targets][slot]
         indices = np.searchsorted(cdf[:, 0], scores, side='left')
 
         return 1 - cdf[:, 1][indices]

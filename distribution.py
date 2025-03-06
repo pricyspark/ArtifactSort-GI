@@ -81,22 +81,20 @@ def upgrades():
     #np.save('asdf', probs)
 
 def base(slot):
+    something = {}
     for stat in MAIN_PROBS[slot].keys():
 
         copy_SUB_PROBS = np.array(SUB_PROBS, dtype=float)
         if stat not in STAT_2_NUM:
             raise KeyError
-        print('asdf', copy_SUB_PROBS[STAT_2_NUM[stat]])
-        print(stat)
         copy_SUB_PROBS[STAT_2_NUM[stat]] = 0
         copy_SUB_PROBS /= np.sum(copy_SUB_PROBS)
-        print(copy_SUB_PROBS)
-        print(np.sum(copy_SUB_PROBS))
 
         sum = 0
         p = copy_SUB_PROBS
         qwer = {}
         for comb in permutations(range(10), 4):
+            # print('comb', comb)
             prob = 1
             total_prob = 0
             #asdf = (p[comb[0]] 
@@ -120,8 +118,6 @@ def base(slot):
             sum += prob
 
             #print(prob)
-
-            bases = product((0.7, 0.8, 0.9, 1.0), repeat=4)
             
         #    for upgrades in combinations_with_replacement(range(16), 4):
 
@@ -131,6 +127,31 @@ def base(slot):
         for idx, (key, value) in enumerate(qwer.items()):
             qwertyui[idx, :-1] = key
             qwertyui[idx, -1] = value
-        np.save(f'temp/{slot}_{stat}.npy', qwertyui)
 
+        something[stat] = qwertyui
+
+    total = 0
+    for thing in something:
+        total += something[thing].shape[0]
+
+    out = np.zeros((total, 6))
+    temp = 0
+    #print(something.keys())
+    #print(total)
+    for thing in something:
+        print('num cols:', something[thing].shape[1])
+        rows = something[thing].shape[0]
+        out[temp:temp + rows, 0] = STAT_2_NUM[thing]
+        out[temp:temp + rows, 1:-1] = something[thing][:, :-1]
+        out[temp:temp + rows, -1] = something[thing][:, -1] * MAIN_PROBS[slot][thing]
+        temp += rows
+        print('qwer')
+    print(np.sum(out[:, 5]))
+
+    np.save(f'temp/{slot}.npy', out)
+
+base('flower')
+base('plume')
+base('sands')
+base('goblet')
 base('circlet')

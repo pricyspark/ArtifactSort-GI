@@ -77,8 +77,8 @@ def upgrades():
         substats[idx, :] = substat
         probs[idx] = prob
 
-    #np.save('asdf', substats)
-    #np.save('asdf', probs)
+    np.save('distros/upgrades.npy', substats)
+    np.save('distros/upgrade_probs.npy', probs)
 
 def base(slot):
     something = {}
@@ -148,8 +148,9 @@ def base(slot):
         print('qwer')
     print(np.sum(out[:, 5]))
 
-    np.save(f'temp/{slot}.npy', out)
+    np.save(f'distros/{slot}.npy', out)
 
+upgrades()
 base('flower')
 base('plume')
 base('sands')

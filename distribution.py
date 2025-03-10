@@ -10,10 +10,10 @@ from itertools import combinations, combinations_with_replacement, product, perm
 import random
 import math
 
-NUM_2_STAT = ['hp', 'atk', 'def', 'hp_', 'atk_', 'def_', 'enerRech_', 'eleMas', 
-              'critRate_', 'critDMG_', 'pyro_dmg_', 'electro_dmg_', 'cryo_dmg_', 
-              'hydro_dmg_', 'dendro_dmg_', 'anemo_dmg_', 'geo_dmg_', 
-              'physical_dmg_', 'heal_']
+NUM_2_STAT = [  'hp', 'atk', 'def', 'hp_', 'atk_', 'def_', 'enerRech_', 'eleMas', 
+                'critRate_', 'critDMG_', 'pyro_dmg_', 'electro_dmg_', 'cryo_dmg_', 
+                'hydro_dmg_', 'dendro_dmg_', 'anemo_dmg_', 'geo_dmg_', 
+                'physical_dmg_', 'heal_'    ]
 STAT_2_NUM = {stat: index for index, stat in enumerate(NUM_2_STAT)}
 
 CACHE_SIZE = 2000
@@ -45,6 +45,7 @@ MAIN_PROBS = {
                 'heal_': 5/50,
                 'eleMas': 2/50}
 }
+
 SUB_PROBS = [6, 6, 6, 4, 4, 4, 4, 4, 3, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 
 def upgrades():
@@ -56,9 +57,9 @@ def upgrades():
         distro = list(product(range(16), repeat=4)) + list(product(range(16), repeat=5))
         for upgrades in distro:
             if len(upgrades) == 4:
-                prob = 0.8 * ((1/16) ** 4 / 256)
+                prob = 0.8
             else:
-                prob = 0.2 * ((1/16) ** 5 / 256)
+                prob = 0.2 * 1/16
 
             substats = list(base)
             for upgrade in upgrades:
@@ -76,6 +77,8 @@ def upgrades():
     for idx, (substat, prob) in enumerate(dictionary.items()):
         substats[idx, :] = substat
         probs[idx] = prob
+    probs *=  ((1/16) ** 4 / 256)
+    print(np.sum(probs))
 
     np.save('distros/upgrades.npy', substats)
     np.save('distros/upgrade_probs.npy', probs)
@@ -90,17 +93,10 @@ def base(slot):
         copy_SUB_PROBS[STAT_2_NUM[stat]] = 0
         copy_SUB_PROBS /= np.sum(copy_SUB_PROBS)
 
-        sum = 0
-        p = copy_SUB_PROBS
         qwer = {}
         for comb in permutations(range(10), 4):
-            # print('comb', comb)
             prob = 1
             total_prob = 0
-            #asdf = (p[comb[0]] 
-            #        * (p[comb[1]] / (1 - p[comb[0]])) 
-            #        * (p[comb[2]] / (1 - p[comb[0]] - p[comb[1]]))
-            #        * (p[comb[3]] / (1 - p[comb[0]] - p[comb[1]] - p[comb[2]])))
             for idx in comb:
                 current_prob = copy_SUB_PROBS[idx] / (1 - total_prob)
                 total_prob += copy_SUB_PROBS[idx]
@@ -114,14 +110,9 @@ def base(slot):
                 qwer[comb] += prob
             else:
                 qwer[comb] = prob
-
-            sum += prob
-
-            #print(prob)
             
         #    for upgrades in combinations_with_replacement(range(16), 4):
 
-        print(sum)
         qwertyui = np.zeros((len(qwer), 5))
 
         for idx, (key, value) in enumerate(qwer.items()):
@@ -139,13 +130,11 @@ def base(slot):
     #print(something.keys())
     #print(total)
     for thing in something:
-        print('num cols:', something[thing].shape[1])
         rows = something[thing].shape[0]
         out[temp:temp + rows, 0] = STAT_2_NUM[thing]
         out[temp:temp + rows, 1:-1] = something[thing][:, :-1]
         out[temp:temp + rows, -1] = something[thing][:, -1] * MAIN_PROBS[slot][thing]
         temp += rows
-        print('qwer')
     print(np.sum(out[:, 5]))
 
     np.save(f'distros/{slot}.npy', out)

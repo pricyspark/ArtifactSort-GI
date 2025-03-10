@@ -185,7 +185,7 @@ def lru_cache_nested_numpy(maxsize=128):
 # 17: physical_dmg_
 # 18: heal_
 
-FLOAT_DTYPE = np.float32
+FLOAT_DTYPE = np.float64
 
 STATS = [
     'hp', 'atk', 'def', 'hp_', 'atk_', 'def_', 'enerRech_', 'eleMas', 
@@ -313,6 +313,13 @@ def calculate_probability(counts, base_prob):
         denominator *= math.factorial(count)
     multinomial_coeff = numerator / denominator
     return multinomial_coeff * base_prob
+
+def close_key(dict, target):
+    for key in dict:
+        if math.isclose(key, target, abs_tol=0.01):
+            return key
+        
+    return None
 
 class FastArtifact:
     score_cdfs = {}
@@ -796,10 +803,13 @@ class FastArtifact:
                         score = stats @ targets
                         
                         total_prob = prob * base[-1]
-                        if score in distro:
-                            distro[score] += total_prob
-                        else:
+                        
+                        key = close_key(distro, score)
+                        if key is None:
+                            print('new key:', score)
                             distro[score] = total_prob
+                        else:
+                            distro[key] += total_prob
 
                 cdf = np.zeros((len(distro), 2))
                 cdf[:, 0] = sorted(distro.keys())

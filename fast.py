@@ -187,14 +187,14 @@ def lru_cache_nested_numpy(maxsize=128):
 
 FLOAT_DTYPE = np.float32
 
-NUM_2_STAT = [
+STATS = [
     'hp', 'atk', 'def', 'hp_', 'atk_', 'def_', 'enerRech_', 'eleMas', 
     'critRate_', 'critDMG_', 'pyro_dmg_', 'electro_dmg_', 'cryo_dmg_', 
     'hydro_dmg_', 'dendro_dmg_', 'anemo_dmg_', 'geo_dmg_', 'physical_dmg_', 
     'heal_'
 ]
 
-STAT_2_NUM = {stat: index for index, stat in enumerate(NUM_2_STAT)}
+STAT_2_NUM = {stat: index for index, stat in enumerate(STATS)}
 
 CACHE_SIZE = 2000
 MAIN_PROBS = {
@@ -237,19 +237,6 @@ MAIN_PROBS = {
 }
 
 SUB_PROBS = [6, 6, 6, 4, 4, 4, 4, 4, 3, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-
-SUB_PROBS_DICT = {
-    'hp': 6,
-    'atk': 6,
-    'def': 6,
-    'hp_': 4,
-    'atk_': 4,
-    'def_': 4,
-    'enerRech_': 4,
-    'eleMas': 4,
-    'critRate_': 3,
-    'critDMG_': 3
-}
 
 MAIN_VALUES = {
     'hp': 4780,
@@ -391,20 +378,20 @@ class FastArtifact:
     # TODO: round substat floats when printing, maybe by modifying or
     # just the displayed value
     def __str__(self):
-        output = f'set: {self.set}\nlvl: {self.lvl}\nslot: {self.slot}\nmain: {NUM_2_STAT[self.main]}\nsub: {{'
+        output = f'set: {self.set}\nlvl: {self.lvl}\nslot: {self.slot}\nmain: {STATS[self.main]}\nsub: {{'
         for idx, substat_idx in enumerate(self.substats):
             if idx != 0:
                 output += ', '
-            output += f'\'{str(NUM_2_STAT[substat_idx])}\': {self.stats[substat_idx]}'
+            output += f'\'{str(STATS[substat_idx])}\': {self.stats[substat_idx]}'
         output += '}'
         return output
     
     def __repr__(self):
-        output = f'set: {self.set}\nlvl: {self.lvl}\nslot: {self.slot}\nmain: {NUM_2_STAT[self.main]}\nsub: {{'
+        output = f'set: {self.set}\nlvl: {self.lvl}\nslot: {self.slot}\nmain: {STATS[self.main]}\nsub: {{'
         for idx, substat_idx in enumerate(self.substats):
             if idx != 0:
                 output += ', '
-            output += f'\'{str(NUM_2_STAT[substat_idx])}\': {self.stats[substat_idx]}'
+            output += f'\'{str(STATS[substat_idx])}\': {self.stats[substat_idx]}'
         output += '}'
         return output
     
@@ -508,14 +495,16 @@ class FastArtifact:
             rng = np.random.default_rng(seed)
 
         if len(self.substats) == 3:
-            probs = np.array(list(SUB_PROBS_DICT.values()), dtype=FLOAT_DTYPE)
+            probs = np.array(SUB_PROBS, dtype=FLOAT_DTYPE)
+            # probs = np.array(list(SUB_PROBS_DICT.values()), dtype=FLOAT_DTYPE)
             if self.main < 10:
                 probs[self.main] = 0
             for sub in self.substats:
                 probs[sub] = 0
             probs /= np.sum(probs)
 
-            new_sub = rng.choice(list(SUB_PROBS_DICT.keys()), p=probs) # TODO: this doesn't need to use SUB_PROBS_DICT only SUB_PROB since it immediately converts the substat back to idx
+            new_sub = rng.choice(STATS, p=probs)
+            # new_sub = rng.choice(list(SUB_PROBS_DICT.keys()), p=probs) # TODO: this doesn't need to use SUB_PROBS_DICT only SUB_PROB since it immediately converts the substat back to idx
             #new_sub = random.choices(list(copy_SUB_PROBS_DICT.keys()), weights=probs)[0]
             self.substats.append(STAT_2_NUM[new_sub])
             self.stats[STAT_2_NUM[new_sub]] = rng.choice((0.7, 0.8, 0.9, 1.0))
@@ -567,15 +556,14 @@ class FastArtifact:
             add_substat = True
 
             # Create list of possible extra substat
-            copy_SUB_PROBS_DICT = SUB_PROBS_DICT.copy() # TODO: don't use SUB_PROBS_DICT since it gets converted to nums anyways
-            copy_SUB_PROBS_DICT.pop(NUM_2_STAT[main], None)
+            new_probs = np.array(SUB_PROBS, dtype=FLOAT_DTYPE)
+            new_probs[main] = 0
             for substat_idx in substats:
-                copy_SUB_PROBS_DICT.pop(NUM_2_STAT[substat_idx], None)
-            total = sum(copy_SUB_PROBS_DICT.values())
-            for substat in copy_SUB_PROBS_DICT:
-                copy_SUB_PROBS_DICT[substat] /= total
+                new_probs[substat_idx] = 0
+            new_probs /= np.sum(new_probs)
             
-            num_possibilities = len(permutations) * len(copy_SUB_PROBS_DICT)
+            num_new = np.count_nonzero(new_probs)
+            num_possibilities = len(permutations) * num_new
         else:
             permutations = list(generate_permutations(num_upgrades, 4))
             num_possibilities = len(permutations)
@@ -592,15 +580,17 @@ class FastArtifact:
             prob = calculate_probability(counts, base_prob)
             for i, substat_idx in enumerate(substats): # Fill in its columns
                 if add_substat:
-                    possibilities[counter:counter+len(copy_SUB_PROBS_DICT), substat_idx] += counts[i] * 0.85
+                    possibilities[counter:counter+num_new, substat_idx] += counts[i] * 0.85
                     #probs[counter:counter+len(copy_SUB_PROBS_DICT)] = prob * np.array(copy_SUB_PROBS_DICT.values())
                 else:
                     possibilities[counter, substat_idx] += 0.85 * counts[i]
                     probs[counter] = prob
                     
             if add_substat:
-                for substat, sub_prob in copy_SUB_PROBS_DICT.items():
-                    possibilities[counter, STAT_2_NUM[substat]] += 0.85 * (counts[3] + 1)
+                for sub_idx, sub_prob in enumerate(new_probs):
+                    if sub_prob == 0:
+                        continue
+                    possibilities[counter, sub_idx] += 0.85 * (counts[3] + 1)
                     probs[counter] = prob * sub_prob
                     counter += 1
             else:

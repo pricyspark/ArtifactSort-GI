@@ -272,6 +272,8 @@ SUB_VALUES = {
     'critDMG_': 7.77
 }
 
+SUB_COEFS = (21, 24, 27, 30)
+
 ARTIFACT_REQ_EXP = [
     0,
     3000,
@@ -314,13 +316,6 @@ def calculate_probability(counts, base_prob):
     multinomial_coeff = numerator / denominator
     return multinomial_coeff * base_prob
 
-def close_key(dict, target):
-    for key in dict:
-        if math.isclose(key, target, abs_tol=0.01):
-            return key
-        
-    return None
-
 class FastArtifact:
     score_cdfs = {}
 
@@ -332,9 +327,9 @@ class FastArtifact:
         self.lock = lock
 
         if stats is not None:
-            mask = stats == 16/3
+            mask = stats == 160 # 16/3 * 30
             if np.any(mask):
-                self.main = np.argmax(stats == 16/3)
+                self.main = np.argmax(stats == 160)
             else:
                 self.main = np.argmax(stats)
 
@@ -345,12 +340,12 @@ class FastArtifact:
 
         self.main: int = STAT_2_NUM[main]
         self.substats: list = [STAT_2_NUM[substat] for substat in substats.keys()]
-        self.stats = np.zeros(19, dtype=FLOAT_DTYPE)
+        self.stats = np.zeros(19, dtype=np.uint8)
 
         if self.main < 3:
-            self.stats[self.main] = 16/3
+            self.stats[self.main] = 160 # 16/3 * 30
         else:
-            self.stats[self.main] = 8
+            self.stats[self.main] = 240 # 8 * 30
 
         for substat, value in substats.items():
             self.stats[STAT_2_NUM[substat]] = value
@@ -376,7 +371,7 @@ class FastArtifact:
         for substat in json_dict['substats']:
             stat = substat['key']
             value = substat['value']
-            coef = round(value / SUB_VALUES[stat], 1)
+            coef = round(value / SUB_VALUES[stat] * 30, 0)
             substats[substat['key']] = coef
         lock = json_dict['lock']
 
@@ -467,12 +462,12 @@ class FastArtifact:
                 raise ValueError(f'Invalid main stat: {main}')
             main_stat = main
 
-        stats = np.zeros(19, dtype=FLOAT_DTYPE)
+        stats = np.zeros(19, dtype=np.uint8)
         main_idx = STAT_2_NUM[main_stat]
         if main_idx < 3:
-            stats[main_idx] = 16/3
+            stats[main_idx] = 160
         else:
-            stats[main_idx] = 8
+            stats[main_idx] = 240
 
         copy_SUB_PROBS = np.array(SUB_PROBS)
         copy_SUB_PROBS[main_idx] = 0
@@ -482,7 +477,7 @@ class FastArtifact:
         #sub_stats = np.random.choice(19, size=num_substats, replace=False, p=probs)
         
         for sub in sub_stats:
-            stats[sub] = rng.choice((0.7, 0.8, 0.9, 1.0))
+            stats[sub] = rng.choice(SUB_COEFS)
 
         artifact = FastArtifact(set, 0, slot, main_stat, stats=stats)
         artifact.upgrade_till(lvl, rng, seed)
@@ -514,12 +509,12 @@ class FastArtifact:
             # new_sub = rng.choice(list(SUB_PROBS_DICT.keys()), p=probs) # TODO: this doesn't need to use SUB_PROBS_DICT only SUB_PROB since it immediately converts the substat back to idx
             #new_sub = random.choices(list(copy_SUB_PROBS_DICT.keys()), weights=probs)[0]
             self.substats.append(STAT_2_NUM[new_sub])
-            self.stats[STAT_2_NUM[new_sub]] = rng.choice((0.7, 0.8, 0.9, 1.0))
+            self.stats[STAT_2_NUM[new_sub]] = rng.choice(SUB_COEFS)
 
         else:
             temp = rng.integers(16)
             upgrade_idx = temp // 4
-            upgrade_coef = [0.7, 0.8, 0.9, 1][temp % 4]
+            upgrade_coef = SUB_COEFS[temp % 4]
 
             self.stats[self.substats[upgrade_idx]] += upgrade_coef
 
@@ -546,9 +541,9 @@ class FastArtifact:
             upgrading.
         """
 
-        mask = stats == 16/3
+        mask = stats == 160
         if np.any(mask):
-            main = np.argmax(stats == 16/3)
+            main = np.argmax(stats == 160)
         else:
             main = np.argmax(stats)
 
@@ -614,7 +609,7 @@ class FastArtifact:
     
     @staticmethod
     def vectorize_targets(targets: dict):
-        output = np.zeros(19, dtype=FLOAT_DTYPE)
+        output = np.zeros(19, dtype=np.uint16) # TODO: this has to be at least uint16, so maybe make all other uint16 for speed, but it depends on how much uint8s and uint16s actually interact
         for target, value in targets.items():
             if target == 'crit_':
                 output[8] = value
@@ -789,27 +784,35 @@ class FastArtifact:
                 distro = {}
                 for idx, base in enumerate(bases):
                     for upgrade, prob in zip(upgrades, probs):
-                        stats = np.zeros(19, dtype=float)
+                        stats = np.zeros(19, dtype=np.uint8)
 
                         main = base[0]
                         if main < 3:
-                            stats[int(main)] = 16/3
+                            stats[int(main)] = 160
                         else:
-                            stats[int(main)] = 8
+                            stats[int(main)] = 240
 
                         for a, b in zip(base[1:], upgrade):
-                            stats[int(a)] = b / 10
+                            b = np.uint8(b)
+                            stats[int(a)] = b * 3
 
                         score = stats @ targets
                         
+                        
                         total_prob = prob * base[-1]
                         
+                        if score in distro:
+                            distro[score] += total_prob
+                        else:
+                            distro[score] = total_prob
+                        '''
                         key = close_key(distro, score)
                         if key is None:
                             print('new key:', score)
                             distro[score] = total_prob
                         else:
                             distro[key] += total_prob
+                        '''
 
                 cdf = np.zeros((len(distro), 2))
                 cdf[:, 0] = sorted(distro.keys())

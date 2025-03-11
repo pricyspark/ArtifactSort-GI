@@ -480,7 +480,7 @@ class FastArtifact:
             stats[sub] = rng.choice(SUB_COEFS)
 
         artifact = FastArtifact(set, 0, slot, main_stat, stats=stats)
-        artifact.upgrade_till(lvl, rng, seed)
+        artifact.upgrade_until(lvl, rng, seed)
 
         return artifact
 
@@ -520,7 +520,7 @@ class FastArtifact:
 
         self.lvl = (self.lvl // 4) * 4 + 4
 
-    def upgrade_till(self, lvl, rng=None, seed=None):
+    def upgrade_until(self, lvl, rng=None, seed=None):
         while self.lvl // 4 < lvl // 4:
             self.random_upgrade(rng, seed)
 
@@ -582,17 +582,17 @@ class FastArtifact:
             prob = calculate_probability(counts, base_prob)
             for i, substat_idx in enumerate(substats): # Fill in its columns
                 if add_substat:
-                    possibilities[counter:counter+num_new, substat_idx] += counts[i] * 0.85
+                    possibilities[counter:counter+num_new, substat_idx] += counts[i] * 24 # TODO: this doesn't work because 0.85 * 30 isn't an integer. Either multiply by 60 instead of 30, stop using 0.85 as an estimate, or use 0.8 which would underestimate upgardes. This may be fine bc tuning may counteract this. Not ideal though.
                     #probs[counter:counter+len(copy_SUB_PROBS_DICT)] = prob * np.array(copy_SUB_PROBS_DICT.values())
                 else:
-                    possibilities[counter, substat_idx] += 0.85 * counts[i]
+                    possibilities[counter, substat_idx] += 24 * counts[i]
                     probs[counter] = prob
                     
             if add_substat:
                 for sub_idx, sub_prob in enumerate(new_probs):
                     if sub_prob == 0:
                         continue
-                    possibilities[counter, sub_idx] += 0.85 * (counts[3] + 1)
+                    possibilities[counter, sub_idx] += 24 * (counts[3] + 1)
                     probs[counter] = prob * sub_prob
                     counter += 1
             else:
@@ -609,7 +609,7 @@ class FastArtifact:
     
     @staticmethod
     def vectorize_targets(targets: dict):
-        output = np.zeros(19, dtype=np.uint16) # TODO: this has to be at least uint16, so maybe make all other uint16 for speed, but it depends on how much uint8s and uint16s actually interact
+        output = np.zeros(19, dtype=np.uint32) # TODO: this has to be at least uint16, so maybe make all other uint16 for speed, but it depends on how much uint8s and uint16s actually interact
         for target, value in targets.items():
             if target == 'crit_':
                 output[8] = value
@@ -838,12 +838,20 @@ class FastArtifact:
         return FastArtifact.class_top_x_per(score, slot, targets)
     
     @classmethod
-    def avg_req_to_beat(cls, distro, targets, slot):
+    def req_to_beat_mean(cls, distro, targets, slot):
         possibilities, probs = distro
         scores = possibilities @ targets
         percents = FastArtifact.class_top_x_per(scores, slot, targets)
         num_req = 1 / percents
         return num_req @ probs
+    
+    @classmethod
+    def req_to_beat_second_moment(cls, distro, targets, slot):
+        possibilities, probs = distro
+        scores = possibilities @ targets
+        percents = FastArtifact.class_top_x_per(scores, slot, targets)
+        num_req = 1 / percents
+        return np.square(num_req) @ probs
 
     @staticmethod
     def static_upgrade_req_exp(lvl):
@@ -858,6 +866,13 @@ class FastArtifact:
         """
         upgrade_lvl = 4 * ((self.lvl // 4) + 1)
         return ARTIFACT_REQ_EXP[upgrade_lvl] - ARTIFACT_REQ_EXP[self.lvl]
+    
+    @staticmethod
+    def static_max_req_exp(lvl):
+        return ARTIFACT_REQ_EXP[20] - ARTIFACT_REQ_EXP[lvl]
+    
+    def max_req_exp(self):
+        return ARTIFACT_REQ_EXP[20] - ARTIFACT_REQ_EXP[self.lvl] 
 
     @staticmethod
     def static_salvage_exp(lvl):

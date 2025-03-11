@@ -980,29 +980,9 @@ class FastArtifact:
         Returns:
             tuple: Tuple of 6 lists for each level
         """
-        # TODO: This is so stupid lmao but it works, im too lazy to make
-        # it smarter
-        zeros = []
-        fours = []
-        eights = []
-        twelves = []
-        sixteens = []
-        twenties = []
+        
+        output = [None] * 6
         for artifact in artifacts:
-            match artifact.lvl // 4:
-                case 0:
-                    zeros.append(artifact)
-                case 1:
-                    fours.append(artifact)
-                case 2:
-                    eights.append(artifact)
-                case 3:
-                    twelves.append(artifact)
-                case 4:
-                    sixteens.append(artifact)
-                case 5:
-                    twenties.append(artifact)
-                case _:
-                    raise ValueError('Invalid artifact level')
-
-        return zeros, fours, eights, twelves, sixteens, twenties
+            output[artifact // 4].append(artifact)
+        
+        return tuple(output)

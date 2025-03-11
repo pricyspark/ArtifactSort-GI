@@ -363,6 +363,7 @@ class FastArtifact:
         Returns:
             FastArtifact: _description_
         """
+        
         set: str = json_dict['setKey']
         lvl: int = json_dict['level']
         slot: str = json_dict['slotKey']
@@ -371,7 +372,7 @@ class FastArtifact:
         for substat in json_dict['substats']:
             stat = substat['key']
             value = substat['value']
-            coef = round(value / SUB_VALUES[stat] * 30, 0)
+            coef = round(value / SUB_VALUES[stat] * 30)
             substats[substat['key']] = coef
         lock = json_dict['lock']
 
@@ -402,36 +403,44 @@ class FastArtifact:
         return hash((self.lvl, self.slot, self.stats.tobytes()))
     
     def __eq__(self, other):
-        # TODO: add checking to normal artifacts
         return (
+            self.set == other.set and
             self.lvl == other.lvl and
             self.slot == other.slot and
             self.main == other.main and
-            np.array_equal(self.substats, other.substats)
+            np.array_equal(self.substats, other.substats) and
+            np.array_equal(self.stats, other.stats)
         )
     
     def __ne__(self, other):
         return not (self == other)
 
     @staticmethod
-    def generate(set, lvl=0, slot=None, main=None, source='domain', rng=None, seed=None):
+    def generate(set: str, lvl=0, slot=None, main=None, source='domain', rng=None, seed=None):
         """Randomly generate a single artifact.
 
         Args:
+            set (str): Generated artifact's set.
             lvl (int, optional): Generated artifact's level. Defaults to 0.
-            slot (_type_, optional): Generated artifact's slot. If None,
-            randomly assign a slot. Defaults to None.
-            source (str, optional): The source of the artifact, which
-            affects the probability of getting 4 substats at level 0.
+            slot (str, optional): Generated artifact's slot. Defaults to None.
+            main (int, optional): Generated artifact's main stat index.
+            Defaults to None.
+            source (str, optional): Source of obtaining artifact. This
+            changes the probability it has 4 substats at level 0.
             Defaults to 'domain'.
+            rng (Generator, optional): Preseeded numpy Generator object.
+            If passed, ignore seed and use this. Defaults to None.
+            seed (int, optional): If no numpy Generator is provided, use this
+            to create a new one. Defaults to None.
 
         Raises:
             ValueError: If source is invalid.
-            ValueError: If main stat is invalid.
+            ValueError: If main stat is not valid for given slot.
 
         Returns:
-            FastArtifact: Randomly generated artifact
+            FastArtifact: Randomly generated artifact.
         """
+        
         if rng is None:
             rng = np.random.default_rng(seed)
 
@@ -485,11 +494,18 @@ class FastArtifact:
         return artifact
 
     def random_upgrade(self, rng=None, seed=None):
-        """Randomly upgrade artifact in place a single time.
+        """Randomly upgrade artifact in place.
+
+        Args:
+            rng (Generator, optional): Preseeded numpy Generator object.
+            If passed, ignore seed and use this. Defaults to None.
+            seed (int, optional): If no numpy Generator is provided, use this
+            to create a new one. Defaults to None.
 
         Raises:
             ValueError: If artifact is already max level.
         """
+        
         if self.lvl == 20:
             raise ValueError('Cannot upgrade level 20 artifact')
         
@@ -528,17 +544,20 @@ class FastArtifact:
 
     #@functools.lru_cache(maxsize=CACHE_SIZE)
     @staticmethod
-    @lru_cache_with_numpy(maxsize=CACHE_SIZE)
-    def upgrade_distro(num_upgrades, stats):
-        """Calculate the artifact's possible upgrades and their
-        probability distribution.
+    #@lru_cache_with_numpy(maxsize=CACHE_SIZE)
+    def upgrade_distro(num_upgrades: int, stats: np.ndarray):
+        """Artifact's possible max upgrades and their probability
+        distribution.
 
         Args:
-            lvl (int): Target level after upgrading
+            num_upgrades (int): How many upgrades needed to max.
+            stats (NDArray): Current artifact's stats to base the
+            possibilites off of.
 
         Returns:
-            list: List of tuples of (possibility, probability) after
-            upgrading.
+            tuple(NDArray, NDArray): First array is possibilities. Each
+            row represents the stats of the maxed artifact. Second array
+            probabilities corresponding to each row of possibilities.
         """
 
         mask = stats == 160
@@ -601,15 +620,37 @@ class FastArtifact:
         return possibilities, probs
     
     @staticmethod
-    def sample_distro(distro: list):
-        possibilities = distro[0]
-        probs = distro[1]
+    def sample_distro(distro: tuple):
+        """Randomly sample an artifact from a distro and return its
+        stats.
+
+        Args:
+            distro (tuple): Tuple returned from upgrade_distro(). First
+            array is possibilities. Each row represents the stats of the
+            maxed artifact. Second array probabilities corresponding to
+            each row of possibilities.
+
+        Returns:
+            NDArray: Stats of the sampled artifact.
+        """
+        
+        possibilities, probs = distro
         row = np.random.choice(possibilities.shape[0], p=probs)
         return possibilities[row, :]
     
     @staticmethod
     def vectorize_targets(targets: dict):
-        output = np.zeros(19, dtype=np.uint32) # TODO: this has to be at least uint16, so maybe make all other uint16 for speed, but it depends on how much uint8s and uint16s actually interact
+        """Convert a target dictionary to a target array.
+
+        Args:
+            targets (dict): Mapping from stat to weight. Weights must be
+            ints, or they will be cast.
+
+        Returns:
+            NDArray: Array of stat weights.
+        """
+        
+        output = np.zeros(19, dtype=np.uint32)
         for target, value in targets.items():
             if target == 'crit_':
                 output[8] = value
@@ -622,6 +663,15 @@ class FastArtifact:
     
     @staticmethod
     def unvectorize_targets(targets):
+        """Convert a target array back to a target dictionary.
+
+        Args:
+            targets (NDArray): Array of stat weights.
+
+        Returns:
+            dict: Mapping from stat to weight
+        """
+        
         out_list = []
         nonzero = np.nonzero(targets)[0]
         for idx in nonzero:
@@ -629,62 +679,71 @@ class FastArtifact:
         
         return tuple(out_list)
 
-    # TODO: maybe store scores for each (artifact, targets) pair to avoid
-    # repeat calculations
+    # TODO: maybe cache
     def score(self, targets: np.ndarray):
-        """Calculate the current score.
+        """Current score for given targets.
 
         Args:
-            targets (dict): Dictionary mapping a stat to a weight to
-            base the score.
+            targets (NDArray): Vectorized array of target weights.
 
         Returns:
-            float: Score
+            float: Calculated score
         """
 
         return self.stats @ targets
 
     #@functools.lru_cache(maxsize=CACHE_SIZE)
     @staticmethod
-    @lru_cache_nested_numpy(maxsize=CACHE_SIZE)
-    def score_mean(distro: list, targets: dict):
-        """Calculate the average score if randomly upgrading an
-        artifact.
+    #@lru_cache_nested_numpy(maxsize=CACHE_SIZE)
+    def score_mean(distro: tuple, targets: np.ndarray):
+        """Average score if maxing an artifact.
 
         Args:
-            distro (list): List of tuples of (possibility, probability)
-            after upgrading. Generated by upgrade_distro.
-            targets (dict): Dictionary mapping a stat to a weight to
-            base the score. 
+            distro (tuple): Tuple returned from upgrade_distro(). First
+            array is possibilities. Each row represents the stats of the
+            maxed artifact. Second array probabilities corresponding to
+            each row of possibilities.
+            targets (NDArray): Vectorized array of target weights.
 
         Raises:
-            ValueError: Distribution doesn't add to 1.
+            ValueError: Distribution probabilities don't add to 1.
 
         Returns:
-            float: Average score
+            float: Calculated average score
         """
+        
         possibilities, probs = distro
+        if np.sum(probs) != 1:
+            raise ValueError('Distribution probabilities don\'t add to 1')
+        
         return (possibilities @ targets) @ probs
     
     #@functools.lru_cache(maxsize=CACHE_SIZE)
     @staticmethod
-    @lru_cache_nested_numpy(maxsize=CACHE_SIZE)
-    def score_second_moment(distro: list, targets: dict):
-        """Calculate the second moment of an artifact distribution.
+    #@lru_cache_nested_numpy(maxsize=CACHE_SIZE)
+    def score_second_moment(distro: tuple, targets: np.ndarray):
+        """Second moment of a distro's scores for the
+        given targets.
 
         Args:
-            distro (list): List of tuples of (possibility, probability)
-            after upgrading. Generated by upgrade_distro.
-            targets (dict): Dictionary mapping a stat to a weight to
-            base the score. 
+            distro (tuple): Tuple returned from upgrade_distro(). First
+            array is possibilities. Each row represents the stats of the
+            maxed artifact. Second array probabilities corresponding to
+            each row of possibilities.
+            targets (NDArray): Vectorized array of target weights.
 
         Raises:
-            ValueError: Distribution does not add to 1.
+            ValueError: Distribution probabilities don't add to 1.
 
         Returns:
-            float: Second moment of score
+            float: Calculated second moment score
         """
+        
         possibilities, probs = distro
+        
+        if np.sum(probs) != 1:
+            raise ValueError('Distribution probabilities don\'t add to 1')
+        
         return np.square(possibilities @ targets) @ probs
 
     # TODO: maybe fix this code duplication, but it would make it 2x
@@ -692,22 +751,21 @@ class FastArtifact:
     #@functools.lru_cache(maxsize=CACHE_SIZE)
     @staticmethod
     #@lru_cache_with_numpy(maxsize=CACHE_SIZE)
-    def score_std_dev(distro: list, targets: dict):
-        """Calculate the standard deviation of scores of an artifact
-        distribution.
+    def score_std_dev(distro: tuple, targets: np.ndarray):
+        """Standard deviation of a distro's scores for given
+        targets.
 
         Args:
-            distro (list): List of tuples of (possibility, probability)
-            after upgrading. Generated by upgrade_distro.
-            targets (dict): Dictionary mapping a stat to a weight to
-            base the score. 
-
-        Raises:
-            ValueError: Distribution does not add to 1.
+            distro (tuple): Tuple returned from upgrade_distro(). First
+            array is possibilities. Each row represents the stats of the
+            maxed artifact. Second array probabilities corresponding to
+            each row of possibilities.
+            targets (NDArray): Vectorized array of target weights.
 
         Returns:
-            float: Standard deviation of score
+            float: Calculated standard deviation score
         """
+        
         return math.sqrt(FastArtifact.score_second_moment(distro, targets) - (FastArtifact.score_mean(distro, targets) ** 2))
 
     '''
@@ -747,15 +805,23 @@ class FastArtifact:
         return current_std_dev - new_std_dev
     '''
 
-    # TODO: consolidate distro files of same slot into one file. Make
-    # first value in each row the main stat to differentiate. This is
-    # expensive, so also store the score distro in disk.
-    # This is because artifacts of other main stats still compete. An
-    # ATK goblet may be better than a DMG bonus. Can't greedily compute
-    # them separately. 
-
     @classmethod
     def class_top_x_per(cls, scores, slot, targets):
+        """Probability a random maxed artifact of the same
+        slot needed to beat a given score for the given targets. Save
+        score cumulative density function as class variable. Try to load
+        from file first, generating from scratch and saving if needed.
+
+        Args:
+            scores (NDArray): Array of scores, which each generate a
+            separate probability.
+            slot (str): Artifact slot for the scores.
+            targets (NDArray): Vectorized array of target weights.
+
+        Returns:
+            NDArray: Array of probabilities for each score.
+        """
+        
         unvect_targets = FastArtifact.unvectorize_targets(targets)
         # key = slot + '_' + main
 
@@ -830,6 +896,19 @@ class FastArtifact:
         return 1 - cdf[:, 1][indices]
     
     def top_x_per(self, targets):
+        """Probability a random maxed artifact of the same
+        slot needed to beat current artifact's score for the given targets.
+
+        Args:
+            targets (NDArray): Vectorized array of target weights.
+
+        Raises:
+            ValueError: If current artifact isn't maxed.
+
+        Returns:
+            float: Calculated probability.
+        """
+        
         if self.lvl != 20:
             raise ValueError('Can only rate maxed artifacts.')
         
@@ -839,6 +918,21 @@ class FastArtifact:
     
     @classmethod
     def req_to_beat_mean(cls, distro, targets, slot):
+        """Average number of maxed artifacts of the same slot needed to
+        beat the distro's score for the given targets.
+
+        Args:
+            distro (tuple): Tuple returned from upgrade_distro(). First
+            array is possibilities. Each row represents the stats of the
+            maxed artifact. Second array probabilities corresponding to
+            each row of possibilities.
+            targets (NDArray): Vectorized array of target weights.
+            slot (str): Artifact slot for the scores.
+
+        Returns:
+            float: Calculated average number of artifacts
+        """
+        
         possibilities, probs = distro
         scores = possibilities @ targets
         percents = FastArtifact.class_top_x_per(scores, slot, targets)
@@ -847,6 +941,21 @@ class FastArtifact:
     
     @classmethod
     def req_to_beat_second_moment(cls, distro, targets, slot):
+        """Second moment of the number of maxed artifacts of the same
+        slot needed to beat the distro's score for the given targets.
+
+        Args:
+            distro (tuple): Tuple returned from upgrade_distro(). First
+            array is possibilities. Each row represents the stats of the
+            maxed artifact. Second array probabilities corresponding to
+            each row of possibilities.
+            targets (NDArray): Vectorized array of target weights.
+            slot (str): Artifact slot for the scores.
+
+        Returns:
+            float: Calculated second moment number of artifacts
+        """
+        
         possibilities, probs = distro
         scores = possibilities @ targets
         percents = FastArtifact.class_top_x_per(scores, slot, targets)
@@ -855,35 +964,77 @@ class FastArtifact:
 
     @staticmethod
     def static_upgrade_req_exp(lvl):
+        """Artifact EXP required to reach the given level.
+
+        Args:
+            lvl (int): Target artifact level
+
+        Returns:
+            int: Calculated artifact EXP
+        """
+        
         upgrade_lvl = 4 * ((lvl // 4) + 1)
         return ARTIFACT_REQ_EXP[upgrade_lvl] - ARTIFACT_REQ_EXP[lvl]
 
     def upgrade_req_exp(self):
-        """Estimate how much EXP is needed to upgrade once.
+        """Estimate how much EXP is needed to upgrade once. Only an
+        estimate because exact current EXP is unknown.
 
         Returns:
-            int: Required EXP
+            int: Estimated EXP
         """
+        
         upgrade_lvl = 4 * ((self.lvl // 4) + 1)
         return ARTIFACT_REQ_EXP[upgrade_lvl] - ARTIFACT_REQ_EXP[self.lvl]
     
     @staticmethod
     def static_max_req_exp(lvl):
+        """Estimate how much EXP is needed to fully upgrade an artifact
+        with the given level. Only an estimate because exact current EXP
+        is unknown.
+
+        Args:
+            lvl (int): Current artifact's level
+
+        Returns:
+            int: Estimated EXP
+        """
+        
         return ARTIFACT_REQ_EXP[20] - ARTIFACT_REQ_EXP[lvl]
     
     def max_req_exp(self):
+        """Estimate how much EXP is needed to fully upgrade current
+        artifact. Only an estiamte because exact current EXP is unkown.
+
+        Returns:
+            int: Estimated EXP
+        """
+        
         return ARTIFACT_REQ_EXP[20] - ARTIFACT_REQ_EXP[self.lvl] 
 
     @staticmethod
     def static_salvage_exp(lvl):
+        """Estimate how much EXP is given when an artifact with the
+        given level is salvaged. Only an estimate because exact current
+        EXP is unknown.
+
+        Args:
+            lvl (int): Current artifact's level
+
+        Returns:
+            int: Estimated EXP
+        """
+        
         return int(3780 + 0.8 * ARTIFACT_REQ_EXP[lvl])
 
     def salvage_exp(self):
-        """Estimate how much EXP given when salvaged.
+        """Estimate how much EXP is given when current artifact is
+        salvaged. Only an estiamte because exact current EXP is unknown.
 
         Returns:
-            int: Salvaged EXP
+            int: Estimated EXP
         """
+        
         return int(3780 + 0.8 * ARTIFACT_REQ_EXP[self.lvl])
 
     @staticmethod

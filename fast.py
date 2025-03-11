@@ -161,10 +161,6 @@ def lru_cache_nested_numpy(maxsize=128):
         return wrapper
     return decorator
 
-
-
-
-
 # 0: hp
 # 1: atk
 # 2: def
@@ -198,20 +194,20 @@ STAT_2_NUM = {stat: index for index, stat in enumerate(STATS)}
 
 CACHE_SIZE = 2000
 MAIN_PROBS = {
-    'flower' : {
+    'flower': {
         'hp': 1
     },
-    'plume'  : {
+    'plume': {
         'atk': 1
     },
-    'sands'  : {
+    'sands': {
         'hp_': 8/30,
         'atk_': 8/30,
         'def_': 8/30,
         'enerRech_': 3/30,
         'eleMas': 3/30
     },
-    'goblet' : {
+    'goblet': {
         'hp_': 77/400,
         'atk_': 77/400,
         'def_': 76/400,

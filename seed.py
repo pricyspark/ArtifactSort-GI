@@ -29,13 +29,12 @@ def worker(q, x, shm_scores_name, scores_shape, scores_dtype, shm_finals_name, f
 
     y = simulate(x, shm_scores_array, shm_finals_array).reshape((-1, 1))
     subarray = np.hstack((x, y))
-
     q.put(subarray)
     t1 = time.time()
     print(t1 - t0)
 
-def aggregator(q, num_samples):
-    final = np.zeros((num_samples, 3)) # TODO: don't hardcode 3
+def aggregator(q, num_samples, num_metrics):
+    final = np.zeros((num_samples, num_metrics + 1))
     idx = 0
     while not q.empty():
         new_subarray = q.get()
@@ -83,6 +82,7 @@ def simulate(X, scores, finals):
 
 class SeededInventory:
     def __init__(self, targets, metrics, num_inventories, num_artifacts, seed, set, lvl, slot, source='domain', populate=True):
+        print('Initializing SeededInventory')
         self.num_inventories = num_inventories
         self.num_artifacts = num_artifacts
         self.seed = seed
@@ -114,6 +114,8 @@ class SeededInventory:
 
                 artifact.random_upgrade(rng=self.rng)
                 self.finals[inventory_idx, artifact_idx] = artifact.score(targets)
+            print(f'Seeded inventory {inventory_idx}')
+        print('Initialized SeededInventory')
 
     def __eq__(self, other):
         return (np.array_equal(self.artifacts, other.artifacts) and
@@ -129,6 +131,7 @@ class SeededInventory:
         output.artifacts = np.load(f'seeded/{num_inventories}_{num_artifacts}_{seed}_artifacts.npy')
         output.scores = np.load(f'seeded/{num_inventories}_{num_artifacts}_{seed}_scores.npy')
         output.finals = np.load(f'seeded/{num_inventories}_{num_artifacts}_{seed}_finals.npy')
+        print('Loaded SeededInventory')
         return output
     
     def save(self):
@@ -168,7 +171,7 @@ class SeededInventory:
         for p in processes:
             p.join()
 
-        results = aggregator(q, X.shape[0])
+        results = aggregator(q, X.shape[0], X.shape[1])
 
         shm_scores.close()
         shm_finals.close()
@@ -185,37 +188,50 @@ if __name__ == '__main__':
 
     def metrics(artifact, targets):
         if artifact is None or targets is None:
-            return 2
+            return 6
 
         num_upgrades = 5 - (artifact.lvl // 4)
         distro = FastArtifact.upgrade_distro(num_upgrades, artifact.stats)
-        return (FastArtifact.score_second_moment(distro, targets), 
-                FastArtifact.score_std_dev(distro, targets))
+        return (FastArtifact.score_mean(distro, targets),
+                FastArtifact.score_second_moment(distro, targets), 
+                FastArtifact.score_std_dev(distro, targets),
+                FastArtifact.req_to_beat_mean(distro, targets, 'flower'),
+                FastArtifact.req_to_beat_second_moment(distro, targets, 'flower'),
+                artifact.max_req_exp())
 
-    targets = FastArtifact.vectorize_targets({'atk_': 1, 'atk': 1/3, 'crit_': 4/3})
+    targets = FastArtifact.vectorize_targets({'atk_': 3, 'atk': 1, 'crit_': 4})
 
-    print('initializing')
     t0 = time.time()
-    seeded = SeededInventory.load(targets, metrics, 4000, 200, 0, None, 0, 'flower')
-    #seeded = SeededInventory(targets, metrics, 4000, 200, 0, None, 0, 'flower', 'domain')
+    seeded = SeededInventory.load(targets, metrics, 1000, 200, 0, None, 0, 'flower')
+    #seeded = SeededInventory(targets, metrics, 1000, 200, 0, None, 0, 'flower', 'domain')
     t1 = time.time()
     print(t1 - t0)
     #seeded = SeededInventory(targets, metrics, 1000, 200, 1, None, 0, 'flower', 'domain', True)
-    print('initialized')
     #seeded.save()
 
-    stuff = np.load('data/4000_200_0.npy')
-    #stuff = np.zeros((0, 3), dtype=float)
+    stuff = np.load('data/1000_200_0.npy')
+    #stuff = np.zeros((0, 7), dtype=float)
     print(seeded.upper_bound())
     
     while True:
         np.save('backup.npy', stuff)
         coefs = np.random.rand(120, 1)
-        x = np.hstack((coefs, 1 - coefs))
+        x = np.random.rand(120, 6)
+        x[:, 0] = 0
+        x[:, 1] = 0
+        #x[:, 2] = 0
+        #x[:, 3] = 0
+        #x[:, 4] = 0
+        #x[:, 5] = 0
+        x[:, 5] -= 0.5
+        x[:, 5] /= 50
+        x /= np.sum(np.abs(x), axis=1, keepdims=True)
+        #x = np.hstack((coefs, 1 - coefs))
         results = seeded.simulate_multi(x, 6)
         stuff = np.vstack((stuff, results))
         print(stuff.shape)
-        np.save('data/4000_200_0.npy', stuff)
+        np.save('data/1000_200_0.npy', stuff)
+        break
 
     ''' 
     while True:

@@ -709,8 +709,8 @@ class FastArtifact:
         """
         
         possibilities, probs = distro
-        if np.sum(probs) != 1:
-            raise ValueError('Distribution probabilities don\'t add to 1')
+        if not math.isclose(np.sum(probs), 1):
+            raise ValueError(f'Distribution probabilities add to {np.sum(probs)}, not 1')
         
         return (possibilities @ targets) @ probs
     
@@ -737,8 +737,8 @@ class FastArtifact:
         
         possibilities, probs = distro
         
-        if np.sum(probs) != 1:
-            raise ValueError('Distribution probabilities don\'t add to 1')
+        if not math.isclose(np.sum(probs), 1):
+            raise ValueError(f'Distribution probabilities add to {np.sum(probs)}, not 1')
         
         return np.square(possibilities @ targets) @ probs
 
@@ -959,7 +959,7 @@ class FastArtifact:
         return np.square(num_req) @ probs
 
     @staticmethod
-    def static_upgrade_req_exp(lvl):
+    def upgrade_req_exp(lvl):
         """Artifact EXP required to reach the given level.
 
         Args:
@@ -972,19 +972,8 @@ class FastArtifact:
         upgrade_lvl = 4 * ((lvl // 4) + 1)
         return ARTIFACT_REQ_EXP[upgrade_lvl] - ARTIFACT_REQ_EXP[lvl]
 
-    def upgrade_req_exp(self):
-        """Estimate how much EXP is needed to upgrade once. Only an
-        estimate because exact current EXP is unknown.
-
-        Returns:
-            int: Estimated EXP
-        """
-        
-        upgrade_lvl = 4 * ((self.lvl // 4) + 1)
-        return ARTIFACT_REQ_EXP[upgrade_lvl] - ARTIFACT_REQ_EXP[self.lvl]
-    
     @staticmethod
-    def static_max_req_exp(lvl):
+    def max_req_exp(lvl):
         """Estimate how much EXP is needed to fully upgrade an artifact
         with the given level. Only an estimate because exact current EXP
         is unknown.
@@ -997,19 +986,9 @@ class FastArtifact:
         """
         
         return ARTIFACT_REQ_EXP[20] - ARTIFACT_REQ_EXP[lvl]
-    
-    def max_req_exp(self):
-        """Estimate how much EXP is needed to fully upgrade current
-        artifact. Only an estiamte because exact current EXP is unkown.
-
-        Returns:
-            int: Estimated EXP
-        """
-        
-        return ARTIFACT_REQ_EXP[20] - ARTIFACT_REQ_EXP[self.lvl] 
 
     @staticmethod
-    def static_salvage_exp(lvl):
+    def salvage_exp(lvl):
         """Estimate how much EXP is given when an artifact with the
         given level is salvaged. Only an estimate because exact current
         EXP is unknown.
@@ -1022,16 +1001,6 @@ class FastArtifact:
         """
         
         return int(3780 + 0.8 * ARTIFACT_REQ_EXP[lvl])
-
-    def salvage_exp(self):
-        """Estimate how much EXP is given when current artifact is
-        salvaged. Only an estiamte because exact current EXP is unknown.
-
-        Returns:
-            int: Estimated EXP
-        """
-        
-        return int(3780 + 0.8 * ARTIFACT_REQ_EXP[self.lvl])
 
     @staticmethod
     def read_json(filename, split=False):

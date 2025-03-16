@@ -687,6 +687,25 @@ class FastArtifact:
         """
 
         return self.stats @ targets
+    
+    @staticmethod
+    def score_maxed(artifacts, targets_list):
+        output = np.zeros((len(artifacts), len(targets_list)), dtype=float)
+        for artifact_idx, artifact in enumerate(artifacts):
+            for targets_idx, targets in enumerate(targets_list):
+                output[artifact_idx, targets_idx] = artifact.stats @ targets
+                
+        return output
+    
+    @staticmethod
+    def score_nonmaxed(artifacts, funs):
+        output = np.zeros((len(artifacts), len(funs)), dtype=float)
+        for artifact_idx, artifact in enumerate(artifacts):
+            for fun_idx, fun in enumerate(funs):
+                output[artifact_idx, fun_idx] = fun(artifact)
+                
+        return output
+            
 
     #@functools.lru_cache(maxsize=CACHE_SIZE)
     @staticmethod
@@ -1045,6 +1064,18 @@ class FastArtifact:
                 artifacts.append(FastArtifact.serialize(artifact_dict))
         
         return artifacts
+    
+    @staticmethod
+    def split_maxed(artifacts):
+        maxed = []
+        nonmaxed = []
+        for artifact in artifacts:
+            if artifact.lvl == 20:
+                maxed.append(artifact)
+            else:
+                nonmaxed.append(artifact)
+                
+        return maxed, nonmaxed
     
     @staticmethod
     def split_slot(artifacts):

@@ -13,6 +13,8 @@ import os
 from sortedcontainers import SortedKeyList
 import time
 from multiprocessing import shared_memory, Process, Queue
+import sys
+from pathlib import Path
 
 ''' 
 artifact lookup: [num_artifacts x 6 x 19]
@@ -56,12 +58,12 @@ def simulate(X, scores, finals):
             sorted_artifacts = SortedKeyList(range(num_artifacts), key=lambda idx: -coefs @ scores[inventory, idx, lvls[idx] // 4, :])
             while sorted_artifacts:
                 best = sorted_artifacts.pop(0)
-                req_exp = FastArtifact.static_upgrade_req_exp(lvls[best])
+                req_exp = FastArtifact.upgrade_req_exp(lvls[best])
                 for artifact in reversed(sorted_artifacts[1:]):
                     if exp >= req_exp:
                         break
 
-                    exp += FastArtifact.static_salvage_exp(lvls[artifact]) / 3
+                    exp += FastArtifact.salvage_exp(lvls[artifact]) / 3
                     sorted_artifacts.pop(-1)
                 
                 if exp < req_exp:
@@ -83,12 +85,23 @@ def simulate(X, scores, finals):
 class SeededInventory:
     def __init__(self, targets, metrics, num_inventories, num_artifacts, seed, set, lvl, slot, source='domain', populate=True):
         print('Initializing SeededInventory')
+        self.slot = slot
         self.num_inventories = num_inventories
         self.num_artifacts = num_artifacts
         self.seed = seed
         self.rng = np.random.default_rng(seed)
+        
         if not populate:
             return
+        
+        try:
+            temp = SeededInventory.load(targets, metrics, num_inventories, num_artifacts, seed, set, lvl, slot)
+            self.artifacts = temp.artifacts
+            self.scores = temp.scores
+            self.finals = temp.finals
+            return
+        except Exception as e:
+            print(e)
         
         num_metrics = metrics(None, None)
 
@@ -127,17 +140,31 @@ class SeededInventory:
 
     @staticmethod
     def load(targets, metrics, num_inventories, num_artifacts, seed, set, lvl, slot):
+        unvect_targets = FastArtifact.unvectorize_targets(targets)
+        target_folder = ''
+        for idx, coef in unvect_targets:
+            target_folder += str(idx) + '_' + str(coef) + '_'
+        target_folder = target_folder[:-1]
+        
         output = SeededInventory(targets, metrics, num_inventories, num_artifacts, seed, set, lvl, slot, populate=False)
-        output.artifacts = np.load(f'seeded/{num_inventories}_{num_artifacts}_{seed}_artifacts.npy')
-        output.scores = np.load(f'seeded/{num_inventories}_{num_artifacts}_{seed}_scores.npy')
-        output.finals = np.load(f'seeded/{num_inventories}_{num_artifacts}_{seed}_finals.npy')
+        output.artifacts = np.load(f'seeded/{num_inventories}_{num_artifacts}_{seed}/{slot}/artifacts.npy')
+        output.scores = np.load(f'seeded/{num_inventories}_{num_artifacts}_{seed}/{slot}/{target_folder}/scores.npy')
+        output.finals = np.load(f'seeded/{num_inventories}_{num_artifacts}_{seed}/{slot}/{target_folder}/finals.npy')
         print('Loaded SeededInventory')
         return output
     
     def save(self):
-        np.save(f'seeded/{self.num_inventories}_{self.num_artifacts}_{self.seed}_artifacts', self.artifacts)
-        np.save(f'seeded/{self.num_inventories}_{self.num_artifacts}_{self.seed}_scores', self.scores)
-        np.save(f'seeded/{self.num_inventories}_{self.num_artifacts}_{self.seed}_finals', self.finals)
+        unvect_targets = FastArtifact.unvectorize_targets(targets)
+        target_folder = ''
+        for idx, coef in unvect_targets:
+            target_folder += str(idx) + '_' + str(coef) + '_'
+        target_folder = target_folder[:-1]
+        
+        Path(f'seeded/{self.num_inventories}_{self.num_artifacts}_{self.seed}/{self.slot}/{target_folder}').mkdir(parents=True, exist_ok=True)
+        
+        np.save(f'seeded/{self.num_inventories}_{self.num_artifacts}_{self.seed}/{self.slot}/artifacts.npy', self.artifacts)
+        np.save(f'seeded/{self.num_inventories}_{self.num_artifacts}_{self.seed}/{self.slot}/{target_folder}/scores.npy', self.scores)
+        np.save(f'seeded/{self.num_inventories}_{self.num_artifacts}_{self.seed}/{self.slot}/{target_folder}/finals.npy', self.finals)
 
     def upper_bound(self):
         sum = 0
@@ -195,28 +222,29 @@ if __name__ == '__main__':
         return (FastArtifact.score_mean(distro, targets),
                 FastArtifact.score_second_moment(distro, targets), 
                 FastArtifact.score_std_dev(distro, targets),
-                FastArtifact.req_to_beat_mean(distro, targets, 'flower'),
-                FastArtifact.req_to_beat_second_moment(distro, targets, 'flower'),
-                artifact.max_req_exp())
+                FastArtifact.req_to_beat_mean(distro, targets, artifact.slot),
+                FastArtifact.req_to_beat_second_moment(distro, targets, artifact.slot),
+                FastArtifact.max_req_exp(artifact.lvl))
 
-    targets = FastArtifact.vectorize_targets({'atk_': 3, 'atk': 1, 'crit_': 4})
+    #targets = FastArtifact.vectorize_targets({'atk_': 3, 'atk': 1,
+    #'crit_': 4, 'enerRech_': 5})
+    #targets = FastArtifact.vectorize_targets({'atk_': 3, 'atk': 1, 'crit_': 4, 'pyro_dmg_': 4, 'eleMas': 3})
+    targets = FastArtifact.vectorize_targets({'atk_': 3, 'atk': 1, 'enerRech_': 5, 'eleMas': 8})
 
     t0 = time.time()
-    seeded = SeededInventory.load(targets, metrics, 1000, 200, 0, None, 0, 'flower')
-    #seeded = SeededInventory(targets, metrics, 1000, 200, 0, None, 0, 'flower', 'domain')
+    seeded = SeededInventory(targets, metrics, 1000, 200, 0, None, 0, 'goblet', 'domain')
     t1 = time.time()
     print(t1 - t0)
-    #seeded = SeededInventory(targets, metrics, 1000, 200, 1, None, 0, 'flower', 'domain', True)
-    #seeded.save()
-
-    stuff = np.load('data/1000_200_0.npy')
-    #stuff = np.zeros((0, 7), dtype=float)
+    seeded.save()
+    #sys.exit()
+    #stuff = np.load('data/1000_200_0.npy')
+    stuff = np.zeros((0, 7), dtype=float)
     print(seeded.upper_bound())
     
     while True:
         np.save('backup.npy', stuff)
-        coefs = np.random.rand(120, 1)
-        x = np.random.rand(120, 6)
+        coefs = np.random.rand(480, 1)
+        x = np.random.rand(480, 6)
         x[:, 0] = 0
         x[:, 1] = 0
         #x[:, 2] = 0

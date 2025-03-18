@@ -56,6 +56,14 @@ def simulate(X, scores, finals):
             exp = 10080 * num_artifacts / 3
             lvls = np.zeros(num_artifacts, dtype=int)
             sorted_artifacts = SortedKeyList(range(num_artifacts), key=lambda idx: -coefs @ scores[inventory, idx, lvls[idx] // 4, :])
+            
+            for artifact in reversed(sorted_artifacts):
+                if len(sorted_artifacts) <= 50:
+                    break
+                
+                exp += FastArtifact.salvage_exp(lvls[artifact]) / 3
+                sorted_artifacts.pop(-1)
+            
             while sorted_artifacts:
                 best = sorted_artifacts.pop(0)
                 req_exp = FastArtifact.upgrade_req_exp(lvls[best])
@@ -190,8 +198,8 @@ class SeededInventory:
 
         q = Queue()
         processes = []
-        for i in range(num_workers):
-            p = Process(target=worker, args=(q, xs[i], shm_scores.name, self.scores.shape, self.scores.dtype, shm_finals.name, self.finals.shape, self.finals.dtype))
+        for x in xs:
+            p = Process(target=worker, args=(q, x, shm_scores.name, self.scores.shape, self.scores.dtype, shm_finals.name, self.finals.shape, self.finals.dtype))
             p.start()
             processes.append(p)
 
@@ -228,11 +236,11 @@ if __name__ == '__main__':
 
     #targets = FastArtifact.vectorize_targets({'atk_': 3, 'atk': 1,
     #'crit_': 4, 'enerRech_': 5})
-    #targets = FastArtifact.vectorize_targets({'atk_': 3, 'atk': 1, 'crit_': 4, 'pyro_dmg_': 4, 'eleMas': 3})
-    targets = FastArtifact.vectorize_targets({'atk_': 3, 'atk': 1, 'enerRech_': 5, 'eleMas': 8})
+    targets = FastArtifact.vectorize_targets({'atk_': 3, 'atk': 1, 'crit_': 4})
+    #targets = FastArtifact.vectorize_targets({'atk_': 3, 'atk': 1, 'enerRech_': 5, 'eleMas': 8})
 
     t0 = time.time()
-    seeded = SeededInventory(targets, metrics, 1000, 200, 0, None, 0, 'goblet', 'domain')
+    seeded = SeededInventory(targets, metrics, 1000, 200, 0, None, 0, 'flower', 'domain')
     t1 = time.time()
     print(t1 - t0)
     seeded.save()
@@ -240,7 +248,16 @@ if __name__ == '__main__':
     #stuff = np.load('data/1000_200_0.npy')
     stuff = np.zeros((0, 7), dtype=float)
     print(seeded.upper_bound())
+    x = np.array([[0, 0, 4.25210538e-01, 2.36175818e-01, 3.37325588e-01, 1.28805541e-03]])
+    for i in range(10):
+        print(seeded.simulate(x))
     
+    #[0.00000000e+00 0.00000000e+00 4.25210538e-01 2.36175818e-01
+    #3.37325588e-01 1.28805541e-03 1.61760000e+03]
+    
+    #y = simulate(x, shm_scores_array, shm_finals_array).reshape((-1, 1))
+    
+    sys.exit()
     while True:
         np.save('backup.npy', stuff)
         coefs = np.random.rand(480, 1)

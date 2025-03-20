@@ -428,7 +428,7 @@ class FastArtifact:
             If passed, ignore seed and use this. Defaults to None.
             seed (int, optional): If no numpy Generator is provided, use this
             to create a new one. Defaults to None.
-
+        
         Raises:
             ValueError: If source is invalid.
             ValueError: If main stat is not valid for given slot.
@@ -439,7 +439,7 @@ class FastArtifact:
         
         if rng is None:
             rng = np.random.default_rng(seed)
-
+        
         match source:
             case 'domain':
                 prob = 0.2
@@ -635,6 +635,35 @@ class FastArtifact:
         return possibilities[row, :]
     
     @staticmethod
+    def generate_funs(filename):
+        with open(filename) as f:
+            data = json.load(f)
+            
+        output = []
+        for fun in data:
+            num = fun['num']
+            targets = FastArtifact.vectorize_targets(fun['targets'])
+            metrics = fun['metrics']
+                
+            def out_fun(artifact, num=num, targets=targets, metrics=metrics):
+                if artifact is None:
+                    return num
+                
+                print(targets)
+                print(metrics)
+                
+                num_upgrades = 5 - (artifact.lvl // 4)
+                distro = FastArtifact.upgrade_distro(num_upgrades, artifact.stats)
+                output = 0
+                for metric, coef in metrics.items():
+                    output += eval(metric) * coef
+                    
+                return output
+            
+            output.append(out_fun)
+        return output
+    
+    @staticmethod
     def vectorize_targets(targets: dict):
         """Convert a target dictionary to a target array.
 
@@ -685,7 +714,7 @@ class FastArtifact:
         Returns:
             float: Calculated score
         """
-
+        
         return self.stats @ targets
     
     @staticmethod
@@ -705,7 +734,28 @@ class FastArtifact:
                 output[artifact_idx, fun_idx] = fun(artifact)
                 
         return output
+    
+    @staticmethod
+    def score_nonmaxed_relative(artifacts, funs):
+        scores = FastArtifact.score_nonmaxed(artifacts, funs)
+        output = np.zeros_like(scores)
+        for i, col in enumerate(scores.T):
+            order = np.argsort(col)[::-1]
+            result = np.zeros_like(order)
+            result[order] = np.arange(len(col))
+            output[:, i] = result
             
+        return output
+    
+    @staticmethod
+    def rate(artifacts, funs):
+        relative_scores = FastArtifact.score_nonmaxed_relative(artifacts, funs)
+        output = np.zeros_like(relative_scores, dtype=bool)
+        for i, fun in enumerate(funs):
+            output[relative_scores[:, i] < fun(None), i] = True
+            
+        #return output
+        return output.any(axis=1)
 
     #@functools.lru_cache(maxsize=CACHE_SIZE)
     @staticmethod

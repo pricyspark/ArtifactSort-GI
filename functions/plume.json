@@ -1,0 +1,182 @@
+[
+    {
+        "num": 50,
+        "targets": {
+            "hp_": 3,
+            "hp": 1,
+            "crit_": 4
+        },
+        "metrics": {
+            "FastArtifact.score_std_dev(distro, targets)":                              1.10570504e-01,
+            "FastArtifact.req_to_beat_mean(distro, targets, artifact.slot)":            3.26475121e-01,
+            "FastArtifact.req_to_beat_second_moment(distro, targets, artifact.slot)":   5.62148060e-01,
+            "FastArtifact.max_req_exp(artifact.lvl)":                                   -8.06314600e-04
+        }
+    },
+    {
+        "num": 50,
+        "targets": {
+            "atk_": 3,
+            "atk": 1,
+            "crit_": 4
+        },
+        "metrics": {
+            "FastArtifact.score_std_dev(distro, targets)":                              1.10570504e-01,
+            "FastArtifact.req_to_beat_mean(distro, targets, artifact.slot)":            3.26475121e-01,
+            "FastArtifact.req_to_beat_second_moment(distro, targets, artifact.slot)":   5.62148060e-01,
+            "FastArtifact.max_req_exp(artifact.lvl)":                                   -8.06314600e-04
+        }
+    },
+    {
+        "num": 50,
+        "targets": {
+            "def_": 3,
+            "def": 1,
+            "crit_": 4
+        },
+        "metrics": {
+            "FastArtifact.score_std_dev(distro, targets)":                              1.10570504e-01,
+            "FastArtifact.req_to_beat_mean(distro, targets, artifact.slot)":            3.26475121e-01,
+            "FastArtifact.req_to_beat_second_moment(distro, targets, artifact.slot)":   5.62148060e-01,
+            "FastArtifact.max_req_exp(artifact.lvl)":                                   -8.06314600e-04
+        }
+    },
+    {
+        "num": 50,
+        "targets": {
+            "hp_": 3,
+            "hp": 1,
+            "crit_": 4,
+            "enerRech_": 5
+        },
+        "metrics": {
+            "FastArtifact.score_std_dev(distro, targets)":                              3.30950611e-01,
+            "FastArtifact.req_to_beat_mean(distro, targets, artifact.slot)":            4.40074268e-01,
+            "FastArtifact.req_to_beat_second_moment(distro, targets, artifact.slot)":   -8.41308060e-05,
+            "FastArtifact.max_req_exp(artifact.lvl)":                                   6.11026539e-04
+        }
+    },
+    {
+        "num": 50,
+        "targets": {
+            "atk_": 3,
+            "atk": 1,
+            "crit_": 4,
+            "enerRech_": 5
+        },
+        "metrics": {
+            "FastArtifact.score_std_dev(distro, targets)":                              3.30950611e-01,
+            "FastArtifact.req_to_beat_mean(distro, targets, artifact.slot)":            4.40074268e-01,
+            "FastArtifact.req_to_beat_second_moment(distro, targets, artifact.slot)":   -8.41308060e-05,
+            "FastArtifact.max_req_exp(artifact.lvl)":                                   6.11026539e-04
+        }
+    },
+    {
+        "num": 50,
+        "targets": {
+            "def_": 3,
+            "def": 1,
+            "crit_": 4,
+            "enerRech_": 5
+        },
+        "metrics": {
+            "FastArtifact.score_std_dev(distro, targets)":                              3.30950611e-01,
+            "FastArtifact.req_to_beat_mean(distro, targets, artifact.slot)":            4.40074268e-01,
+            "FastArtifact.req_to_beat_second_moment(distro, targets, artifact.slot)":   -8.41308060e-05,
+            "FastArtifact.max_req_exp(artifact.lvl)":                                   6.11026539e-04
+        }
+    },
+    {
+        "num": 50,
+        "targets": {
+            "hp_": 3,
+            "hp": 1,
+            "crit_": 4,
+            "eleMas": 3
+        },
+        "metrics": {
+            "FastArtifact.score_std_dev(distro, targets)":                              4.67702559e-01,
+            "FastArtifact.req_to_beat_mean(distro, targets, artifact.slot)":            6.71408924e-02,
+            "FastArtifact.req_to_beat_second_moment(distro, targets, artifact.slot)":   4.65109481e-01,
+            "FastArtifact.max_req_exp(artifact.lvl)":                                   -4.70670945e-05
+        }
+    },
+    {
+        "num": 50,
+        "targets": {
+            "atk_": 3,
+            "atk": 1,
+            "crit_": 4,
+            "eleMas": 3
+        },
+        "metrics": {
+            "FastArtifact.score_std_dev(distro, targets)":                              4.67702559e-01,
+            "FastArtifact.req_to_beat_mean(distro, targets, artifact.slot)":            6.71408924e-02,
+            "FastArtifact.req_to_beat_second_moment(distro, targets, artifact.slot)":   4.65109481e-01,
+            "FastArtifact.max_req_exp(artifact.lvl)":                                   -4.70670945e-05
+        }
+    },
+    {
+        "num": 50,
+        "targets": {
+            "def_": 3,
+            "def": 1,
+            "crit_": 4,
+            "eleMas": 3
+        },
+        "metrics": {
+            "FastArtifact.score_std_dev(distro, targets)":                              4.67702559e-01,
+            "FastArtifact.req_to_beat_mean(distro, targets, artifact.slot)":            6.71408924e-02,
+            "FastArtifact.req_to_beat_second_moment(distro, targets, artifact.slot)":   4.65109481e-01,
+            "FastArtifact.max_req_exp(artifact.lvl)":                                   -4.70670945e-05
+        }
+    },
+    {
+        "num": 50,
+        "targets": {
+            "hp_": 3,
+            "hp": 1,
+            "crit_": 4,
+            "enerRech_": 5,
+            "eleMas": 3
+        },
+        "metrics": {
+            "FastArtifact.score_std_dev(distro, targets)":                              6.41896672e-01,
+            "FastArtifact.req_to_beat_mean(distro, targets, artifact.slot)":            1.69750036e-01,
+            "FastArtifact.req_to_beat_second_moment(distro, targets, artifact.slot)":   1.87825544e-01,
+            "FastArtifact.max_req_exp(artifact.lvl)":                                   5.27747443e-04
+        }
+    },
+    {
+        "num": 50,
+        "targets": {
+            "atk_": 3,
+            "atk": 1,
+            "crit_": 4,
+            "enerRech_": 5,
+            "eleMas": 3
+        },
+        "metrics": {
+            "FastArtifact.score_std_dev(distro, targets)":                              6.41896672e-01,
+            "FastArtifact.req_to_beat_mean(distro, targets, artifact.slot)":            1.69750036e-01,
+            "FastArtifact.req_to_beat_second_moment(distro, targets, artifact.slot)":   1.87825544e-01,
+            "FastArtifact.max_req_exp(artifact.lvl)":                                   5.27747443e-04
+        }
+    },
+    {
+        "num": 50,
+        "targets": {
+            "def_": 3,
+            "def": 1,
+            "crit_": 4,
+            "enerRech_": 5,
+            "eleMas": 3
+        },
+        "metrics": {
+            "FastArtifact.score_std_dev(distro, targets)":                              6.41896672e-01,
+            "FastArtifact.req_to_beat_mean(distro, targets, artifact.slot)":            1.69750036e-01,
+            "FastArtifact.req_to_beat_second_moment(distro, targets, artifact.slot)":   1.87825544e-01,
+            "FastArtifact.max_req_exp(artifact.lvl)":                                   5.27747443e-04
+        }
+    }
+]

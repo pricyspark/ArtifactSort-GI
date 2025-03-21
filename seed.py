@@ -53,7 +53,7 @@ def simulate(X, scores, finals):
         total = 0
         for inventory in range(num_inventories):
             max_score = 0
-            exp = 10080 * num_artifacts / 3
+            exp = 10080 * num_artifacts / 10
             lvls = np.zeros(num_artifacts, dtype=int)
             sorted_artifacts = SortedKeyList(range(num_artifacts), key=lambda idx: -coefs @ scores[inventory, idx, lvls[idx] // 4, :])
             
@@ -61,7 +61,7 @@ def simulate(X, scores, finals):
                 if len(sorted_artifacts) <= 50:
                     break
                 
-                exp += FastArtifact.salvage_exp(lvls[artifact]) / 3
+                exp += FastArtifact.salvage_exp(lvls[artifact]) / 10
                 sorted_artifacts.pop(-1)
             
             while sorted_artifacts:
@@ -71,7 +71,7 @@ def simulate(X, scores, finals):
                     if exp >= req_exp:
                         break
 
-                    exp += FastArtifact.salvage_exp(lvls[artifact]) / 3
+                    exp += FastArtifact.salvage_exp(lvls[artifact]) / 10
                     sorted_artifacts.pop(-1)
                 
                 if exp < req_exp:
@@ -113,19 +113,29 @@ class SeededInventory:
         
         num_metrics = metrics(None, None)
 
-        self.artifacts= np.full((num_inventories, num_artifacts, 5, 19), -1, dtype=float)
+        # TODO: don't regenerate artifacts if you don't have to.
+        # Challenge: would need to fully generate in a seperate loop to
+        # keep the rng consistent
+        
+        # Store artifact stats for lvls 0-16 to score from
+        self.artifacts= np.full((num_inventories, num_artifacts, 5, 19), -1, dtype=np.uint8)
+        # Store scores for lvls 0-16 to base upgrades from
         self.scores = np.full((num_inventories, num_artifacts, 5, num_metrics), -1, dtype=float)
+        # Store final maxed scores to base finals results from
         self.finals = np.full((num_inventories, num_artifacts), -1, dtype=float)
+        
         for inventory_idx in range(num_inventories):
             for artifact_idx in range(num_artifacts):
                 artifact = FastArtifact.generate(set, lvl, slot, None, source, rng=self.rng)
                 self.artifacts[inventory_idx, artifact_idx, 0, :] = artifact.stats
 
                 scores = metrics(artifact, targets)
+                # Populate score for lvl 0
                 for i in range(num_metrics):
                     self.scores[inventory_idx, artifact_idx, 0, i] = scores[i]
 
-                for i in range(1, 5):
+                # Populate scores for lvls 4, 8, 12, and 16
+                for i in (1, 2, 3, 4):
                     artifact.random_upgrade(rng=self.rng)
                     self.artifacts[inventory_idx, artifact_idx, i, :] = artifact.stats
 
@@ -133,6 +143,7 @@ class SeededInventory:
                     for j in range(num_metrics):
                         self.scores[inventory_idx, artifact_idx, i, j] = scores[j]
 
+                # Populate score for lvl 20
                 artifact.random_upgrade(rng=self.rng)
                 self.finals[inventory_idx, artifact_idx] = artifact.score(targets)
             print(f'Seeded inventory {inventory_idx}')
@@ -155,7 +166,7 @@ class SeededInventory:
         target_folder = target_folder[:-1]
         
         output = SeededInventory(targets, metrics, num_inventories, num_artifacts, seed, set, lvl, slot, populate=False)
-        output.artifacts = np.load(f'seeded/{num_inventories}_{num_artifacts}_{seed}/{slot}/artifacts.npy')
+        output.artifacts = np.load(f'seeded/{num_inventories}_{num_artifacts}_{seed}/{slot}/artifacts.npy').astype(np.uint8)
         output.scores = np.load(f'seeded/{num_inventories}_{num_artifacts}_{seed}/{slot}/{target_folder}/scores.npy')
         output.finals = np.load(f'seeded/{num_inventories}_{num_artifacts}_{seed}/{slot}/{target_folder}/finals.npy')
         print('Loaded SeededInventory')
@@ -169,7 +180,7 @@ class SeededInventory:
         target_folder = target_folder[:-1]
         
         Path(f'seeded/{self.num_inventories}_{self.num_artifacts}_{self.seed}/{self.slot}/{target_folder}').mkdir(parents=True, exist_ok=True)
-        
+        print('asdf', self.artifacts.dtype)
         np.save(f'seeded/{self.num_inventories}_{self.num_artifacts}_{self.seed}/{self.slot}/artifacts.npy', self.artifacts)
         np.save(f'seeded/{self.num_inventories}_{self.num_artifacts}_{self.seed}/{self.slot}/{target_folder}/scores.npy', self.scores)
         np.save(f'seeded/{self.num_inventories}_{self.num_artifacts}_{self.seed}/{self.slot}/{target_folder}/finals.npy', self.finals)
@@ -223,15 +234,15 @@ if __name__ == '__main__':
 
     def metrics(artifact, targets):
         if artifact is None or targets is None:
-            return 6
+            return 5
 
         num_upgrades = 5 - (artifact.lvl // 4)
         distro = FastArtifact.upgrade_distro(num_upgrades, artifact.stats)
-        return (FastArtifact.score_mean(distro, targets),
-                FastArtifact.score_second_moment(distro, targets), 
-                FastArtifact.score_std_dev(distro, targets),
-                FastArtifact.req_to_beat_mean(distro, targets, artifact.slot),
+        single_distro = FastArtifact.upgrade_distro(1, artifact.stats)
+        return (FastArtifact.req_to_beat_mean(distro, targets, artifact.slot),
                 FastArtifact.req_to_beat_second_moment(distro, targets, artifact.slot),
+                FastArtifact.score_std_dev(distro, targets),
+                FastArtifact.score_std_dev(single_distro, targets),
                 FastArtifact.max_req_exp(artifact.lvl))
 
     #targets = FastArtifact.vectorize_targets({'atk_': 3, 'atk': 1,
@@ -240,43 +251,42 @@ if __name__ == '__main__':
     #targets = FastArtifact.vectorize_targets({'atk_': 3, 'atk': 1, 'enerRech_': 5, 'eleMas': 8})
 
     t0 = time.time()
-    seeded = SeededInventory(targets, metrics, 1000, 200, 0, None, 0, 'flower', 'domain')
+    seeded = SeededInventory(targets, metrics, 1000, 200, 1, None, 0, 'flower', 'domain')
     t1 = time.time()
     print(t1 - t0)
-    seeded.save()
-    #sys.exit()
+    #seeded.save()
     #stuff = np.load('data/1000_200_0.npy')
-    stuff = np.zeros((0, 7), dtype=float)
+    stuff = np.zeros((0, 6), dtype=float)
     print(seeded.upper_bound())
-    x = np.array([[0, 0, 4.25210538e-01, 2.36175818e-01, 3.37325588e-01, 1.28805541e-03]])
-    for i in range(10):
-        print(seeded.simulate(x))
+    #x = np.array([[0, 0, 1.56046763e-02, 1.39895183e-01, 8.43889114e-01, 6.11026539e-04]])
+    #print(seeded.simulate(x))
     
     #[0.00000000e+00 0.00000000e+00 4.25210538e-01 2.36175818e-01
     #3.37325588e-01 1.28805541e-03 1.61760000e+03]
     
     #y = simulate(x, shm_scores_array, shm_finals_array).reshape((-1, 1))
     
-    sys.exit()
+    #sys.exit()
     while True:
-        np.save('backup.npy', stuff)
-        coefs = np.random.rand(480, 1)
-        x = np.random.rand(480, 6)
-        x[:, 0] = 0
-        x[:, 1] = 0
+        np.save('data/backup.npy', stuff)
+        x = np.random.rand(1000, 5) - 0.5
+        #x[:, 0] = 0
+        #x[:, 1] = 0
         #x[:, 2] = 0
         #x[:, 3] = 0
         #x[:, 4] = 0
-        #x[:, 5] = 0
-        x[:, 5] -= 0.5
-        x[:, 5] /= 50
-        x /= np.sum(np.abs(x), axis=1, keepdims=True)
+        x[:, 1] += 0.4
+        x[:, 4] /= 10
+        x /= np.linalg.norm(x, axis=1, keepdims=True)
+        #sys.exit()
+        #x /= np.sum(np.abs(x), axis=1, keepdims=True)
         #x = np.hstack((coefs, 1 - coefs))
         results = seeded.simulate_multi(x, 6)
         stuff = np.vstack((stuff, results))
+        #print(stuff)
         print(stuff.shape)
+        #sys.exit()
         np.save('data/1000_200_0.npy', stuff)
-        break
 
     ''' 
     while True:

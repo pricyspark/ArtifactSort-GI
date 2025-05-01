@@ -4,162 +4,11 @@ import numpy as np
 import copy
 import json
 import functools
-from memory_profiler import profile
-from numba import jit, njit
-from numba.experimental import jitclass
-from collections.abc import Iterable
+#from memory_profiler import profile
+#from numba import jit, njit
+#from numba.experimental import jitclass
+#from collections.abc import Iterable
 from pathlib import Path
-
-def lru_cache_with_numpy(maxsize=128):
-    """
-    A decorator that caches function calls using functools.lru_cache.
-    It handles functions with two arguments where the first is cacheable
-    and the second is a NumPy array by converting the array into a hashable form.
-    
-    Parameters:
-    - maxsize (int): The maximum size of the cache. Defaults to 128.
-    
-    Returns:
-    - Decorated function with caching capability.
-    """
-    def decorator(func):
-        # Define the cached helper function
-        @functools.lru_cache(maxsize=maxsize)
-        def cached_func(arg1, dtype_str, shape, array_data):
-            # Reconstruct the NumPy array from cached data
-            dtype = np.dtype(dtype_str)
-            array = np.frombuffer(array_data, dtype=dtype).reshape(shape)
-            return func(arg1, array)
-        
-        @functools.wraps(func)
-        def wrapper(arg1, array):
-            if not isinstance(array, np.ndarray):
-                raise TypeError("The second argument must be a NumPy array.")
-            
-            # Extract hashable components from the NumPy array
-            dtype_str = array.dtype.str
-            shape = array.shape
-            array_data = array.tobytes()
-            
-            return cached_func(arg1, dtype_str, shape, array_data)
-        
-        return wrapper
-    return decorator
-
-def lru_cache_two_numpy(maxsize=128):
-    """
-    A decorator that caches function calls using functools.lru_cache.
-    It handles functions with two NumPy array arguments by converting the arrays 
-    into hashable forms (dtype, shape, and data bytes).
-
-    Parameters:
-    - maxsize (int): The maximum size of the cache. Defaults to 128.
-
-    Returns:
-    - Decorated function with caching capability.
-    """
-    def decorator(func):
-        # Define the cached helper function
-        @functools.lru_cache(maxsize=maxsize)
-        def cached_func(dtype_str1, shape1, array_data1,
-                        dtype_str2, shape2, array_data2):
-            # Reconstruct the first NumPy array from cached data
-            dtype1 = np.dtype(dtype_str1)
-            array1 = np.frombuffer(array_data1, dtype=dtype1).reshape(shape1)
-            
-            # Reconstruct the second NumPy array from cached data
-            dtype2 = np.dtype(dtype_str2)
-            array2 = np.frombuffer(array_data2, dtype=dtype2).reshape(shape2)
-            
-            return func(array1, array2)
-        
-        @functools.wraps(func)
-        def wrapper(array1, array2):
-            # Validate input types
-            if not isinstance(array1, np.ndarray) or not isinstance(array2, np.ndarray):
-                raise TypeError("Both arguments must be NumPy arrays.")
-            
-            # Extract hashable components from the first NumPy array
-            dtype_str1 = array1.dtype.str
-            shape1 = array1.shape
-            array_data1 = array1.tobytes()
-            
-            # Extract hashable components from the second NumPy array
-            dtype_str2 = array2.dtype.str
-            shape2 = array2.shape
-            array_data2 = array2.tobytes()
-            
-            return cached_func( dtype_str1, shape1, array_data1,
-                                dtype_str2, shape2, array_data2 )
-        
-        return wrapper
-    return decorator
-
-def lru_cache_nested_numpy(maxsize=128):
-    """
-    A decorator that caches function calls using functools.lru_cache.
-    It handles functions with parameters structured as ((numpy array, numpy array), numpy array)
-    by converting each NumPy array into hashable forms (dtype, shape, and data bytes).
-
-    Parameters:
-    - maxsize (int): The maximum size of the cache. Defaults to 128.
-
-    Returns:
-    - Decorated function with caching capability.
-    """
-    def decorator(func):
-        # Define the cached helper function
-        @functools.lru_cache(maxsize=maxsize)
-        def cached_func(dtype_str1, shape1, array_data1,
-                        dtype_str2, shape2, array_data2,
-                        dtype_str3, shape3, array_data3):
-            # Reconstruct the first NumPy array from cached data
-            dtype1 = np.dtype(dtype_str1)
-            array1 = np.frombuffer(array_data1, dtype=dtype1).reshape(shape1)
-            
-            # Reconstruct the second NumPy array from cached data
-            dtype2 = np.dtype(dtype_str2)
-            array2 = np.frombuffer(array_data2, dtype=dtype2).reshape(shape2)
-            
-            # Reconstruct the third NumPy array from cached data
-            dtype3 = np.dtype(dtype_str3)
-            array3 = np.frombuffer(array_data3, dtype=dtype3).reshape(shape3)
-            
-            return func((array1, array2), array3)
-        
-        @functools.wraps(func)
-        def wrapper(pair, array3):
-            # TODO: maybe put the safety checks back in, but thats slower
-            # Validate input types
-            #if not (isinstance(pair, tuple) and len(pair) == 2):
-            #    raise TypeError("The first argument must be a tuple of two NumPy arrays.")
-            array1, array2 = pair
-            #if not isinstance(array1, np.ndarray) or not isinstance(array2, np.ndarray):
-            #    raise TypeError("Both elements in the first tuple must be NumPy arrays.")
-            #if not isinstance(array3, np.ndarray):
-            #    raise TypeError("The second argument must be a NumPy array.")
-            
-            # Extract hashable components from the first NumPy array
-            dtype_str1 = array1.dtype.str
-            shape1 = array1.shape
-            array_data1 = array1.tobytes()
-            
-            # Extract hashable components from the second NumPy array
-            dtype_str2 = array2.dtype.str
-            shape2 = array2.shape
-            array_data2 = array2.tobytes()
-            
-            # Extract hashable components from the third NumPy array
-            dtype_str3 = array3.dtype.str
-            shape3 = array3.shape
-            array_data3 = array3.tobytes()
-            
-            return cached_func( dtype_str1, shape1, array_data1,
-                                dtype_str2, shape2, array_data2,
-                                dtype_str3, shape3, array_data3 )
-        
-        return wrapper
-    return decorator
 
 # 0: hp
 # 1: atk
@@ -192,7 +41,6 @@ STATS = [
 
 STAT_2_NUM = {stat: index for index, stat in enumerate(STATS)}
 
-CACHE_SIZE = 2000
 MAIN_PROBS = {
     'flower': {
         'hp': 1
@@ -345,8 +193,6 @@ class FastArtifact:
 
         for substat, value in substats.items():
             self.stats[STAT_2_NUM[substat]] = value
-
-
 
     @staticmethod
     def serialize(json_dict):
@@ -986,7 +832,7 @@ class FastArtifact:
 
     @staticmethod
     def upgrade_req_exp(lvl):
-        """Artifact EXP required to reach the given level.
+        """Artifact EXP required to upgrade, starting from given level.
 
         Args:
             lvl (int): Target artifact level

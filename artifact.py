@@ -190,66 +190,6 @@ def upgrade_until_max(artifacts, lvls, mains=None, seed=None):
             for _ in range(lvl):
                 upgrade(artifact, main, seed) # TODO seed generator, otherwise they all get the same seed
 
-def distro(artifacts, num_upgrades):
-    raise NotImplementedError
-
-def vectorize(targets: dict):
-    """Convert a target dictionary to a target array.
-
-    Args:
-        targets (dict): Mapping from stat to weight. Weights must be
-        ints, or they will be cast.
-
-    Returns:
-        NDArray: Array of stat weights.
-    """
-    
-    output = np.zeros(19, dtype=np.uint32)
-    for target, value in targets.items():
-        if target == 'crit_':
-            output[8] = value
-            output[9] = value
-            continue
-
-        output[STAT_2_NUM[target]] = value
-
-    return output
-
-def score(artifacts, targets):
-    if type(targets) == dict:
-        targets = vectorize(targets)
-        
-    return artifacts @ targets
-
-def simulate_exp(artifacts, lvls, targets, fun, mains=None):
-    # TODO: check if anything is maxed. They shouldn't be
-    # TODO: add benchmark for how long it takes to acheive top n%, not
-    # just top 1
-    original_artifacts = artifacts.copy()
-    smart_upgrade_until_max(artifacts, lvls)
-    scores = score(artifacts, targets)
-    goal = np.argmax(scores)
-    #print_artifact(artifacts[goal])
-    artifacts = original_artifacts.copy()
-    #print_artifact(artifacts[goal])
-    
-    exp = 0
-    
-    while lvls[goal] != 20:
-        idx = fun(artifacts, lvls, targets)
-        if lvls[idx] == 20:
-            raise ValueError
-        smart_upgrade(artifacts[idx])
-        exp += UPGRADE_REQ_EXP[lvls[idx]]
-        lvls[idx] = 4 * ((lvls[idx] // 4) + 1)
-            
-    return exp
-
-def upper_bound(artifacts, lvls, targets):
-    scores = score(artifacts, targets)
-    scores[lvls == 20] = 0
-    return np.argmax(scores)
-
 if __name__ == '__main__':
     artifacts = generate('sands', size=2)
     print(artifacts)

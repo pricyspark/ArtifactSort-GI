@@ -39,12 +39,23 @@ UPGRADE_REQ_EXP = (
     23075, 12025, 66150, 53125, 37975, 20375, 117175, 93675, 66625, 35575, 0
 ) # TODO: check this
 
-def _find_main(artifact):
+def find_main(artifact):
     mask = artifact == 160
     if np.any(mask):
         return np.where(mask == True)[0][0]
     else:
         return np.where(artifact == 240)[0][0]
+    
+def find_sub(artifact, main=None):
+    if main is None:
+        main = find_main(artifact)
+    
+    temp = artifact[main]
+    artifact[main] = 0
+    subs = np.nonzero(artifact)[0]
+    artifact[main] = temp
+    
+    return subs
 
 def generate(slot, main=None, lvls=None, source='domain', size=None, seed=None):
     try:
@@ -119,17 +130,15 @@ def print_artifact(artifacts) -> None:
             print_artifact(artifact)
             print()
 
-def _upgrade_helper(artifact, rng):
-    main = _find_main(artifact)
-    
-    sub_probs = SUB_PROBS.copy()
-    sub_probs[main] = 0
+def _upgrade_helper(artifact, rng):    
     if np.count_nonzero(artifact) == 4:
-        for idx in np.nonzero(artifact):
-            sub_probs[idx] = 0
+        sub_probs = SUB_PROBS.copy()
+        sub_probs[np.nonzero(artifacts)[0]] = 0
         sub_probs /= np.sum(sub_probs)
         artifact[rng.choice(19, p=sub_probs)] = rng.choice(SUB_COEFS)
     else:
+        # TODO: this seems like a dumb way to do this
+        main = find_main(artifact)
         temp = artifact[main]
         artifact[main] = 0
         artifact[rng.choice(np.nonzero(artifact)[0])] += rng.choice(SUB_COEFS)

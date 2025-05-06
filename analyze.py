@@ -1,10 +1,71 @@
 import numpy as np
 from artifact import *
+import math
 #import artifact as Artifact
 #from artifact import STATS, STAT_2_NUM, MAIN_PROBS, SUB_PROBS, MAIN_VALUES, SUB_VALUES, SUB_COEFS, ARTIFACT_REQ_EXP, UPGRADE_REQ_EXP
         
-def distro(artifacts, num_upgrades):
-    raise NotImplementedError
+def _all_compositions(N, M):
+        """Yield all length-N tuples of non-neg ints summing to M."""
+        if N == 1:
+            yield (M,)
+        else:
+            for k in range(M+1):
+                for rest in _all_compositions(N-1, M-k):
+                    yield (k,) + rest
+
+def _multinomial_prob(counts, N, M):
+    """P(counts) = M! / (∏ counts_i!) * (1/N)^M"""
+    num = math.factorial(M)
+    denom = 1
+    for c in counts:
+        denom *= math.factorial(c)
+    return num/denom * (1/N)**M
+
+def _distribution(N, M):
+    dist = []
+    for counts in _all_compositions(N, M):
+        dist.append((counts, _multinomial_prob(counts, N, M)))
+    return tuple(dist)
+
+def distro(artifacts, num_upgrades):    
+    #raise NotImplementedError
+    if num_upgrades == 0:
+        return
+    
+    dist = []
+    if artifacts.ndim == 1:
+        seed = []
+        if np.count_nonzero(artifacts) == 4:
+            num_upgrades -= 1
+            sub_probs = SUB_PROBS.copy()
+            sub_probs[np.nonzero(artifacts)[0]] = 0
+            sub_probs /= np.sum(sub_probs)
+            for idx in np.where(artifacts == 0)[0]:
+                if sub_probs[idx] == 0:
+                    continue
+                temp = artifacts.copy()
+                temp[idx] = 25 # This assume a 0.8333 coef
+                seed.append((temp, sub_probs[idx]))
+        else:
+            seed.append((artifacts.copy(), 1))
+            
+        main = find_main(artifacts)
+        upgrades = _distribution(4, num_upgrades)
+        for artifact, prob in seed:
+            for upgrade, upgrade_prob in upgrades:
+                substats = find_sub(artifact, main)
+                temp_artifact = artifact.copy()
+                for i in range(4):
+                    temp_artifact[substats[i]] += math.floor(25.5 * upgrade[i])
+                
+                dist.append((temp_artifact, prob * upgrade_prob))
+                
+    else:
+        dist = []
+        for artifact in artifacts:
+            dist.append(distro(artifact, num_upgrades))
+        
+    return tuple(dist)
 
 def vectorize(targets: dict):
     """Convert a target dictionary to a target array.

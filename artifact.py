@@ -1,6 +1,7 @@
 import numpy as np
 import copy
 import zlib
+import math
 
 STATS = (
     'hp', 'atk', 'def', 'hp_', 'atk_', 'def_', 'enerRech_', 'eleMas', 
@@ -46,7 +47,7 @@ def find_main(artifact):
     else:
         return np.where(artifact == 240)[0][0]
     
-def find_sub(artifact, main=None):
+def find_sub(artifact, main=None): # TODO: i'm skeptical of performance
     if main is None:
         main = find_main(artifact)
     
@@ -133,7 +134,7 @@ def print_artifact(artifacts) -> None:
 def _upgrade_helper(artifact, rng):    
     if np.count_nonzero(artifact) == 4:
         sub_probs = SUB_PROBS.copy()
-        sub_probs[np.nonzero(artifacts)[0]] = 0
+        sub_probs[np.nonzero(artifact)[0]] = 0
         sub_probs /= np.sum(sub_probs)
         artifact[rng.choice(19, p=sub_probs)] = rng.choice(SUB_COEFS)
     else:
@@ -198,6 +199,24 @@ def upgrade_until_max(artifacts, lvls, mains=None, seed=None):
         for artifact, lvl, main in zip(artifacts, num_upgrades, mains):
             for _ in range(lvl):
                 upgrade(artifact, main, seed) # TODO seed generator, otherwise they all get the same seed
+
+def estimate_lvl(artifacts):
+    # TODO: maybe make this more advanced, considering the number of
+    # rolls from each substat individually
+    if artifacts.ndim == 1:
+        substats = find_sub(artifacts)
+        rolls = round(np.sum(artifacts[substats]) / 25.5)
+        if rolls == 3:
+            return 0
+        if rolls == 9:
+            return 20
+        return 4 * (rolls - 4) + 2
+    else:
+        lvls = np.zeros(len(artifacts), dtype=int)
+        for idx, artifact in enumerate(artifacts):
+            lvls[idx] = estimate_lvl(artifact)
+            
+        return lvls
 
 if __name__ == '__main__':
     artifacts = generate('sands', size=2)

@@ -27,13 +27,16 @@ def _distribution(N, M):
         dist.append((counts, _multinomial_prob(counts, N, M)))
     return tuple(dist)
 
-def distro(artifacts, num_upgrades):    
-    #raise NotImplementedError
-    if num_upgrades == 0:
-        return
-    
+def distro(artifacts, lvls):    
     dist = []
+    probs = []
     if artifacts.ndim == 1:
+        if lvls == 20:
+            return artifacts.reshape((1, -1)), np.array([1])
+        
+        num_upgrades = 20 - lvls // 4
+        dist.append(artifacts.copy())
+        probs.append(0)
         seed = []
         if np.count_nonzero(artifacts) == 4:
             num_upgrades -= 1
@@ -57,15 +60,25 @@ def distro(artifacts, num_upgrades):
                 temp_artifact = artifact.copy()
                 for i in range(4):
                     temp_artifact[substats[i]] += math.floor(25.5 * upgrade[i])
-                
-                dist.append((temp_artifact, prob * upgrade_prob))
-                
+                dist.append(temp_artifact)
+                probs.append(prob * upgrade_prob)
     else:
-        dist = []
-        for artifact in artifacts:
-            dist.append(distro(artifact, num_upgrades))
+        try:
+            _ = iter(lvls)
+        except:
+            lvls = np.full(len(artifacts), lvls)
         
-    return tuple(dist)
+        for artifact, lvl in zip(artifacts, lvls):
+            temp_dist, temp_probs = distro(artifact, lvl)
+            dist.append(temp_dist)
+            probs.append(temp_probs)
+        
+    dist = np.array(dist, dtype=np.uint8)
+    probs = np.array(probs)
+    return dist, probs
+    
+def avg(distribution, probs, targets):
+    return score(distribution, targets) @ probs
 
 def vectorize(targets: dict):
     """Convert a target dictionary to a target array.
@@ -103,9 +116,7 @@ def simulate_exp(artifacts, lvls, targets, fun, mains=None):
     smart_upgrade_until_max(artifacts, lvls)
     scores = score(artifacts, targets)
     goal = np.argmax(scores)
-    #print_artifact(artifacts[goal])
     artifacts = original_artifacts.copy()
-    #print_artifact(artifacts[goal])
     
     exp = 0
     
@@ -124,19 +135,82 @@ def upper_bound(artifacts, lvls, targets):
     scores[lvls == 20] = 0
     return np.argmax(scores)
 
-def create_dataset(num_queries, slot, lvls, targets, source='domain', num_trials=1000):
-    artifacts = generate(slot, lvls, source)
-    for i in range(num_trials):
-        original_artifacts = artifacts.copy()
-        artifacts = original_artifacts
-    num = 10000
-    totals = np.zeros(num)
-    avg = np.zeros(num)
-    targets = vectorize({'atk_': 3, 'atk': 1, 'crit_': 4})
-    for i in range(num):
-        artifacts = generate('flower', size=200, seed=i)
-        totals[i] = (simulate_exp(artifacts, np.zeros(200, dtype=int), targets, upper_bound))
+def create_dataset(num_queries, slot, lvls, targets, source='domain', size=None, num_trials=1000):
+    try:
+        _ = iter(lvls)
+        lvls = np.array(lvls)
+        size = len(lvls)
+    except:
+        if size is None:
+            size = 1
+        if lvls is None:
+            lvls = 0
+        lvls = np.full(size, lvls)
+    
+    num_artifacts = len(lvls)
+    relevance = np.zeros(num_queries * num_artifacts, dtype=float)
+    original_artifacts = np.zeros((num_queries * num_artifacts, 19), dtype=np.uint8)
+    for query in range(num_queries):
+        original_artifacts[query * num_artifacts:(query + 1) * num_artifacts] = generate(slot, lvls=lvls, source=source)
+        for _ in range(num_trials):
+            artifacts = original_artifacts[query * num_artifacts:(query + 1) * num_artifacts].copy()
+            upgrade_until_max(artifacts, lvls)
+            scores = score(artifacts, targets)
+            
+            order = np.argsort(np.argsort(scores))
+            #relevance[query * num_artifacts:(query + 1) * num_artifacts] += order / num_artifacts
+            relevance[query * num_artifacts:(query + 1) * num_artifacts] += order
+        scores = relevance[query * num_artifacts:(query + 1) * num_artifacts]
+        order = np.argsort(np.argsort(scores))
+        relevance[query * num_artifacts:(query + 1) * num_artifacts] = order - len(order) + 32
+    
+    x = np.append(original_artifacts, np.tile(lvls, num_queries).reshape((-1, 1)), axis=1)
+    relevance[relevance < 0] = 0
+    qid = np.repeat(np.arange(num_queries), size)
+    
+    return x, relevance, qid
 
-    cumsum = np.cumsum(totals)
-    for i in range(len(cumsum)):
-        avg[i] = cumsum[i] / (i + 1)
+def create_dataset_sample(num_queries, slot, lvls, targets, source='domain', size=None, num_trials=1000):
+    try:
+        _ = iter(lvls)
+        lvls = np.array(lvls)
+        size = len(lvls)
+    except:
+        if size is None:
+            size = 1
+        if lvls is None:
+            lvls = 0
+        lvls = np.full(size, lvls)
+    
+    num_artifacts = len(lvls)
+    relevance = np.zeros(num_queries * num_artifacts, dtype=float)
+    artifacts = np.zeros((num_queries * num_artifacts, 19), dtype=np.uint8)
+    for query in range(num_queries):
+        print(query)
+        artifacts[query * num_artifacts:(query + 1) * num_artifacts] = generate(slot, lvls=lvls, source=source)
+        distribution, probs = distro(artifacts, lvls)        
+        for _ in range(num_trials):
+            maxed = np.zeros((num_artifacts, 19), dtype=np.uint8)
+            for i in range(num_artifacts):
+                id = np.random.choice(np.arange(len(probs[i])), p=probs[i])
+                maxed[i] = distribution[i][id]
+            scores = score(maxed, targets)
+            order = np.argsort(np.argsort(scores))
+            relevance[query * num_artifacts:(query + 1) * num_artifacts] += order
+        scores = relevance[query * num_artifacts:(query + 1) * num_artifacts]
+        order = np.argsort(np.argsort(scores))
+        relevance[query * num_artifacts:(query + 1) * num_artifacts] = order - len(order) + 32
+    
+    lvls = np.tile(lvls, num_queries).reshape((-1, 1))
+    
+    
+    x = np.append(artifacts, lvls, axis=1)
+    relevance[relevance < 0] = 0
+    qid = np.repeat(np.arange(num_queries), size)
+    
+    return x, relevance, qid
+
+if __name__ == '__main__':
+    targets = {'atk_': 3, 'atk': 1, 'crit_': 4}
+    lvls = np.arange(200, dtype=int) // 34 * 4
+    a, b, qid = create_dataset_sample(1, 'flower', lvls, targets)

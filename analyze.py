@@ -7,13 +7,13 @@ import xgboost as xgb
 #from artifact import STATS, STAT_2_NUM, MAIN_PROBS, SUB_PROBS, MAIN_VALUES, SUB_VALUES, SUB_COEFS, ARTIFACT_REQ_EXP, UPGRADE_REQ_EXP
         
 def _all_compositions(N, M):
-        """Yield all length-N tuples of non-neg ints summing to M."""
-        if N == 1:
-            yield (M,)
-        else:
-            for k in range(M+1):
-                for rest in _all_compositions(N-1, M-k):
-                    yield (k,) + rest
+    """Yield all length-N tuples of non-neg ints summing to M."""
+    if N == 1:
+        yield (M,)
+    else:
+        for k in range(M+1):
+            for rest in _all_compositions(N-1, M-k):
+                yield (k,) + rest
 
 def _multinomial_prob(counts, N, M):
     """P(counts) = M! / (∏ counts_i!) * (1/N)^M"""
@@ -30,6 +30,22 @@ def _distribution(N, M):
     return tuple(dist)
 
 def distro(artifacts, lvls):    
+    """Create a distribution possible max artifacts. If given a single
+    artifact, return twin arrays artifacts and probabilities. If given
+    multiple artifacts, return twin lists of arrays instead.
+
+    Args:
+        artifacts (_type_): _description_
+        lvls (_type_): _description_
+
+    Raises:
+        ValueError: _description_
+        ValueError: _description_
+
+    Returns:
+        _type_: _description_
+    """
+    
     dist = []
     probs = []
     if artifacts.ndim == 1:
@@ -91,12 +107,36 @@ def distro(artifacts, lvls):
 
     return dist, probs
     
-def avg(distribution, probs, targets, scores=None):
+def avg(distribution, probs, targets, scores=None) -> float:
+    """Find distribution's average score.
+
+    Args:
+        distribution (_type_): _description_
+        probs (_type_): _description_
+        targets (_type_): _description_
+        scores (_type_, optional): _description_. Defaults to None.
+
+    Returns:
+        _type_: _description_
+    """
+    
     if scores is None:
         scores = score(distribution, targets)
     return scores @ probs
 
-def variance(distribution, probs, targets, scores=None, mean=None):
+def variance(distribution, probs, targets, scores=None, mean=None) -> float:
+    """Find distribution's score variance.
+
+    Args:
+        distribution (_type_): _description_
+        probs (_type_): _description_
+        targets (_type_): _description_
+        scores (_type_, optional): _description_. Defaults to None.
+        mean (_type_, optional): _description_. Defaults to None.
+
+    Returns:
+        _type_: _description_
+    """
     if scores is None:
         scores = score(distribution, targets)
     if mean is None:
@@ -104,7 +144,19 @@ def variance(distribution, probs, targets, scores=None, mean=None):
         
     return (scores - mean)**2 @ probs
 
-def std(distribution, probs, targets, scores=None, mean=None):
+def std(distribution, probs, targets, scores=None, mean=None) -> float:
+    """Find distribution's score standard deviation.
+
+    Args:
+        distribution (_type_): _description_
+        probs (_type_): _description_
+        targets (_type_): _description_
+        scores (_type_, optional): _description_. Defaults to None.
+        mean (_type_, optional): _description_. Defaults to None.
+
+    Returns:
+        float: _description_
+    """
     return np.sqrt(variance(distribution, probs, targets, scores, mean))
 
 def vectorize(targets: dict):
@@ -130,6 +182,17 @@ def vectorize(targets: dict):
     return output
 
 def score(artifacts, targets):
+    """Calculate scores. If given a single artifact, returns a scalar.
+    If ggiven multiple artifacts, returns an array.
+
+    Args:
+        artifacts (_type_): _description_
+        targets (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+    
     if type(targets) == dict:
         targets = vectorize(targets)
         

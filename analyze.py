@@ -243,6 +243,31 @@ def upper_bound(artifacts, lvls, targets):
     scores[lvls == 20] = 0
     return np.argmax(scores)
 
+def rank(artifacts, lvls, targets, num_trials=1000, rng=None, seed=None):
+    num_artifacts = len(artifacts)
+    try:
+        _ = iter(lvls)
+        lvls = np.array(lvls)
+    except:
+        if lvls is None:
+            lvls = 0
+        lvls = np.full(num_artifacts, lvls)
+    
+    if rng is None:
+        rng = np.random.default_rng(seed)
+    
+    distributions, probs = distro(artifacts, lvls)
+    relevance = np.zeros(num_artifacts, dtype=np.uint8)
+    for _ in range(num_trials):
+        maxed = np.zeros((num_artifacts, 19), dtype=np.uint8)
+        for i in range(num_artifacts):
+            maxed[i] = rng.choice(distributions[i], p=probs[i])
+        final_scores = score(maxed, targets)
+        best = np.argmax(final_scores)
+        relevance[best] += 1
+        
+    return relevance
+        
 def create_dataset(num_queries, slot, lvls, targets, source='domain', size=None, num_trials=1000, seed=None):
     try:
         _ = iter(lvls)
@@ -299,7 +324,7 @@ def create_dataset(num_queries, slot, lvls, targets, source='domain', size=None,
     second_moments = second_moments.reshape((-1, 1))
     variances = variances.reshape((-1, 1))
     
-    metadata = np.column_stack((avgs, second_moments, variances))
+    metadata = np.column_stack((lvls, avgs, second_moments, variances))
     x = np.append(artifacts, metadata, axis=1)
     #x = np.append(x, avgs, axis=1)
     #x = np.append(x, second_moments, axis=1)

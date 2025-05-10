@@ -2,6 +2,11 @@ import numpy as np
 import copy
 import zlib
 import math
+import json
+
+SLOTS = ('flower', 'plume', 'sands', 'goblet', 'circlet')
+
+SLOT_2_NUM = {slot: index for index, slot in enumerate(SLOTS)}
 
 STATS = (
     'hp', 'atk', 'def', 'hp_', 'atk_', 'def_', 'enerRech_', 'eleMas', 
@@ -121,6 +126,54 @@ def generate(slot, main=None, lvls=None, source='domain', size=None, rng=None, s
             output[idx, substats[upgrade]] += rng.choice(SUB_COEFS)
             
     return output
+
+def artifact_to_dict(artifacts):
+    pass
+
+def dict_to_artifact(dicts):
+    if type(dicts) == dict:
+        artifact = np.zeros(19, dtype=np.uint8)
+        
+        slot: int = SLOT_2_NUM[dicts['slotKey']]
+        lvl: int = dicts['level']
+        main: int = STAT_2_NUM[dicts['mainStatKey']]
+        if main < 3:
+            artifact[main] = 160
+        else:
+            artifact[main] = 240
+            
+        for substat in dicts['substats']:
+            stat = STAT_2_NUM[substat['key']]
+            value = substat['value']
+            coef = round(value / SUB_VALUES[stat] * 30)
+            artifact[stat] = coef
+            
+        return slot, artifact, lvl
+        
+    else:
+        slots = np.zeros(len(dicts), dtype=np.uint8)
+        artifacts = np.zeros((len(dicts), 19), dtype=np.uint8)
+        lvls = np.zeros(len(dicts), dtype=np.uint8)
+        for i, dictionary in enumerate(dicts):
+            slots[i], artifacts[i], lvls[i] = dict_to_artifact(dictionary)
+
+        return slots, artifacts, lvls
+    
+def load(filename):
+    with open(filename) as f:
+        data = json.load(f)
+    
+    if data['format'] != 'GOOD':
+        raise ValueError
+    
+    slots, artifacts, lvls = dict_to_artifact(data['artifacts'])
+    
+    output = [None] * 5
+    for i in range(5):
+        output[i] = (artifacts[slots == i], lvls[slots == i])
+    
+    return output
+    
 
 def print_artifact(artifacts) -> None:
     if artifacts.ndim == 1:

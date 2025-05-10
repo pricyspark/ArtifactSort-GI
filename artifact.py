@@ -58,7 +58,7 @@ def find_sub(artifact, main=None): # TODO: i'm skeptical of performance
     
     return subs
 
-def generate(slot, main=None, lvls=None, source='domain', size=None, seed=None):
+def generate(slot, main=None, lvls=None, source='domain', size=None, rng=None, seed=None):
     try:
         _ = iter(lvls)
         lvls = np.array(lvls)
@@ -70,7 +70,8 @@ def generate(slot, main=None, lvls=None, source='domain', size=None, seed=None):
             lvls = 0
         lvls = np.full(size, lvls)
         
-    rng = np.random.default_rng(seed)
+    if rng is None:
+        rng = np.random.default_rng(seed)
 
     # Figure out probability of starting with 4 substats
     match source:
@@ -148,12 +149,12 @@ def _upgrade_helper(artifact, rng):
 def upgrade(artifacts, mains=None, seed=None):
     # TODO: add mains optional param
     
-    rng = np.random.default_rng(seed)
+    RNG = np.random.default_rng(seed)
     if artifacts.ndim == 1:
-        _upgrade_helper(artifacts, rng)
+        _upgrade_helper(artifacts, RNG)
     else:
         for artifact in artifacts:
-            _upgrade_helper(artifact, rng)
+            _upgrade_helper(artifact, RNG)
 
 def _smart_seed(artifacts):
     if artifacts.ndim == 1:
@@ -166,13 +167,13 @@ def _smart_seed(artifacts):
     
 def smart_upgrade(artifacts, mains=None):
     if artifacts.ndim == 1:
-        rng = np.random.default_rng(_smart_seed(artifacts))
-        _upgrade_helper(artifacts, rng)
+        RNG = np.random.default_rng(_smart_seed(artifacts))
+        _upgrade_helper(artifacts, RNG)
     else:
         seeds = _smart_seed(artifacts)
         for artifact, seed in zip(artifacts, seeds):
-            rng = np.random.default_rng(seed)
-            _upgrade_helper(artifact, rng)
+            RNG = np.random.default_rng(seed)
+            _upgrade_helper(artifact, RNG)
             
 def smart_upgrade_until_max(artifacts, lvls, mains=None): # TODO: this is code duplication
     num_upgrades = 5 - lvls // 4

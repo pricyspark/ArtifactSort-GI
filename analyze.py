@@ -108,7 +108,7 @@ def distro(artifacts, lvls):
     return dist, probs
     
 def avg(distribution, probs, targets, scores=None) -> float:
-    """Find distribution's average score.
+    """Find distribution's score average.
 
     Args:
         distribution (_type_): _description_
@@ -123,6 +123,23 @@ def avg(distribution, probs, targets, scores=None) -> float:
     if scores is None:
         scores = score(distribution, targets)
     return scores @ probs
+
+def second_moment(distribution, probs, targets, scores=None) -> float:
+    """Find distribution's score second moment.
+
+    Args:
+        distribution (_type_): _description_
+        probs (_type_): _description_
+        targets (_type_): _description_
+        scores (_type_, optional): _description_. Defaults to None.
+
+    Returns:
+        _type_: _description_
+    """
+    
+    if scores is None:
+        scores = score(distribution, targets)
+    return scores**2 @ probs
 
 def variance(distribution, probs, targets, scores=None, mean=None) -> float:
     """Find distribution's score variance.
@@ -226,7 +243,7 @@ def upper_bound(artifacts, lvls, targets):
     scores[lvls == 20] = 0
     return np.argmax(scores)
 
-def create_dataset(num_queries, slot, lvls, targets, source='domain', size=None, num_trials=1000):
+def create_dataset(num_queries, slot, lvls, targets, source='domain', size=None, num_trials=1000, seed=None):
     try:
         _ = iter(lvls)
         lvls = np.array(lvls)
@@ -239,41 +256,73 @@ def create_dataset(num_queries, slot, lvls, targets, source='domain', size=None,
         lvls = np.full(size, lvls)
     
     num_artifacts = len(lvls)
-    
     avgs = np.zeros(num_queries * num_artifacts, dtype=float)
-    
+    second_moments = np.zeros(num_queries * num_artifacts, dtype=float)
+    variances = np.zeros(num_queries * num_artifacts, dtype=float)
     relevance = np.zeros(num_queries * num_artifacts, dtype=float)
+    # TODO: this is temp. other_relevance is a counter. Increment if
+    # it's the max for a trial.
+    other_relevance = np.zeros(num_queries * num_artifacts, dtype=float)
     artifacts = np.zeros((num_queries * num_artifacts, 19), dtype=np.uint8)
+    RNG = np.random.default_rng(seed)
     for query in range(num_queries):
         this_slice = slice(query * num_artifacts, (query + 1) * num_artifacts)
-        artifacts[this_slice] = generate(slot, lvls=lvls, source=source)
-        distributions, probs = distro(artifacts, lvls)
+        artifacts[this_slice] = generate(slot, lvls=lvls, source=source, rng=RNG)
+        distributions, probs = distro(artifacts[this_slice], lvls)
         
         for i, (distribution, prob) in enumerate(zip(distributions, probs)):
-            avgs[this_slice][i] = avg(distribution, prob, targets)
+            scores = score(distribution, targets)
+            #avgs[this_slice][i] = scores @ prob
+            mean = avg(None, prob, None, scores)
+            second_m = second_moment(None, prob, None, scores)
+            var = variance(None, prob, None, scores, mean)
+            
+            avgs[this_slice][i] = mean
+            second_moments[this_slice][i] = second_m
+            variances[this_slice][i] = var
         
         for _ in range(num_trials):
             maxed = np.zeros((num_artifacts, 19), dtype=np.uint8)
             for i in range(num_artifacts):
-                id = np.random.choice(np.arange(len(probs[i])), p=probs[i])
-                maxed[i] = distributions[i][id]
-            scores = score(maxed, targets)
-            order = np.argsort(np.argsort(scores))
+                maxed[i] = RNG.choice(distributions[i], p=probs[i])
+            final_scores = score(maxed, targets)
+            order = np.argsort(np.argsort(final_scores))
             relevance[this_slice] += order / num_trials
+            best = np.argmax(final_scores)
+            other_relevance[this_slice][best] += 1
         #scores = relevance[this_slice]
         #order = np.argsort(np.argsort(scores))
         #relevance[this_slice] = order - len(order) + 32
     
     lvls = np.tile(lvls, num_queries).reshape((-1, 1))
     avgs = avgs.reshape((-1, 1))
+    second_moments = second_moments.reshape((-1, 1))
+    variances = variances.reshape((-1, 1))
     
-    x = np.append(artifacts, lvls, axis=1)
-    x = np.append(x, avgs, axis=1)
+    metadata = np.column_stack((avgs, second_moments, variances))
+    x = np.append(artifacts, metadata, axis=1)
+    #x = np.append(x, avgs, axis=1)
+    #x = np.append(x, second_moments, axis=1)
+    #x = np.append(x, variances, axis=1)
     
-    relevance[relevance < 0] = 0
+    relevance = np.append(relevance.reshape((-1, 1)), other_relevance.reshape((-1, 1)), axis=1)
+    
+    #relevance[relevance < 0] = 0
     qid = np.repeat(np.arange(num_queries), size)
     
     return x, relevance, qid
+
+def choose_samples(x, y, qid):
+    current = -1
+    idxs = []
+    for idx, (artifact, relevance, query) in enumerate(zip(x, y, qid)):
+        if current != query and relevance == 0:
+            current = query
+            idxs.append(idx)
+        if relevance != 0:
+            idxs.append(idx)
+            
+    return x[idxs], y[idxs], qid[idxs]
 
 if __name__ == '__main__':
     #t0 = time.time()

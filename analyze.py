@@ -210,6 +210,8 @@ def score(artifacts, targets):
         _type_: _description_
     """
     
+    # TODO: additionally put vectorization to caller functions so this
+    # doesn't repeat
     if type(targets) == dict:
         targets = vectorize(targets)
         
@@ -243,7 +245,9 @@ def upper_bound(artifacts, lvls, targets):
     scores[lvls == 20] = 0
     return np.argmax(scores)
 
-def rank(artifacts, lvls, targets, num_trials=1000, rng=None, seed=None):
+def rank(artifacts, lvls, targets, sets=None, k=1, num_trials=1000, rng=None, seed=None):
+    # TODO: implement sets
+    
     num_artifacts = len(artifacts)
     try:
         _ = iter(lvls)
@@ -257,14 +261,20 @@ def rank(artifacts, lvls, targets, num_trials=1000, rng=None, seed=None):
         rng = np.random.default_rng(seed)
     
     distributions, probs = distro(artifacts, lvls)
-    relevance = np.zeros(num_artifacts, dtype=np.uint8)
+    relevance = np.zeros(num_artifacts)
     for _ in range(num_trials):
         maxed = np.zeros((num_artifacts, 19), dtype=np.uint8)
         for i in range(num_artifacts):
             maxed[i] = rng.choice(distributions[i], p=probs[i])
-        final_scores = score(maxed, targets)
-        best = np.argmax(final_scores)
-        relevance[best] += 1
+        if type(targets) == dict or (type(targets) == np.ndarray and targets.ndim == 1):
+            final_scores = score(maxed, targets)
+            best = np.argpartition(final_scores, -k)[-k:]
+            relevance[best] += 1
+        else:
+            for target in targets:
+                final_scores = score(maxed, target)
+                best = np.argpartition(final_scores, -k)[-k:]
+                relevance[best] += 1
         
     return relevance
         

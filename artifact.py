@@ -136,6 +136,7 @@ def dict_to_artifact(dicts):
         
         slot: int = SLOT_2_NUM[dicts['slotKey']]
         lvl: int = dicts['level']
+        setKey = dicts['setKey']
         main: int = STAT_2_NUM[dicts['mainStatKey']]
         if main < 3:
             artifact[main] = 160
@@ -147,17 +148,18 @@ def dict_to_artifact(dicts):
             value = substat['value']
             coef = round(value / SUB_VALUES[stat] * 30)
             artifact[stat] = coef
-            
-        return slot, artifact, lvl
+
+        return slot, artifact, lvl, setKey
         
     else:
         slots = np.zeros(len(dicts), dtype=np.uint8)
         artifacts = np.zeros((len(dicts), 19), dtype=np.uint8)
         lvls = np.zeros(len(dicts), dtype=np.uint8)
+        sets = [None] * len(dicts)
         for i, dictionary in enumerate(dicts):
-            slots[i], artifacts[i], lvls[i] = dict_to_artifact(dictionary)
+            slots[i], artifacts[i], lvls[i], sets[i] = dict_to_artifact(dictionary)
 
-        return slots, artifacts, lvls
+        return slots, artifacts, lvls, sets
     
 def load(filename):
     with open(filename) as f:
@@ -166,11 +168,22 @@ def load(filename):
     if data['format'] != 'GOOD':
         raise ValueError
     
-    slots, artifacts, lvls = dict_to_artifact(data['artifacts'])
+    slots, artifacts, lvls, sets = dict_to_artifact(data['artifacts'])
+    
+    sets_dict = {}
+    for artifact_set in sets:
+        if artifact_set not in sets_dict:
+            sets_dict[artifact_set] = len(sets_dict)
+    sets_array = np.zeros_like(slots)
+    for i in range(len(sets_array)):
+        sets_array[i] = sets_dict[sets[i]]
     
     output = [None] * 5
     for i in range(5):
-        output[i] = (artifacts[slots == i], lvls[slots == i])
+        output[i] = (artifacts[slots == i], lvls[slots == i], sets_array[slots == i])
+        
+    # TODO: create standard mapping from set to int, instead of first
+    # come first served
     
     return output
     

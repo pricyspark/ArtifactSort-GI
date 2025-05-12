@@ -4,6 +4,47 @@ import zlib
 import math
 import json
 
+SETS = (
+    'ArchaicPetra',
+    'BlizzardStrayer',
+    'BloodstainedChivalry',
+    'CrimsonWitchOfFlames',
+    'DeepwoodMemories',
+    'DesertPavilionChronicle',
+    'EchoesOfAnOffering',
+    'EmblemOfSeveredFate',
+    'FinaleOfTheDeepGalleries',
+    'FlowerOfParadiseLost',
+    'FragmentOfHarmonicWhimsy',
+    'GildedDreams',
+    'GladiatorsFinale',
+    'GoldenTroupe',
+    'HeartOfDepth',
+    'HuskOfOpulentDreams',
+    'Lavawalker',
+    'LongNightsOath',
+    'MaidenBeloved',
+    'MarechausseeHunter',
+    'NoblesseOblige',
+    'NymphsDream',
+    'ObsidianCodex',
+    'OceanHuedClam',
+    'PaleFlame',
+    'RetracingBolide',
+    'ScrollOfTheHeroOfCinderCity',
+    'ShimenawasReminiscence',
+    'TenacityOfTheMillelith',
+    'ThunderingFury',
+    'Thundersoother',
+    'UnfinishedReverie',
+    'VermillionHereafter',
+    'ViridescentVenerer',
+    'VourukashasGlow',
+    'WanderersTroupe'
+)
+
+SET_2_NUM = {artifact_set: index for index, artifact_set in enumerate(SETS)}
+
 SLOTS = ('flower', 'plume', 'sands', 'goblet', 'circlet')
 
 SLOT_2_NUM = {slot: index for index, slot in enumerate(SLOTS)}
@@ -35,8 +76,11 @@ SUB_VALUES = (  298.75, 19.45, 23.13, 5.83, 5.83, 7.29, 6.48, 23.31, 3.89, 7.77,
 SUB_COEFS = np.array((21, 24, 27, 30), dtype=np.uint8)
 
 ARTIFACT_REQ_EXP = (
-    0, 3000, 6725, 11150, 16300, 22200, 28875, 36375, 44725, 53950, 
-    64075, 75125, 87150, 100175, 115325, 132925, 153300, 176800, 203850, 234900, 
+    0, 3000, 6725, 11150, 
+    16300, 22200, 28875, 36375, 
+    44725, 53950, 64075, 75125, 
+    87150, 100175, 115325, 132925, 
+    153300, 176800, 203850, 234900, 
     270475
 )
 
@@ -44,6 +88,15 @@ UPGRADE_REQ_EXP = (
     16300, 13300, 9575, 5150, 28425, 22525, 15850, 8350, 42425, 33200, 
     23075, 12025, 66150, 53125, 37975, 20375, 117175, 93675, 66625, 35575, 0
 ) # TODO: check this
+
+MAX_REQ_EXP = (
+    270475, 267475, 263750, 259325,
+    254175, 248275, 241600, 234100,
+    225750, 216525, 206400, 195350,
+    183325, 170300, 155150, 137550,
+    117175, 93675, 66625, 35575,
+    0
+)
 
 def find_main(artifact):
     mask = artifact == 160
@@ -135,8 +188,8 @@ def dict_to_artifact(dicts):
         artifact = np.zeros(19, dtype=np.uint8)
         
         slot: int = SLOT_2_NUM[dicts['slotKey']]
-        lvl: int = dicts['level']
-        setKey = dicts['setKey']
+        lvl: int = int(dicts['level'])
+        setKey: int = SET_2_NUM[dicts['setKey']]
         main: int = STAT_2_NUM[dicts['mainStatKey']]
         if main < 3:
             artifact[main] = 160
@@ -148,18 +201,20 @@ def dict_to_artifact(dicts):
             value = substat['value']
             coef = round(value / SUB_VALUES[stat] * 30)
             artifact[stat] = coef
+        if setKey == 1 and slot == 0 and artifact[8] != 0 and artifact[9] != 0:
+            pass
 
-        return slot, artifact, lvl, setKey
+        return artifact, slot, lvl, setKey
         
     else:
-        slots = np.zeros(len(dicts), dtype=np.uint8)
         artifacts = np.zeros((len(dicts), 19), dtype=np.uint8)
+        slots = np.zeros(len(dicts), dtype=np.uint8)
         lvls = np.zeros(len(dicts), dtype=np.uint8)
-        sets = [None] * len(dicts)
+        sets = np.zeros(len(dicts), dtype=int)
         for i, dictionary in enumerate(dicts):
-            slots[i], artifacts[i], lvls[i], sets[i] = dict_to_artifact(dictionary)
+            artifacts[i], slots[i], lvls[i], sets[i] = dict_to_artifact(dictionary)
 
-        return slots, artifacts, lvls, sets
+        return artifacts, slots, lvls, sets
     
 def load(filename):
     with open(filename) as f:
@@ -168,25 +223,7 @@ def load(filename):
     if data['format'] != 'GOOD':
         raise ValueError
     
-    slots, artifacts, lvls, sets = dict_to_artifact(data['artifacts'])
-    
-    sets_dict = {}
-    for artifact_set in sets:
-        if artifact_set not in sets_dict:
-            sets_dict[artifact_set] = len(sets_dict)
-    sets_array = np.zeros_like(slots)
-    for i in range(len(sets_array)):
-        sets_array[i] = sets_dict[sets[i]]
-    
-    output = [None] * 5
-    for i in range(5):
-        output[i] = (artifacts[slots == i], lvls[slots == i], sets_array[slots == i])
-        
-    # TODO: create standard mapping from set to int, instead of first
-    # come first served
-    
-    return output
-    
+    return dict_to_artifact(data['artifacts'])
 
 def print_artifact(artifacts) -> None:
     if artifacts.ndim == 1:

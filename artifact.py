@@ -33,6 +33,7 @@ SETS = (
     'RetracingBolide',
     'ScrollOfTheHeroOfCinderCity',
     'ShimenawasReminiscence',
+    'SongOfDaysPast',
     'TenacityOfTheMillelith',
     'ThunderingFury',
     'Thundersoother',
@@ -71,7 +72,7 @@ SUB_PROBS = np.array((6, 6, 6, 4, 4, 4, 4, 4, 3, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0), 
 MAIN_VALUES = ( 4780, 311, -1, 46.6, 46.6, 58.3, 51.8, 186.5, 31.1, 62.2, 
                 46.6, 46.6, 46.6, 46.6, 46.6, 46.6, 46.6, 58.3, 34.9)
 SUB_VALUES = (  298.75, 19.45, 23.13, 5.83, 5.83, 7.29, 6.48, 23.31, 3.89, 7.77, 
-                0, 0, 0, 0, 0, 0, 0, 0, 0)
+                5.83, 5.83, 5.83, 5.83, 5.83, 5.83, 5.83, 5.83, 4.4875)
 
 SUB_COEFS = np.array((21, 24, 27, 30), dtype=np.uint8)
 
@@ -225,11 +226,14 @@ def load(filename):
     
     return dict_to_artifact(data['artifacts'])
 
-def print_artifact(artifacts) -> None:
+def print_artifact(artifacts, human_readable=True) -> None:
     if artifacts.ndim == 1:
         stats = np.nonzero(artifacts)[0]
         for stat in stats:
-            print(STATS[stat], artifacts[stat])
+            if human_readable:
+                print(STATS[stat], round(artifacts[stat] * SUB_VALUES[stat] / 30, 2))
+            else:
+                print(STATS[stat], artifacts[stat])
     else:
         for artifact in artifacts:
             print_artifact(artifact)

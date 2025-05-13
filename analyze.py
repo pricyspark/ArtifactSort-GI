@@ -3,6 +3,7 @@ from artifact import *
 import math
 import time
 import xgboost as xgb
+from targets import *
 #import artifact as Artifact
 #from artifact import STATS, STAT_2_NUM, MAIN_PROBS, SUB_PROBS, MAIN_VALUES, SUB_VALUES, SUB_COEFS, ARTIFACT_REQ_EXP, UPGRADE_REQ_EXP
         
@@ -273,7 +274,7 @@ def rank(artifacts, lvls, targets, sets=None, k=1, num_trials=30, rng=None, seed
     #return relevance
     return np.argmax(relevance)
 
-def asdf_rank(artifacts, lvls, targets, sets=None, k=1, num_trials=30, rng=None, seed=None):
+def rank_value(artifacts, lvls, targets, sets=None, k=1, num_trials=30, rng=None, seed=None):
     # TODO: implement sets
     
     num_artifacts = len(artifacts)
@@ -395,294 +396,29 @@ def choose_samples(x, y, qid):
             
     return x[idxs], y[idxs], qid[idxs]
 
-if __name__ == '__main__':
-    filename = 'artifacts/genshinData_GOOD_2025_05_12_02_34.json'
-    artifacts, slots, lvls, sets = load(filename)
-    
-    targets = [
-        {'hp_': 3, 'hp': 1, 'crit_': 4},
-        {'hp_': 3, 'hp': 1, 'crit_': 4, 'enerRech_': 5},
-        {'hp_': 3, 'hp': 1, 'crit_': 4, 'eleMas': 3},
-        {'hp_': 3, 'hp': 1, 'crit_': 4, 'enerRech_': 5, 'eleMas': 3},
-        
-        {'atk_': 3, 'atk': 1, 'crit_': 4},
-        {'atk_': 3, 'atk': 1, 'crit_': 4, 'enerRech_': 5},
-        {'atk_': 3, 'atk': 1, 'crit_': 4, 'eleMas': 3},
-        {'atk_': 3, 'atk': 1, 'crit_': 4, 'enerRech_': 5, 'eleMas': 3},
-        
-        {'def_': 3, 'def': 1, 'crit_': 4},
-        {'def_': 3, 'def': 1, 'crit_': 4, 'enerRech_': 5},
-        {'def_': 3, 'def': 1, 'crit_': 4, 'eleMas': 3},
-        {'def_': 3, 'def': 1, 'crit_': 4, 'enerRech_': 5, 'eleMas': 3}
-    ]
-    
-    sands_targets = [
-        {'hp_': 3, 'hp': 1, 'crit_': 4},
-        {'hp_': 3, 'hp': 1, 'crit_': 4, 'enerRech_': 5},
-        {'hp_': 3, 'hp': 1, 'crit_': 4, 'eleMas': 3},
-        {'hp_': 3, 'hp': 1, 'crit_': 4, 'enerRech_': 5, 'eleMas': 3},
-        {'hp_': 3, 'hp': 1, 'enerRech_': 5, 'eleMas': 8},
-        
-        {'atk_': 3, 'atk': 1, 'crit_': 4},
-        {'atk_': 3, 'atk': 1, 'crit_': 4, 'enerRech_': 5},
-        {'atk_': 3, 'atk': 1, 'crit_': 4, 'eleMas': 3},
-        {'atk_': 3, 'atk': 1, 'crit_': 4, 'enerRech_': 5, 'eleMas': 3},
-        {'atk_': 3, 'atk': 1, 'enerRech_': 5, 'eleMas': 8},
-        
-        {'def_': 3, 'def': 1, 'crit_': 4},
-        {'def_': 3, 'def': 1, 'crit_': 4, 'enerRech_': 5},
-        {'def_': 3, 'def': 1, 'crit_': 4, 'eleMas': 3},
-        {'def_': 3, 'def': 1, 'crit_': 4, 'enerRech_': 5, 'eleMas': 3},
-        {'def_': 3, 'def': 1, 'enerRech_': 5, 'eleMas': 8}
-    ]
-    
-    goblet_targets = [
-        {'hp_': 3, 'hp': 1, 'crit_': 4},
-        {'hp_': 3, 'hp': 1, 'crit_': 4, 'enerRech_': 5},
-        {'hp_': 3, 'hp': 1, 'crit_': 4, 'eleMas': 3},
-        {'hp_': 3, 'hp': 1, 'crit_': 4, 'enerRech_': 5, 'eleMas': 3},
-        {'hp_': 3, 'hp': 1, 'enerRech_': 5, 'eleMas': 8},
-        {'hp_': 3, 'hp': 1, 'pyro_dmg_': 4, 'crit_': 4},
-        {'hp_': 3, 'hp': 1, 'pyro_dmg_': 4, 'crit_': 4, 'enerRech_': 5},
-        {'hp_': 3, 'hp': 1, 'pyro_dmg_': 4, 'crit_': 4, 'eleMas': 3},
-        {'hp_': 3, 'hp': 1, 'pyro_dmg_': 4, 'crit_': 4, 'enerRech_': 5, 'eleMas': 3},
-        {'hp_': 3, 'hp': 1, 'pyro_dmg_': 4, 'enerRech_': 5, 'eleMas': 8},
-        {'hp_': 3, 'hp': 1, 'electro_dmg_': 4, 'crit_': 4},
-        {'hp_': 3, 'hp': 1, 'electro_dmg_': 4, 'crit_': 4, 'enerRech_': 5},
-        {'hp_': 3, 'hp': 1, 'electro_dmg_': 4, 'crit_': 4, 'eleMas': 3},
-        {'hp_': 3, 'hp': 1, 'electro_dmg_': 4, 'crit_': 4, 'enerRech_': 5, 'eleMas': 3},
-        {'hp_': 3, 'hp': 1, 'electro_dmg_': 4, 'enerRech_': 5, 'eleMas': 8},
-        {'hp_': 3, 'hp': 1, 'cryo_dmg_': 4, 'crit_': 4},
-        {'hp_': 3, 'hp': 1, 'cryo_dmg_': 4, 'crit_': 4, 'enerRech_': 5},
-        {'hp_': 3, 'hp': 1, 'cryo_dmg_': 4, 'crit_': 4, 'eleMas': 3},
-        {'hp_': 3, 'hp': 1, 'cryo_dmg_': 4, 'crit_': 4, 'enerRech_': 5, 'eleMas': 3},
-        {'hp_': 3, 'hp': 1, 'cryo_dmg_': 4, 'enerRech_': 5, 'eleMas': 8},
-        {'hp_': 3, 'hp': 1, 'hydro_dmg_': 4, 'crit_': 4},
-        {'hp_': 3, 'hp': 1, 'hydro_dmg_': 4, 'crit_': 4, 'enerRech_': 5},
-        {'hp_': 3, 'hp': 1, 'hydro_dmg_': 4, 'crit_': 4, 'eleMas': 3},
-        {'hp_': 3, 'hp': 1, 'hydro_dmg_': 4, 'crit_': 4, 'enerRech_': 5, 'eleMas': 3},
-        {'hp_': 3, 'hp': 1, 'hydro_dmg_': 4, 'enerRech_': 5, 'eleMas': 8},
-        {'hp_': 3, 'hp': 1, 'dendro_dmg_': 4, 'crit_': 4},
-        {'hp_': 3, 'hp': 1, 'dendro_dmg_': 4, 'crit_': 4, 'enerRech_': 5},
-        {'hp_': 3, 'hp': 1, 'dendro_dmg_': 4, 'crit_': 4, 'eleMas': 3},
-        {'hp_': 3, 'hp': 1, 'dendro_dmg_': 4, 'crit_': 4, 'enerRech_': 5, 'eleMas': 3},
-        {'hp_': 3, 'hp': 1, 'dendro_dmg_': 4, 'enerRech_': 5, 'eleMas': 8},
-        {'hp_': 3, 'hp': 1, 'anemo_dmg_': 4, 'crit_': 4},
-        {'hp_': 3, 'hp': 1, 'anemo_dmg_': 4, 'crit_': 4, 'enerRech_': 5},
-        {'hp_': 3, 'hp': 1, 'anemo_dmg_': 4, 'crit_': 4, 'eleMas': 3},
-        {'hp_': 3, 'hp': 1, 'anemo_dmg_': 4, 'crit_': 4, 'enerRech_': 5, 'eleMas': 3},
-        {'hp_': 3, 'hp': 1, 'anemo_dmg_': 4, 'enerRech_': 5, 'eleMas': 8},
-        {'hp_': 3, 'hp': 1, 'geo_dmg_': 4, 'crit_': 4},
-        {'hp_': 3, 'hp': 1, 'geo_dmg_': 4, 'crit_': 4, 'enerRech_': 5},
-        {'hp_': 3, 'hp': 1, 'geo_dmg_': 4, 'crit_': 4, 'eleMas': 3},
-        {'hp_': 3, 'hp': 1, 'geo_dmg_': 4, 'crit_': 4, 'enerRech_': 5, 'eleMas': 3},
-        {'hp_': 3, 'hp': 1, 'geo_dmg_': 4, 'enerRech_': 5, 'eleMas': 8},
-        {'hp_': 3, 'hp': 1, 'physical_dmg_': 4, 'crit_': 4},
-        {'hp_': 3, 'hp': 1, 'physical_dmg_': 4, 'crit_': 4, 'enerRech_': 5},
-        {'hp_': 3, 'hp': 1, 'physical_dmg_': 4, 'crit_': 4, 'eleMas': 3},
-        {'hp_': 3, 'hp': 1, 'physical_dmg_': 4, 'crit_': 4, 'enerRech_': 5, 'eleMas': 3},
-        {'hp_': 3, 'hp': 1, 'physical_dmg_': 4, 'enerRech_': 5, 'eleMas': 8},
-        
-        {'atk_': 3, 'atk': 1, 'crit_': 4},
-        {'atk_': 3, 'atk': 1, 'crit_': 4, 'enerRech_': 5},
-        {'atk_': 3, 'atk': 1, 'crit_': 4, 'eleMas': 3},
-        {'atk_': 3, 'atk': 1, 'crit_': 4, 'enerRech_': 5, 'eleMas': 3},
-        {'atk_': 3, 'atk': 1, 'enerRech_': 5, 'eleMas': 8},
-        {'atk_': 3, 'atk': 1, 'pyro_dmg_': 4, 'crit_': 4},
-        {'atk_': 3, 'atk': 1, 'pyro_dmg_': 4, 'crit_': 4, 'enerRech_': 5},
-        {'atk_': 3, 'atk': 1, 'pyro_dmg_': 4, 'crit_': 4, 'eleMas': 3},
-        {'atk_': 3, 'atk': 1, 'pyro_dmg_': 4, 'crit_': 4, 'enerRech_': 5, 'eleMas': 3},
-        {'atk_': 3, 'atk': 1, 'pyro_dmg_': 4, 'enerRech_': 5, 'eleMas': 8},
-        {'atk_': 3, 'atk': 1, 'electro_dmg_': 4, 'crit_': 4},
-        {'atk_': 3, 'atk': 1, 'electro_dmg_': 4, 'crit_': 4, 'enerRech_': 5},
-        {'atk_': 3, 'atk': 1, 'electro_dmg_': 4, 'crit_': 4, 'eleMas': 3},
-        {'atk_': 3, 'atk': 1, 'electro_dmg_': 4, 'crit_': 4, 'enerRech_': 5, 'eleMas': 3},
-        {'atk_': 3, 'atk': 1, 'electro_dmg_': 4, 'enerRech_': 5, 'eleMas': 8},
-        {'atk_': 3, 'atk': 1, 'cryo_dmg_': 4, 'crit_': 4},
-        {'atk_': 3, 'atk': 1, 'cryo_dmg_': 4, 'crit_': 4, 'enerRech_': 5},
-        {'atk_': 3, 'atk': 1, 'cryo_dmg_': 4, 'crit_': 4, 'eleMas': 3},
-        {'atk_': 3, 'atk': 1, 'cryo_dmg_': 4, 'crit_': 4, 'enerRech_': 5, 'eleMas': 3},
-        {'atk_': 3, 'atk': 1, 'cryo_dmg_': 4, 'enerRech_': 5, 'eleMas': 8},
-        {'atk_': 3, 'atk': 1, 'hydro_dmg_': 4, 'crit_': 4},
-        {'atk_': 3, 'atk': 1, 'hydro_dmg_': 4, 'crit_': 4, 'enerRech_': 5},
-        {'atk_': 3, 'atk': 1, 'hydro_dmg_': 4, 'crit_': 4, 'eleMas': 3},
-        {'atk_': 3, 'atk': 1, 'hydro_dmg_': 4, 'crit_': 4, 'enerRech_': 5, 'eleMas': 3},
-        {'atk_': 3, 'atk': 1, 'hydro_dmg_': 4, 'enerRech_': 5, 'eleMas': 8},
-        {'atk_': 3, 'atk': 1, 'dendro_dmg_': 4, 'crit_': 4},
-        {'atk_': 3, 'atk': 1, 'dendro_dmg_': 4, 'crit_': 4, 'enerRech_': 5},
-        {'atk_': 3, 'atk': 1, 'dendro_dmg_': 4, 'crit_': 4, 'eleMas': 3},
-        {'atk_': 3, 'atk': 1, 'dendro_dmg_': 4, 'crit_': 4, 'enerRech_': 5, 'eleMas': 3},
-        {'atk_': 3, 'atk': 1, 'dendro_dmg_': 4, 'enerRech_': 5, 'eleMas': 8},
-        {'atk_': 3, 'atk': 1, 'anemo_dmg_': 4, 'crit_': 4},
-        {'atk_': 3, 'atk': 1, 'anemo_dmg_': 4, 'crit_': 4, 'enerRech_': 5},
-        {'atk_': 3, 'atk': 1, 'anemo_dmg_': 4, 'crit_': 4, 'eleMas': 3},
-        {'atk_': 3, 'atk': 1, 'anemo_dmg_': 4, 'crit_': 4, 'enerRech_': 5, 'eleMas': 3},
-        {'atk_': 3, 'atk': 1, 'anemo_dmg_': 4, 'enerRech_': 5, 'eleMas': 8},
-        {'atk_': 3, 'atk': 1, 'geo_dmg_': 4, 'crit_': 4},
-        {'atk_': 3, 'atk': 1, 'geo_dmg_': 4, 'crit_': 4, 'enerRech_': 5},
-        {'atk_': 3, 'atk': 1, 'geo_dmg_': 4, 'crit_': 4, 'eleMas': 3},
-        {'atk_': 3, 'atk': 1, 'geo_dmg_': 4, 'crit_': 4, 'enerRech_': 5, 'eleMas': 3},
-        {'atk_': 3, 'atk': 1, 'geo_dmg_': 4, 'enerRech_': 5, 'eleMas': 8},
-        {'atk_': 3, 'atk': 1, 'physical_dmg_': 4, 'crit_': 4},
-        {'atk_': 3, 'atk': 1, 'physical_dmg_': 4, 'crit_': 4, 'enerRech_': 5},
-        {'atk_': 3, 'atk': 1, 'physical_dmg_': 4, 'crit_': 4, 'eleMas': 3},
-        {'atk_': 3, 'atk': 1, 'physical_dmg_': 4, 'crit_': 4, 'enerRech_': 5, 'eleMas': 3},
-        {'atk_': 3, 'atk': 1, 'physical_dmg_': 4, 'enerRech_': 5, 'eleMas': 8},
-        
-        {'def_': 3, 'def': 1, 'crit_': 4},
-        {'def_': 3, 'def': 1, 'crit_': 4, 'enerRech_': 5},
-        {'def_': 3, 'def': 1, 'crit_': 4, 'eleMas': 3},
-        {'def_': 3, 'def': 1, 'crit_': 4, 'enerRech_': 5, 'eleMas': 3},
-        {'def_': 3, 'def': 1, 'enerRech_': 5, 'eleMas': 8},
-        {'def_': 3, 'def': 1, 'pyro_dmg_': 4, 'crit_': 4},
-        {'def_': 3, 'def': 1, 'pyro_dmg_': 4, 'crit_': 4, 'enerRech_': 5},
-        {'def_': 3, 'def': 1, 'pyro_dmg_': 4, 'crit_': 4, 'eleMas': 3},
-        {'def_': 3, 'def': 1, 'pyro_dmg_': 4, 'crit_': 4, 'enerRech_': 5, 'eleMas': 3},
-        {'def_': 3, 'def': 1, 'pyro_dmg_': 4, 'enerRech_': 5, 'eleMas': 8},
-        {'def_': 3, 'def': 1, 'electro_dmg_': 4, 'crit_': 4},
-        {'def_': 3, 'def': 1, 'electro_dmg_': 4, 'crit_': 4, 'enerRech_': 5},
-        {'def_': 3, 'def': 1, 'electro_dmg_': 4, 'crit_': 4, 'eleMas': 3},
-        {'def_': 3, 'def': 1, 'electro_dmg_': 4, 'crit_': 4, 'enerRech_': 5, 'eleMas': 3},
-        {'def_': 3, 'def': 1, 'electro_dmg_': 4, 'enerRech_': 5, 'eleMas': 8},
-        {'def_': 3, 'def': 1, 'cryo_dmg_': 4, 'crit_': 4},
-        {'def_': 3, 'def': 1, 'cryo_dmg_': 4, 'crit_': 4, 'enerRech_': 5},
-        {'def_': 3, 'def': 1, 'cryo_dmg_': 4, 'crit_': 4, 'eleMas': 3},
-        {'def_': 3, 'def': 1, 'cryo_dmg_': 4, 'crit_': 4, 'enerRech_': 5, 'eleMas': 3},
-        {'def_': 3, 'def': 1, 'cryo_dmg_': 4, 'enerRech_': 5, 'eleMas': 8},
-        {'def_': 3, 'def': 1, 'hydro_dmg_': 4, 'crit_': 4},
-        {'def_': 3, 'def': 1, 'hydro_dmg_': 4, 'crit_': 4, 'enerRech_': 5},
-        {'def_': 3, 'def': 1, 'hydro_dmg_': 4, 'crit_': 4, 'eleMas': 3},
-        {'def_': 3, 'def': 1, 'hydro_dmg_': 4, 'crit_': 4, 'enerRech_': 5, 'eleMas': 3},
-        {'def_': 3, 'def': 1, 'hydro_dmg_': 4, 'enerRech_': 5, 'eleMas': 8},
-        {'def_': 3, 'def': 1, 'dendro_dmg_': 4, 'crit_': 4},
-        {'def_': 3, 'def': 1, 'dendro_dmg_': 4, 'crit_': 4, 'enerRech_': 5},
-        {'def_': 3, 'def': 1, 'dendro_dmg_': 4, 'crit_': 4, 'eleMas': 3},
-        {'def_': 3, 'def': 1, 'dendro_dmg_': 4, 'crit_': 4, 'enerRech_': 5, 'eleMas': 3},
-        {'def_': 3, 'def': 1, 'dendro_dmg_': 4, 'enerRech_': 5, 'eleMas': 8},
-        {'def_': 3, 'def': 1, 'anemo_dmg_': 4, 'crit_': 4},
-        {'def_': 3, 'def': 1, 'anemo_dmg_': 4, 'crit_': 4, 'enerRech_': 5},
-        {'def_': 3, 'def': 1, 'anemo_dmg_': 4, 'crit_': 4, 'eleMas': 3},
-        {'def_': 3, 'def': 1, 'anemo_dmg_': 4, 'crit_': 4, 'enerRech_': 5, 'eleMas': 3},
-        {'def_': 3, 'def': 1, 'anemo_dmg_': 4, 'enerRech_': 5, 'eleMas': 8},
-        {'def_': 3, 'def': 1, 'geo_dmg_': 4, 'crit_': 4},
-        {'def_': 3, 'def': 1, 'geo_dmg_': 4, 'crit_': 4, 'enerRech_': 5},
-        {'def_': 3, 'def': 1, 'geo_dmg_': 4, 'crit_': 4, 'eleMas': 3},
-        {'def_': 3, 'def': 1, 'geo_dmg_': 4, 'crit_': 4, 'enerRech_': 5, 'eleMas': 3},
-        {'def_': 3, 'def': 1, 'geo_dmg_': 4, 'enerRech_': 5, 'eleMas': 8},
-        {'def_': 3, 'def': 1, 'physical_dmg_': 4, 'crit_': 4},
-        {'def_': 3, 'def': 1, 'physical_dmg_': 4, 'crit_': 4, 'enerRech_': 5},
-        {'def_': 3, 'def': 1, 'physical_dmg_': 4, 'crit_': 4, 'eleMas': 3},
-        {'def_': 3, 'def': 1, 'physical_dmg_': 4, 'crit_': 4, 'enerRech_': 5, 'eleMas': 3},
-        {'def_': 3, 'def': 1, 'physical_dmg_': 4, 'enerRech_': 5, 'eleMas': 8}
-    ]
-    
-    circlet_targets = [
-        {'hp_': 3, 'hp': 1, 'crit_': 4},
-        {'hp_': 3, 'hp': 1, 'crit_': 4, 'enerRech_': 5},
-        {'hp_': 3, 'hp': 1, 'crit_': 4, 'eleMas': 3},
-        {'hp_': 3, 'hp': 1, 'crit_': 4, 'enerRech_': 5, 'eleMas': 3},
-        {'hp_': 3, 'hp': 1, 'enerRech_': 5, 'eleMas': 8},
-        {'hp_': 3, 'hp': 1, 'enerRech_': 5, 'heal_': 8},
-        
-        {'atk_': 3, 'atk': 1, 'crit_': 4},
-        {'atk_': 3, 'atk': 1, 'crit_': 4, 'enerRech_': 5},
-        {'atk_': 3, 'atk': 1, 'crit_': 4, 'eleMas': 3},
-        {'atk_': 3, 'atk': 1, 'crit_': 4, 'enerRech_': 5, 'eleMas': 3},
-        {'atk_': 3, 'atk': 1, 'enerRech_': 5, 'eleMas': 8},
-        {'atk_': 3, 'atk': 1, 'enerRech_': 5, 'heal_': 8},
-        
-        {'def_': 3, 'def': 1, 'crit_': 4},
-        {'def_': 3, 'def': 1, 'crit_': 4, 'enerRech_': 5},
-        {'def_': 3, 'def': 1, 'crit_': 4, 'eleMas': 3},
-        {'def_': 3, 'def': 1, 'crit_': 4, 'enerRech_': 5, 'eleMas': 3},
-        {'def_': 3, 'def': 1, 'enerRech_': 5, 'eleMas': 8},
-        {'def_': 3, 'def': 1, 'enerRech_': 5, 'heal_': 8}
-    ]
-    
-    asdf = np.zeros(len(artifacts))
-    for slot in (0, 1):
-        if slot == 0:
-            print('flowers')
-        else:
-            print('feathers')
-        for setKey in range(len(SETS)):
-            printed = False
-            current_artifacts = artifacts[np.logical_and(slots == slot, sets == setKey)]
-            current_lvls = lvls[np.logical_and(slots == slot, sets == setKey)]
-            relevance = asdf_rank(current_artifacts, current_lvls, targets, num_trials=1000)
-            for i in range(len(current_artifacts)):
-                if relevance[i] <= 0.00018486 and current_lvls[i] != 20:
-                    if not printed:
-                        print(SETS[setKey])
-                        printed = True
-                    print('relevance:', relevance[i])
-                    print('level:', current_lvls[i])
-                    print_artifact(current_artifacts[i])
-                    print()
-    
-    print('sands')
-    for slot in [2]:
-        for setKey in range(len(SETS)):
-            printed = False
-            current_artifacts = artifacts[np.logical_and(slots == slot, sets == setKey)]
-            current_lvls = lvls[np.logical_and(slots == slot, sets == setKey)]
-            relevance = asdf_rank(current_artifacts, current_lvls, sands_targets, num_trials=1000)
-            for i in range(len(current_artifacts)):
-                if relevance[i] <= 0.00018486 and current_lvls[i] != 20:
-                    if not printed:
-                        print(SETS[setKey])
-                        printed = True
-                    print('relevance:', relevance[i])
-                    print('level:', current_lvls[i])
-                    print_artifact(current_artifacts[i])
-                    print()
-                    
-    print('goblets')
-    for slot in [3]:
-        for setKey in range(len(SETS)):
-            printed = False
-            current_artifacts = artifacts[np.logical_and(slots == slot, sets == setKey)]
-            current_lvls = lvls[np.logical_and(slots == slot, sets == setKey)]
-            relevance = asdf_rank(current_artifacts, current_lvls, goblet_targets, num_trials=1000)
-            for i in range(len(current_artifacts)):
-                if relevance[i] <= 0.00018486 and current_lvls[i] != 20:
-                    if not printed:
-                        print(SETS[setKey])
-                        printed = True
-                    print('relevance:', relevance[i])
-                    print('level:', current_lvls[i])
-                    print_artifact(current_artifacts[i])
-                    print()
-                    
-    print('circlets')
-    for slot in [4]:
-        for setKey in range(len(SETS)):
-            printed = False
-            current_artifacts = artifacts[np.logical_and(slots == slot, sets == setKey)]
-            current_lvls = lvls[np.logical_and(slots == slot, sets == setKey)]
-            relevance = asdf_rank(current_artifacts, current_lvls, circlet_targets, num_trials=1000)
-            for i in range(len(current_artifacts)):
-                if relevance[i] <= 0.00018486 and current_lvls[i] != 20:
-                    if not printed:
-                        print(SETS[setKey])
-                        printed = True
-                    print('relevance:', relevance[i])
-                    print('level:', current_lvls[i])
-                    print_artifact(current_artifacts[i])
-                    print()
-    '''
-    print('relevant')
+def rate(artifacts, slots, lvls, sets, ranker, threshold):
+    relevant = np.zeros(len(artifacts), dtype=bool)
     for slot in range(5):
+        mask = slots == slot
+        original_idxs = np.where(slots == slot)[0]
+        current_artifacts = artifacts[slots == slot]
+        current_lvls = lvls[slots == slot]
+        relevance = ranker(current_artifacts, current_lvls, ALL_TARGETS[SLOTS[slot]], num_trials=1000)
+        for i in range(len(current_artifacts)):
+            if relevance[i] >= threshold or current_lvls[i] == 20:
+                relevant[original_idxs[i]] = True
+        
         for setKey in range(len(SETS)):
-            print(SETS[setKey])
-            current_artifacts = artifacts[np.logical_and(slots == slot, sets == setKey)]
-            current_lvls = lvls[np.logical_and(slots == slot, sets == setKey)]
-            relevance = asdf_rank(current_artifacts, current_lvls, targets, num_trials=1000)
+            mask = np.logical_and(slots == slot, sets == setKey)
+            original_idxs = np.where(mask)[0]
+            current_artifacts = artifacts[mask]
+            current_lvls = lvls[mask]
+            relevance = ranker(current_artifacts, current_lvls, SET_TARGETS[SETS[setKey]][SLOTS[slot]], num_trials=1000)
             for i in range(len(current_artifacts)):
-                if relevance[i] != 0:
-                    print_artifact(current_artifacts[i])
-                    print()
+                if relevance[i] >= threshold or current_lvls[i] == 20:
+                    relevant[original_idxs[i]] = True
                     
-        if slot == 1:
-            break
-    '''
+    return relevant
+
+if __name__ == '__main__':
+    pass

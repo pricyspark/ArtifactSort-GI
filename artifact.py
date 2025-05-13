@@ -74,7 +74,7 @@ MAIN_VALUES = ( 4780, 311, -1, 46.6, 46.6, 58.3, 51.8, 186.5, 31.1, 62.2,
 SUB_VALUES = (  298.75, 19.45, 23.13, 5.83, 5.83, 7.29, 6.48, 23.31, 3.89, 7.77, 
                 5.83, 5.83, 5.83, 5.83, 5.83, 5.83, 5.83, 5.83, 4.4875)
 
-SUB_COEFS = np.array((21, 24, 27, 30), dtype=np.uint8)
+SUB_COEFS = np.array((7, 8, 9, 10), dtype=np.uint8)
 
 ARTIFACT_REQ_EXP = (
     0, 3000, 6725, 11150, 
@@ -104,7 +104,7 @@ def find_main(artifact):
     if np.any(mask):
         return np.where(mask == True)[0][0]
     else:
-        return np.where(artifact == 240)[0][0]
+        return np.where(artifact == 80)[0][0]
     
 def find_sub(artifact, main=None): # TODO: i'm skeptical of performance
     if main is None:
@@ -164,7 +164,7 @@ def generate(slot, main=None, lvls=None, source='domain', size=None, rng=None, s
         if main < 3:
             output[idx, main] = 160
         else:
-            output[idx, main] = 240
+            output[idx, main] = 80
             
         # Figure out unique substats
         sub_probs = SUB_PROBS.copy()
@@ -195,12 +195,12 @@ def dict_to_artifact(dicts):
         if main < 3:
             artifact[main] = 160
         else:
-            artifact[main] = 240
+            artifact[main] = 80
             
         for substat in dicts['substats']:
             stat = STAT_2_NUM[substat['key']]
             value = substat['value']
-            coef = round(value / SUB_VALUES[stat] * 30)
+            coef = round(value / SUB_VALUES[stat] * 10)
             artifact[stat] = coef
         if setKey == 1 and slot == 0 and artifact[8] != 0 and artifact[9] != 0:
             pass
@@ -231,7 +231,7 @@ def print_artifact(artifacts, human_readable=True) -> None:
         stats = np.nonzero(artifacts)[0]
         for stat in stats:
             if human_readable:
-                print(STATS[stat], round(artifacts[stat] * SUB_VALUES[stat] / 30, 2))
+                print(STATS[stat], round(artifacts[stat] * SUB_VALUES[stat] / 10, 2))
             else:
                 print(STATS[stat], artifacts[stat])
     else:

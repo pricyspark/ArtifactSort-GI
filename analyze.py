@@ -4,9 +4,10 @@ import math
 import time
 import xgboost as xgb
 from targets import *
+from scipy.stats import entropy
 #import artifact as Artifact
 #from artifact import STATS, STAT_2_NUM, MAIN_PROBS, SUB_PROBS, MAIN_VALUES, SUB_VALUES, SUB_COEFS, ARTIFACT_REQ_EXP, UPGRADE_REQ_EXP
-        
+
 def _all_compositions(N, M):
     """Yield all length-N tuples of non-neg ints summing to M."""
     if N == 1:
@@ -30,7 +31,7 @@ def _distribution(N, M):
         dist.append((counts, _multinomial_prob(counts, N, M)))
     return tuple(dist)
 
-def distro(artifacts, lvls):    
+def distro(artifacts, lvls=None, num_upgrades=None):
     """Create a distribution possible max artifacts. If given a single
     artifact, return twin arrays artifacts and probabilities. If given
     multiple artifacts, return twin lists of arrays instead.
@@ -94,7 +95,7 @@ def distro(artifacts, lvls):
             lvls = np.full(len(artifacts), lvls)
         
         for artifact, lvl in zip(artifacts, lvls):
-            temp_dist, temp_probs = distro(artifact, lvl)
+            temp_dist, temp_probs = distro(artifact, lvls=lvl)
             dist.append(temp_dist)
             probs.append(temp_probs)
 
@@ -212,7 +213,7 @@ def score(artifacts, targets):
 
 def simulate_exp(artifacts, lvls, targets, fun, mains=None):
     # TODO: check if anything is maxed. They shouldn't be
-    # TODO: add benchmark for how long it takes to acheive top n%, not
+    # TODO: add benchmark for how long it takes to acheive top 1%, not
     # just top 1
     original_artifacts = artifacts.copy()
     smart_upgrade_until_max(artifacts, lvls)
@@ -253,7 +254,7 @@ def rank(artifacts, lvls, targets, sets=None, k=1, num_trials=30, rng=None, seed
     if rng is None:
         rng = np.random.default_rng(seed)
     
-    distributions, probs = distro(artifacts, lvls)
+    distributions, probs = distro(artifacts, lvls=lvls)
     relevance = np.zeros(num_artifacts)
     for _ in range(num_trials):
         maxed = np.zeros((num_artifacts, 19), dtype=np.uint8)
@@ -274,9 +275,7 @@ def rank(artifacts, lvls, targets, sets=None, k=1, num_trials=30, rng=None, seed
     #return relevance
     return np.argmax(relevance)
 
-def rank_value(artifacts, lvls, targets, sets=None, k=1, num_trials=30, rng=None, seed=None):
-    # TODO: implement sets
-    
+def rank_value(artifacts, lvls, targets, k=1, num_trials=30, rng=None, seed=None):
     num_artifacts = len(artifacts)
     try:
         _ = iter(lvls)
@@ -289,7 +288,7 @@ def rank_value(artifacts, lvls, targets, sets=None, k=1, num_trials=30, rng=None
     if rng is None:
         rng = np.random.default_rng(seed)
     
-    distributions, probs = distro(artifacts, lvls)
+    distributions, probs = distro(artifacts, lvls=lvls)
     relevance = np.zeros(num_artifacts)
     for _ in range(num_trials):
         maxed = np.zeros((num_artifacts, 19), dtype=np.uint8)
@@ -314,6 +313,27 @@ def rank_value(artifacts, lvls, targets, sets=None, k=1, num_trials=30, rng=None
         
     return relevance
     #return np.argmax(relevance)
+    
+'''
+def rank_myopic(artifacts, lvls, targets, num_trials=1000):
+    num_artifacts = len(artifacts)
+    for _ in range(num_trials):
+        maxed = np.zeros((num_artifacts, 19), dtype=np.uint8)
+        for i in range(num_artifacts):
+            maxed[i] = rng.choice(distributions[i], p=probs[i])
+        if type(targets) == dict or (type(targets) == np.ndarray and targets.ndim == 1):
+            final_scores = score(maxed, targets)
+            final_scores[lvls == 20] = 0
+            best = np.argpartition(final_scores, -k)[-k:]
+            relevance[best] += 1
+        else:
+            for target in targets:
+                final_scores = score(maxed, target)
+                final_scores[lvls == 20] = 0
+                best = np.argpartition(final_scores, -k)[-k:]
+                relevance[best] += 1
+    #current_entropy = entropy()
+'''
         
 def create_dataset(num_queries, slot, lvls, targets, source='domain', size=None, num_trials=1000, seed=None):
     try:
@@ -340,7 +360,7 @@ def create_dataset(num_queries, slot, lvls, targets, source='domain', size=None,
     for query in range(num_queries):
         this_slice = slice(query * num_artifacts, (query + 1) * num_artifacts)
         artifacts[this_slice] = generate(slot, lvls=lvls, source=source, rng=RNG)
-        distributions, probs = distro(artifacts[this_slice], lvls)
+        distributions, probs = distro(artifacts[this_slice], lvls=lvls)
         
         for i, (distribution, prob) in enumerate(zip(distributions, probs)):
             scores = score(distribution, targets)

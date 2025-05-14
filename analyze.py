@@ -54,7 +54,8 @@ def distro(artifacts, lvls=None, num_upgrades=None):
         if lvls == 20:
             return artifacts.reshape((1, -1)), np.array([1])
         
-        num_upgrades = 5 - lvls // 4
+        if num_upgrades is None:
+            num_upgrades = 5 - lvls // 4
         dist.append(artifacts.copy())
         probs.append(0)
         seed = []
@@ -305,18 +306,34 @@ def rank_value(artifacts, lvls, targets, k=1, num_trials=30, rng=None, seed=None
                 final_scores[lvls == 20] = 0
                 best = np.argpartition(final_scores, -k)[-k:]
                 relevance[best] += 1
+                # each target is weighted equally. Don't divide by the
+                # number of targets, or else having more targets would
+                # make each target less valuable, which isn't the case.
                 
     for i in range(num_artifacts):
         if lvls[i] != 20:
             relevance[i] /= MAX_REQ_EXP[lvls[i]]
             #raise ValueError
         
-    return relevance
-    #return np.argmax(relevance)
+    #return relevance
+    return np.argmax(relevance)
     
-'''
-def rank_myopic(artifacts, lvls, targets, num_trials=1000):
+def rank_myopic(artifacts, lvls, targets, k=1, num_trials=30, rng=None, seed=None):
     num_artifacts = len(artifacts)
+    try:
+        _ = iter(lvls)
+        lvls = np.array(lvls)
+    except:
+        if lvls is None:
+            lvls = 0
+        lvls = np.full(num_artifacts, lvls)
+    
+    if rng is None:
+        rng = np.random.default_rng(seed)
+        
+    distributions, probs = distro(artifacts, lvls=lvls)
+    current_relevance = np.zeros(num_artifacts, dtype=float)
+    #maxed_artifacts = np.zeros((num_trials, num_artifacts), dtype=np.uint8)
     for _ in range(num_trials):
         maxed = np.zeros((num_artifacts, 19), dtype=np.uint8)
         for i in range(num_artifacts):
@@ -325,15 +342,56 @@ def rank_myopic(artifacts, lvls, targets, num_trials=1000):
             final_scores = score(maxed, targets)
             final_scores[lvls == 20] = 0
             best = np.argpartition(final_scores, -k)[-k:]
-            relevance[best] += 1
+            current_relevance[best] += 1
         else:
             for target in targets:
                 final_scores = score(maxed, target)
                 final_scores[lvls == 20] = 0
                 best = np.argpartition(final_scores, -k)[-k:]
-                relevance[best] += 1
+                current_relevance[best] += 1
+        
+    current_entropy = entropy(current_relevance)
+    entropy_reduction = np.zeros(num_artifacts, dtype=float) - 999999999
+    for i in range(num_artifacts):
+        if lvls[i] == 20:
+            continue
+        
+        new_entropy = 0
+        new_artifacts = artifacts.copy()
+        new_lvls = lvls.copy()
+        new_lvls[i] += 4
+        for upgrade, prob in zip(*distro(artifacts[i], num_upgrades=1)):
+            print(i)
+            if prob == 0:
+                continue
+            new_artifacts[i] = upgrade
+        
+            distributions, probs = distro(new_artifacts, lvls=new_lvls)
+            new_relevance = np.zeros(num_artifacts)
+            for _ in range(num_trials):
+                maxed = np.zeros((num_artifacts, 19), dtype=np.uint8)
+                for j in range(num_artifacts):
+                    maxed[j] = rng.choice(distributions[j], p=probs[j])
+                if type(targets) == dict or (type(targets) == np.ndarray and targets.ndim == 1):
+                    final_scores = score(maxed, targets)
+                    final_scores[lvls == 20] = 0
+                    best = np.argpartition(final_scores, -k)[-k:]
+                    new_relevance[best] += 1
+                else:
+                    for target in targets:
+                        final_scores = score(maxed, target)
+                        final_scores[lvls == 20] = 0
+                        best = np.argpartition(final_scores, -k)[-k:]
+                        new_relevance[best] += 1
+                        
+            new_entropy += prob * entropy(new_relevance)
+                        
+        entropy_reduction[i] = (current_entropy - new_entropy) / MAX_REQ_EXP[lvls[i]]
+        #if entropy_reduction[i] < 0:
+        #    raise ValueError
+    print(np.argmax(entropy_reduction))
+    return np.argmax(entropy_reduction)
     #current_entropy = entropy()
-'''
         
 def create_dataset(num_queries, slot, lvls, targets, source='domain', size=None, num_trials=1000, seed=None):
     try:
@@ -441,4 +499,18 @@ def rate(artifacts, slots, lvls, sets, ranker, threshold):
     return relevant
 
 if __name__ == '__main__':
-    pass
+    import matplotlib.pyplot as plt
+    num = 10
+    totals = np.zeros(num)
+    time_avg = np.zeros(num)
+    targets = {'atk_': 3, 'atk': 1, 'crit_': 4}
+    for i in range(num):
+        artifacts = generate('flower', size=10, seed=i)
+        totals[i] = (simulate_exp(artifacts, np.zeros(10, dtype=int), targets, rank_myopic))
+        print(i, totals[i])
+        print()
+
+    cumsum = np.cumsum(totals)
+    for i in range(len(cumsum)):
+        time_avg[i] = cumsum[i] / (i + 1)
+    plt.plot(time_avg)

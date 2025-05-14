@@ -68,7 +68,7 @@ def distro(artifacts, lvls=None, num_upgrades=None):
                 if sub_probs[idx] == 0:
                     continue
                 temp = artifacts.copy()
-                temp[idx] = 25 # This assume a 0.8333 coef
+                temp[idx] = 8 # This assume a 0.8333 coef
                 seed.append((temp, sub_probs[idx]))
         else:
             seed.append((artifacts.copy(), 1))
@@ -80,7 +80,7 @@ def distro(artifacts, lvls=None, num_upgrades=None):
                 substats = find_sub(artifact, main)
                 temp_artifact = artifact.copy()
                 for i in range(4):
-                    temp_artifact[substats[i]] += math.floor(25.5 * upgrade[i])
+                    temp_artifact[substats[i]] += round(8.5 * upgrade[i])
                 dist.append(temp_artifact)
                 probs.append(prob * upgrade_prob)
                 
@@ -316,6 +316,7 @@ def rank_value(artifacts, lvls, targets, k=1, num_trials=30, rng=None, seed=None
             #raise ValueError
         
     #return relevance
+    #print_artifact(artifacts[np.argmax(relevance)])
     return np.argmax(relevance)
     
 def rank_myopic(artifacts, lvls, targets, k=1, num_trials=30, rng=None, seed=None):
@@ -331,7 +332,31 @@ def rank_myopic(artifacts, lvls, targets, k=1, num_trials=30, rng=None, seed=Non
     if rng is None:
         rng = np.random.default_rng(seed)
         
+    '''
+    Psuedo:
+    Store num_trials x num_artifacts x 19 array of the maxed artifacts
+    Compute current relevance from that
+    Compute current entropy from current relevance
+    
+    For each artifact
+        Store current maxed artifacts for selected artifact
+        For each possible upgrade
+            Compute num_trials new maxed artifacts
+            Replace maxed artifacts with new ones for selected artifact
+            Compute new relevance
+            Compute new entropy
+            
+        Compute expected new entropy
+        Put back original maxed artifacts for selected artifact
+        
+    Return artifact with maximum entropy reduction per cost
+    '''
     distributions, probs = distro(artifacts, lvls=lvls)
+    maxed_artifacts = np.zeros((num_artifacts, num_trials, 19), dtype=np.uint8)
+    for i in range(num_artifacts):
+        maxed_artifacts[i] = rng.choice(distributions[i], p=probs[i], size=num_trials)
+    
+    
     current_relevance = np.zeros(num_artifacts, dtype=float)
     #maxed_artifacts = np.zeros((num_trials, num_artifacts), dtype=np.uint8)
     for _ in range(num_trials):
@@ -506,7 +531,7 @@ if __name__ == '__main__':
     targets = {'atk_': 3, 'atk': 1, 'crit_': 4}
     for i in range(num):
         artifacts = generate('flower', size=10, seed=i)
-        totals[i] = (simulate_exp(artifacts, np.zeros(10, dtype=int), targets, rank_myopic))
+        totals[i] = (simulate_exp(artifacts, np.zeros(10, dtype=int), targets, rank_value))
         print(i, totals[i])
         print()
 

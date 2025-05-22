@@ -470,7 +470,7 @@ def rank_value(artifacts, lvls, persist, targets, k=1, num_trials=30, rng=None, 
     persist[0] = np.argmax(relevance)
     return relevance
 
-def rank_estimate(artifacts, lvls, persist, targets, k=1, num_trials=30, rng=None, seed=None):
+def rank_estimate(artifacts, lvls, persist, targets, k=1, num_trials=1000, rng=None, seed=None):
     # 
     num_artifacts = len(artifacts)
     try:
@@ -485,7 +485,7 @@ def rank_estimate(artifacts, lvls, persist, targets, k=1, num_trials=30, rng=Non
         rng = np.random.default_rng(seed)
         
     if len(persist) == 0:
-        persist = [None] * 2
+        persist = [None] * 3
         persist[0] = -1
         distributions, probs = distro_accurate(artifacts, lvls)
         maxed = np.zeros((num_artifacts, num_trials, 19), dtype=np.uint8)
@@ -495,28 +495,41 @@ def rank_estimate(artifacts, lvls, persist, targets, k=1, num_trials=30, rng=Non
         
         distros = []
         for i in range(num_artifacts):
+            distros.append([None, None])
             if lvls[i] == 20:
                 continue
             
             current_distribution, current_probs = distro_accurate(artifacts[i], num_upgrades=1)
+            distros[-1][0] = []
+            distros[-1][1] = current_probs
+            for j, upgrade in enumerate(current_distribution):
+                potential_distribution, potential_probs = distro_accurate(upgrade, next_lvl(lvls[i]))
+                distros[-1][0].append(rng.choice(potential_distribution, p=potential_probs, size=num_trials))
             
+        persist[2] = distros
     else:
         changed = persist[0]
         distributions, probs = distro_accurate(artifacts[changed], lvls[changed])
         persist[1][changed] = rng.choice(distributions, p=probs, size=num_trials)
+        if lvls[changed] != 20:
+            current_distribution, current_probs = distro_accurate(artifacts[changed], num_upgrades=1)
+            persist[2][changed][0] = []
+            persist[2][changed][1] = current_probs
+            for j, upgrade in enumerate(current_distribution):
+                potential_distribution, potential_probs = distro_accurate(upgrade, next_lvl(lvls[i]))
+                persist[2][changed][0].append(rng.choice(potential_distribution, p=potential_probs, size=num_trials))
     
-    changed, maxed = persist
+    changed, maxed, distros = persist
     relevance_std = np.zeros(num_artifacts, dtype=float)
     original_maxed = maxed.copy()
     for i in range(num_artifacts):
         if lvls[i] == 20:
             continue
         
-        current_distribution, current_probs = distro_accurate(artifacts[i], num_upgrades=1)
-        relevance = np.zeros(len(current_distribution), dtype=float)
-        for j, upgrade in enumerate(current_distribution):
-            potential_distribution, potential_probs = distro_accurate(upgrade, next_lvl(lvls[i]))
-            maxed[i] = rng.choice(potential_distribution, p=potential_probs, size=num_trials)
+        maxes, current_probs = distros[i]
+        relevance = np.zeros(len(maxes), dtype=float)
+        for j, asdf in enumerate(maxes):
+            maxed[i] = asdf
             for k in range(num_trials):
                 if type(targets) == dict or (type(targets) == np.ndarray and targets.ndim == 1):
                     final_scores = score(maxed[:, k], targets)
@@ -543,6 +556,7 @@ def rank_estimate(artifacts, lvls, persist, targets, k=1, num_trials=30, rng=Non
             relevance_std[i] /= MAX_REQ_EXP[lvls[i]]        
             
     #print(relevance_std)
+    persist[0] = np.argmax(relevance)
     return np.argmax(relevance_std)
 
 def rank_myopic(artifacts, lvls, distros, targets, k=1, num_trials=100, rng=None, seed=None):

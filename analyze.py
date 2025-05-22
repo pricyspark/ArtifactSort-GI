@@ -424,7 +424,8 @@ def rank_value(artifacts, lvls, persist, targets, k=1, num_trials=30, rng=None, 
         rng = np.random.default_rng(seed)
     
     if len(persist) == 0:
-        persist = [None] * 2
+        while len(persist) < 2:
+            persist.append([None])
         persist[0] = -1
         distributions, probs = distro_accurate(artifacts, lvls)
         maxed = np.zeros((num_artifacts, num_trials, 19), dtype=np.uint8)
@@ -470,7 +471,7 @@ def rank_value(artifacts, lvls, persist, targets, k=1, num_trials=30, rng=None, 
     persist[0] = np.argmax(relevance)
     return relevance
 
-def rank_estimate(artifacts, lvls, persist, targets, k=1, num_trials=1000, rng=None, seed=None):
+def rank_estimate(artifacts, lvls, persist, targets, k=1, num_trials=30, rng=None, seed=None):
     # 
     num_artifacts = len(artifacts)
     try:
@@ -485,7 +486,8 @@ def rank_estimate(artifacts, lvls, persist, targets, k=1, num_trials=1000, rng=N
         rng = np.random.default_rng(seed)
         
     if len(persist) == 0:
-        persist = [None] * 3
+        while len(persist) < 3:
+            persist.append([None])
         persist[0] = -1
         distributions, probs = distro_accurate(artifacts, lvls)
         maxed = np.zeros((num_artifacts, num_trials, 19), dtype=np.uint8)
@@ -516,7 +518,7 @@ def rank_estimate(artifacts, lvls, persist, targets, k=1, num_trials=1000, rng=N
             persist[2][changed][0] = []
             persist[2][changed][1] = current_probs
             for j, upgrade in enumerate(current_distribution):
-                potential_distribution, potential_probs = distro_accurate(upgrade, next_lvl(lvls[i]))
+                potential_distribution, potential_probs = distro_accurate(upgrade, next_lvl(lvls[changed]))
                 persist[2][changed][0].append(rng.choice(potential_distribution, p=potential_probs, size=num_trials))
     
     changed, maxed, distros = persist
@@ -556,8 +558,9 @@ def rank_estimate(artifacts, lvls, persist, targets, k=1, num_trials=1000, rng=N
             relevance_std[i] /= MAX_REQ_EXP[lvls[i]]        
             
     #print(relevance_std)
-    persist[0] = np.argmax(relevance)
-    return np.argmax(relevance_std)
+    output = np.argmax(relevance_std)
+    persist[0] = output
+    return output
 
 def rank_myopic(artifacts, lvls, distros, targets, k=1, num_trials=100, rng=None, seed=None):
     num_artifacts = len(artifacts)

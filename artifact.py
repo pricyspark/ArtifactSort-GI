@@ -313,7 +313,7 @@ def estimate_lvl(artifacts):
     # rolls from each substat individually
     if artifacts.ndim == 1:
         substats = find_sub(artifacts)
-        rolls = round(np.sum(artifacts[substats]) / 25.5)
+        rolls = round(np.sum(artifacts[substats]) / 8.5)
         if rolls == 3:
             return 0
         if rolls == 9:

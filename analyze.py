@@ -471,7 +471,7 @@ def rank_value(artifacts, lvls, persist, targets, k=1, num_trials=1000, rng=None
     persist[0] = np.argmax(relevance)
     return np.argmax(relevance)
 
-def rank_estimate(artifacts, lvls, persist, targets, k=1, num_trials=100, rng=None, seed=None):
+def rank_estimate(artifacts, lvls, persist, targets, k=1, num_trials=30, rng=None, seed=None):
     # 
     num_artifacts = len(artifacts)
     try:
@@ -487,7 +487,7 @@ def rank_estimate(artifacts, lvls, persist, targets, k=1, num_trials=100, rng=No
         
     if len(persist) == 0:
         while len(persist) < 3:
-            persist.append([None])
+            persist.append(None)
         persist[0] = -1
         distributions, probs = distro_accurate(artifacts, lvls)
         maxed = np.zeros((num_artifacts, num_trials, 19), dtype=np.uint8)

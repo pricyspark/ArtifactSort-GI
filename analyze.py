@@ -410,7 +410,7 @@ def rank(artifacts, lvls, targets, sets=None, k=1, num_trials=30, rng=None, seed
     #return relevance
     return np.argmax(relevance)
 
-def rank_value(artifacts, lvls, persist, targets, k=1, num_trials=30, rng=None, seed=None):
+def rank_value(artifacts, lvls, persist, targets, k=1, num_trials=1000, rng=None, seed=None):
     num_artifacts = len(artifacts)
     try:
         _ = iter(lvls)
@@ -425,7 +425,7 @@ def rank_value(artifacts, lvls, persist, targets, k=1, num_trials=30, rng=None, 
     
     if len(persist) == 0:
         while len(persist) < 2:
-            persist.append([None])
+            persist.append(None)
         persist[0] = -1
         distributions, probs = distro_accurate(artifacts, lvls)
         maxed = np.zeros((num_artifacts, num_trials, 19), dtype=np.uint8)
@@ -469,9 +469,9 @@ def rank_value(artifacts, lvls, persist, targets, k=1, num_trials=30, rng=None, 
     #return relevance
     #print_artifact(artifacts[np.argmax(relevance)])
     persist[0] = np.argmax(relevance)
-    return relevance
+    return np.argmax(relevance)
 
-def rank_estimate(artifacts, lvls, persist, targets, k=1, num_trials=30, rng=None, seed=None):
+def rank_estimate(artifacts, lvls, persist, targets, k=1, num_trials=100, rng=None, seed=None):
     # 
     num_artifacts = len(artifacts)
     try:
@@ -520,6 +520,10 @@ def rank_estimate(artifacts, lvls, persist, targets, k=1, num_trials=30, rng=Non
             for j, upgrade in enumerate(current_distribution):
                 potential_distribution, potential_probs = distro_accurate(upgrade, next_lvl(lvls[changed]))
                 persist[2][changed][0].append(rng.choice(potential_distribution, p=potential_probs, size=num_trials))
+    # TODO: save scores instead of artifacts. Save a threshold score.
+    # When computing potential new scores, count how many are above the
+    # threshold. This is the relevance score. Don't recompute scores and
+    # count. Compute scores once and get a threshold.
     
     changed, maxed, distros = persist
     relevance_std = np.zeros(num_artifacts, dtype=float)

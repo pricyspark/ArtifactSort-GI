@@ -208,12 +208,36 @@ def dict_to_artifact(dicts):
         return artifact, slot, lvl, setKey
         
     else:
-        artifacts = np.zeros((len(dicts), 19), dtype=np.uint8)
-        slots = np.zeros(len(dicts), dtype=np.uint8)
-        lvls = np.zeros(len(dicts), dtype=np.uint8)
-        sets = np.zeros(len(dicts), dtype=int)
+        temp_artifacts = []
+        temp_slots = []
+        temp_lvls = []
+        temp_sets = []
+        
+        #artifacts = np.zeros((len(dicts), 19), dtype=np.uint8)
+        #slots = np.zeros(len(dicts), dtype=np.uint8)
+        #lvls = np.zeros(len(dicts), dtype=np.uint8)
+        #sets = np.zeros(len(dicts), dtype=int)
+        for dictionary in dicts:
+            if dictionary['rarity'] == 5:
+                artifact, slot, lvl, setKey = dict_to_artifact(dictionary)
+                temp_artifacts.append(artifact)
+                temp_slots.append(slot)
+                temp_lvls.append(lvl)
+                temp_sets.append(setKey)
+        artifacts = np.zeros((len(temp_artifacts), 19), dtype=np.uint8)
+        slots = np.zeros(len(temp_slots), dtype=np.uint8)
+        lvls = np.zeros(len(temp_lvls), dtype=np.uint8)
+        sets = np.zeros(len(temp_sets), dtype=int)
+        for i in range(len(temp_artifacts)):
+            artifacts[i] = temp_artifacts[i]
+            slots[i] = temp_slots[i]
+            lvls[i] = temp_lvls[i]
+            sets[i] = temp_sets[i]
+        '''
         for i, dictionary in enumerate(dicts):
-            artifacts[i], slots[i], lvls[i], sets[i] = dict_to_artifact(dictionary)
+            if dictionary['rarity'] == 5:
+                artifacts[i], slots[i], lvls[i], sets[i] = dict_to_artifact(dictionary)
+        '''
 
         return artifacts, slots, lvls, sets
     

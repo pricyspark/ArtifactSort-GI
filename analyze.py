@@ -469,11 +469,13 @@ def rank_value(artifacts, lvls, persist, targets, k=1, num_trials=1000, rng=None
     #return relevance
     #print_artifact(artifacts[np.argmax(relevance)])
     persist[0] = np.argmax(relevance)
-    return np.argmax(relevance)
+    return relevance
 
-def rank_estimate(artifacts, lvls, persist, targets, k=1, num_trials=30, rng=None, seed=None):
+def rank_estimate(artifacts, lvls, persist, targets, k=1, num_trials=10, rng=None, seed=None):
     # 
     num_artifacts = len(artifacts)
+    if num_artifacts == 0:
+        raise ValueError
     try:
         _ = iter(lvls)
         lvls = np.array(lvls)
@@ -495,20 +497,28 @@ def rank_estimate(artifacts, lvls, persist, targets, k=1, num_trials=30, rng=Non
             maxed[i] = rng.choice(distributions[i], p=probs[i], size=num_trials)
         persist[1] = maxed
         
-        distros = []
+        single_maxed = []
         for i in range(num_artifacts):
-            distros.append([None, None])
+            single_maxed.append([None, None])
             if lvls[i] == 20:
                 continue
             
             current_distribution, current_probs = distro_accurate(artifacts[i], num_upgrades=1)
-            distros[-1][0] = []
-            distros[-1][1] = current_probs
+            single_maxed[-1][0] = []
+            single_maxed[-1][1] = current_probs
             for j, upgrade in enumerate(current_distribution):
                 potential_distribution, potential_probs = distro_accurate(upgrade, next_lvl(lvls[i]))
-                distros[-1][0].append(rng.choice(potential_distribution, p=potential_probs, size=num_trials))
+                single_maxed[-1][0].append(rng.choice(potential_distribution, p=potential_probs, size=num_trials))
             
-        persist[2] = distros
+        # Single maxed is a list with num_artifacts elements. Each
+        # element is a list with elements corresponding to each of the
+        # possible single upgrades for that artifact. This list has two
+        # elements. The first is a list numpy arrays. Each numpy array
+        # is a sample maxed artifacts. There is an array for each
+        # possible artifact after a single upgrade. The second is a
+        # numpy array corresponding to the probability of each single
+        # upgrade.
+        persist[2] = single_maxed
     else:
         changed = persist[0]
         distributions, probs = distro_accurate(artifacts[changed], lvls[changed])
@@ -525,17 +535,17 @@ def rank_estimate(artifacts, lvls, persist, targets, k=1, num_trials=30, rng=Non
     # threshold. This is the relevance score. Don't recompute scores and
     # count. Compute scores once and get a threshold.
     
-    changed, maxed, distros = persist
+    changed, maxed, single_maxed = persist
     relevance_std = np.zeros(num_artifacts, dtype=float)
     original_maxed = maxed.copy()
     for i in range(num_artifacts):
         if lvls[i] == 20:
             continue
         
-        maxes, current_probs = distros[i]
-        relevance = np.zeros(len(maxes), dtype=float)
-        for j, asdf in enumerate(maxes):
-            maxed[i] = asdf
+        upgrades, current_probs = single_maxed[i]
+        relevance = np.zeros(len(upgrades), dtype=float)
+        for j, upgrade in enumerate(upgrades):
+            maxed[i] = upgrade
             for k in range(num_trials):
                 if type(targets) == dict or (type(targets) == np.ndarray and targets.ndim == 1):
                     final_scores = score(maxed[:, k], targets)
@@ -545,13 +555,19 @@ def rank_estimate(artifacts, lvls, persist, targets, k=1, num_trials=30, rng=Non
                     if final_scores[i] == maximum:
                         relevance[j] += 1 / len(best)
                 else:
-                    raise NotImplementedError
-                
+                    for target in targets:
+                        final_scores = score(maxed[:, k], target)
+                        final_scores[lvls == 20] = 0
+                        maximum = np.max(final_scores)
+                        best = np.where(final_scores == maximum)[0]
+                        if final_scores[i] == maximum:
+                            relevance[j] += 1 / len(best)
+                    
         #print(relevance)
         mean = np.dot(relevance, current_probs)
         if mean >= 0.5 * num_trials:
-            print('ABOVE 50%')
-            return i
+            relevance_std[i] = 10000000000
+            #return i
         var = np.dot(current_probs, (relevance - mean)**2)
         relevance_std[i] = np.sqrt(var)
         
@@ -562,9 +578,8 @@ def rank_estimate(artifacts, lvls, persist, targets, k=1, num_trials=30, rng=Non
             relevance_std[i] /= MAX_REQ_EXP[lvls[i]]        
             
     #print(relevance_std)
-    output = np.argmax(relevance_std)
-    persist[0] = output
-    return output
+    persist[0] = np.argmax(relevance_std)
+    return relevance_std
 
 def rank_myopic(artifacts, lvls, distros, targets, k=1, num_trials=100, rng=None, seed=None):
     num_artifacts = len(artifacts)
@@ -851,11 +866,12 @@ def choose_samples(x, y, qid):
 def rate(artifacts, slots, lvls, sets, ranker, threshold):
     relevant = np.zeros(len(artifacts), dtype=bool)
     for slot in range(5):
+        # TODO: this won't work if there's 0 artifacts
         mask = slots == slot
         original_idxs = np.where(slots == slot)[0]
         current_artifacts = artifacts[slots == slot]
         current_lvls = lvls[slots == slot]
-        relevance = ranker(current_artifacts, current_lvls, ALL_TARGETS[SLOTS[slot]], num_trials=1000)
+        relevance = ranker(current_artifacts, current_lvls, [], ALL_TARGETS[SLOTS[slot]], num_trials=1000)
         for i in range(len(current_artifacts)):
             if relevance[i] >= threshold or current_lvls[i] == 20:
                 relevant[original_idxs[i]] = True
@@ -865,7 +881,11 @@ def rate(artifacts, slots, lvls, sets, ranker, threshold):
             original_idxs = np.where(mask)[0]
             current_artifacts = artifacts[mask]
             current_lvls = lvls[mask]
-            relevance = ranker(current_artifacts, current_lvls, SET_TARGETS[SETS[setKey]][SLOTS[slot]], num_trials=1000)
+            print(len(current_artifacts))
+            print(SETS[setKey])
+            if len(current_artifacts) == 0:
+                continue
+            relevance = ranker(current_artifacts, current_lvls, [], SET_TARGETS[SETS[setKey]][SLOTS[slot]], num_trials=1000)
             for i in range(len(current_artifacts)):
                 if relevance[i] >= threshold or current_lvls[i] == 20:
                     relevant[original_idxs[i]] = True

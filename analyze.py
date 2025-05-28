@@ -863,49 +863,72 @@ def choose_samples(x, y, qid):
             
     return x[idxs], y[idxs], qid[idxs]
 
-def rate(artifacts, slots, lvls, sets, ranker, threshold):
-    relevant = np.zeros(len(artifacts), dtype=bool)
+def rate(artifacts, slots, lvls, sets, ranker, num=None, threshold=None):
+    relevance = np.zeros((len(artifacts), 5 * (1 + len(SETS))), dtype=float)
+    count = 0
     for slot in range(5):
         # TODO: this won't work if there's 0 artifacts
         mask = slots == slot
         original_idxs = np.where(slots == slot)[0]
         current_artifacts = artifacts[slots == slot]
         current_lvls = lvls[slots == slot]
-        relevance = ranker(current_artifacts, current_lvls, [], ALL_TARGETS[SLOTS[slot]], num_trials=1000)
-        for i in range(len(current_artifacts)):
-            if relevance[i] >= threshold or current_lvls[i] == 20:
-                relevant[original_idxs[i]] = True
+        relevance[original_idxs, count] = ranker(current_artifacts, current_lvls, [], ALL_TARGETS[SLOTS[slot]], num_trials=1000)
+        count += 1
         
         for setKey in range(len(SETS)):
             mask = np.logical_and(slots == slot, sets == setKey)
             original_idxs = np.where(mask)[0]
             current_artifacts = artifacts[mask]
             current_lvls = lvls[mask]
-            print(len(current_artifacts))
-            print(SETS[setKey])
             if len(current_artifacts) == 0:
                 continue
-            relevance = ranker(current_artifacts, current_lvls, [], SET_TARGETS[SETS[setKey]][SLOTS[slot]], num_trials=1000)
-            for i in range(len(current_artifacts)):
-                if relevance[i] >= threshold or current_lvls[i] == 20:
-                    relevant[original_idxs[i]] = True
-                    
+            relevance[original_idxs, count] = ranker(current_artifacts, current_lvls, [], SET_TARGETS[SETS[setKey]][SLOTS[slot]], num_trials=1000)
+            count += 1
+    
+    max_relevance = np.max(relevance, axis=1)
+    max_relevance[lvls == 20] = 999999
+    if threshold is None:
+        relevances = np.sort(max_relevance)
+        threshold = relevances[num - 1]
+    relevant = np.logical_or(lvls == 20, max_relevance > threshold)
     return relevant
 
+def visualize(mask, inventory):
+    count = 0
+    artifacts = inventory['artifacts']
+    new_mask = np.zeros(len(artifacts), dtype=bool)
+    for idx, dictionary in enumerate(artifacts):
+        if dictionary['rarity'] == 5:
+            new_mask[idx] = mask[count]
+            count += 1
+        else:
+            new_mask[idx] = True
+    
+    for idx in range(1, len(new_mask) + 1):
+        if new_mask[idx - 1] == True:
+            print('□ ', end='')
+        else:
+            print('■ ', end='')
+        if idx % 8 == 0:
+            print(artifacts[idx - 1]['setKey'])
+    print()
+
 if __name__ == '__main__':
-    num = 10
-    totals = np.zeros(num)
-    time_avg = np.zeros(num)
-    targets = {'atk_': 3, 'atk': 1, 'crit_': 4}
-
-    for i in range(num):
-        artifacts = generate('flower', size=20, seed=i)
-        totals[i] = (simulate_exp(artifacts, np.zeros(20, dtype=int), targets, rank_estimate))
-        print(i, totals[i])
-        print()
-
-    cumsum = np.cumsum(totals)
-    for i in range(len(cumsum)):
-        time_avg[i] = cumsum[i] / (i + 1)
-        
-    print(time_avg[-1])
+    filename = 'artifacts/genshinData_GOOD_2025_05_28_00_48.json'
+    artifacts, slots, lvls, sets = load(filename)
+    relevant = rate(artifacts, slots, lvls, sets, rank_value, num=50)
+    
+    count = 0
+    for relevance, artifact, slot, lvl, artifact_set in zip(relevant, artifacts, slots, lvls, sets):
+        if not relevance:
+            count += 1
+            print(SLOTS[slot])
+            print(SETS[artifact_set])
+            print('lvl:', lvl)
+            print_artifact(artifact)
+            print()
+    print(count)
+    
+    with open(filename) as f:
+        data = json.load(f)
+        visualize(relevant, data)

@@ -2,7 +2,6 @@ import numpy as np
 from artifact import *
 import math
 import time
-import xgboost as xgb
 from targets import *
 from scipy.stats import entropy
 import functools

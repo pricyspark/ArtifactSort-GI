@@ -894,7 +894,10 @@ def rate(artifacts, slots, lvls, sets, ranker, num=None, threshold=None):
 
 def visualize(mask, inventory):
     count = 0
-    artifacts = inventory['artifacts']
+    # This is code duplication
+    def cmp(artifact):
+        return artifact['id']
+    artifacts = sorted(inventory['artifacts'], key=cmp)
     new_mask = np.zeros(len(artifacts), dtype=bool)
     for idx, dictionary in enumerate(artifacts):
         if dictionary['rarity'] == 5:
@@ -913,7 +916,7 @@ def visualize(mask, inventory):
     print()
 
 if __name__ == '__main__':
-    filename = 'artifacts/genshinData_GOOD_2025_05_28_00_48.json'
+    filename = 'artifacts/genshinData_GOOD_2025_06_21_13_39.json'
     artifacts, slots, lvls, sets = load(filename)
     relevant = rate(artifacts, slots, lvls, sets, rank_value, num=50)
     
@@ -930,4 +933,5 @@ if __name__ == '__main__':
     
     with open(filename) as f:
         data = json.load(f)
+        # Reloading feels stupid
         visualize(relevant, data)

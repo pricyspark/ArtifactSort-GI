@@ -248,7 +248,10 @@ def load(filename):
     if data['format'] != 'GOOD':
         raise ValueError
     
-    return dict_to_artifact(data['artifacts'])
+    def cmp(artifact):
+        return artifact['id']
+    
+    return dict_to_artifact(sorted(data['artifacts'], key=cmp))
 
 def print_artifact(artifacts, human_readable=True) -> None:
     if artifacts.ndim == 1:

@@ -574,7 +574,7 @@ def rank_estimate(artifacts, lvls, persist, targets, k=1, num_trials=10, rng=Non
         
     for i in range(num_artifacts):
         if lvls[i] != 20:
-            relevance_std[i] /= MAX_REQ_EXP[lvls[i]]        
+            relevance_std[i] /= MAX_REQ_EXP[lvls[i]]
             
     #print(relevance_std)
     persist[0] = np.argmax(relevance_std)
@@ -862,23 +862,23 @@ def choose_samples(x, y, qid):
             
     return x[idxs], y[idxs], qid[idxs]
 
-def rate(artifacts, slots, lvls, sets, ranker, num=None, threshold=None):
+def rate(artifacts, slots, rarities, lvls, sets, ranker, num=None, threshold=None):
     relevance = np.zeros((len(artifacts), 5 * (1 + len(SETS))), dtype=float)
     count = 0
     for slot in range(5):
         # TODO: this won't work if there's 0 artifacts
-        mask = slots == slot
-        original_idxs = np.where(slots == slot)[0]
-        current_artifacts = artifacts[slots == slot]
-        current_lvls = lvls[slots == slot]
+        mask = np.logical_and(rarities == 5, slots == slot)
+        original_idxs = np.where(mask)[0]
+        current_artifacts = artifacts[mask]
+        current_lvls = lvls[mask]
         relevance[original_idxs, count] = ranker(current_artifacts, current_lvls, [], ALL_TARGETS[SLOTS[slot]], num_trials=1000)
         count += 1
         
         for setKey in range(len(SETS)):
-            mask = np.logical_and(slots == slot, sets == setKey)
-            original_idxs = np.where(mask)[0]
-            current_artifacts = artifacts[mask]
-            current_lvls = lvls[mask]
+            new_mask = np.logical_and(mask, sets == setKey)
+            original_idxs = np.where(new_mask)[0]
+            current_artifacts = artifacts[new_mask]
+            current_lvls = lvls[new_mask]
             if len(current_artifacts) == 0:
                 continue
             relevance[original_idxs, count] = ranker(current_artifacts, current_lvls, [], SET_TARGETS[SETS[setKey]][SLOTS[slot]], num_trials=1000)
@@ -886,52 +886,99 @@ def rate(artifacts, slots, lvls, sets, ranker, num=None, threshold=None):
     
     max_relevance = np.max(relevance, axis=1)
     max_relevance[lvls == 20] = 999999
+    max_relevance[rarities != 5] = 999999
     if threshold is None:
         relevances = np.sort(max_relevance)
         threshold = relevances[num - 1]
+        print(threshold)
     relevant = np.logical_or(lvls == 20, max_relevance > threshold)
     return relevant
 
-def visualize(mask, inventory):
-    count = 0
-    # This is code duplication
-    def cmp(artifact):
-        return artifact['id']
-    artifacts = sorted(inventory['artifacts'], key=cmp)
-    new_mask = np.zeros(len(artifacts), dtype=bool)
-    for idx, dictionary in enumerate(artifacts):
-        if dictionary['rarity'] == 5:
-            new_mask[idx] = mask[count]
-            count += 1
-        else:
-            new_mask[idx] = True
+def visualize(mask, artifacts, slots, sets):
+    rows = [(mask[i:i+8], artifacts[i:i+8], slots[i:i+8], sets[i:i+8]) for i in range(0, len(mask), 8)]
     
-    for idx in range(1, len(new_mask) + 1):
-        if new_mask[idx - 1] == True:
-            print('□ ', end='')
-        else:
-            print('■ ', end='')
-        if idx % 8 == 0:
-            print(artifacts[idx - 1]['setKey'])
+    # TODO: this only works if there are more than 8 artifacts, so the
+    # first row is filled
+    # Border
+    print('+', end='')
+    for _ in range(8):
+        print('--------+', end='')
     print()
-
+    
+    for row in rows: 
+        # Slot
+        print('|', end='')
+        for idx in range(len(row[0])):
+            if row[0][idx]:
+                print('        |', end='')
+            else:
+                print(f'{SLOTS[row[2][idx]]:<8}|', end='')
+        print()
+        
+        # Set
+        print('|', end='')
+        for idx in range(len(row[0])):
+            if row[0][idx]:
+                print('        |', end='')
+            else:
+                print(f'{SETS[row[3][idx]][:8]:<8}|', end='')
+        print()
+        
+        # Main stat
+        print('|', end='')
+        for idx in range(len(row[0])):
+            if row[0][idx]:
+                print('        |', end='')
+            else:
+                print(f'{STATS[find_main(row[1][idx])][:8]:<8}|', end='')
+        print()
+        
+        # Space
+        print('|', end='')
+        for _ in range(len(row[0])):
+            print('        |', end='')
+        print()
+        
+        # Substats
+        for sub_idx in range(4):
+            print('|', end='')
+            for idx in range(len(row[0])):
+                if row[0][idx]:
+                    print('        |', end='')
+                else:
+                    subs = find_sub(row[1][idx])
+                    try:
+                        print(f'{STATS[subs[sub_idx]][:8]:<8}|', end='')
+                    except:
+                        print('        |', end='')    
+            print()    
+            
+        # Border
+        print('+', end='')
+        for _ in range(len(row[0])):
+            print('--------+', end='')
+        print()
+        
 if __name__ == '__main__':
-    filename = 'artifacts/genshinData_GOOD_2025_06_21_13_39.json'
-    artifacts, slots, lvls, sets = load(filename)
-    relevant = rate(artifacts, slots, lvls, sets, rank_value, num=50)
+    start = time.time()
+    filename = 'artifacts/genshinData_GOOD_2025_07_03_02_41.json'
+    artifacts, slots, rarities, lvls, sets = load(filename)
+    relevant = rate(artifacts, slots, rarities, lvls, sets, rank_value, num=500)
     
     count = 0
-    for relevance, artifact, slot, lvl, artifact_set in zip(relevant, artifacts, slots, lvls, sets):
+    '''
+    for idx, (relevance, artifact, slot, lvl, artifact_set) in enumerate(zip(relevant, artifacts, slots, lvls, sets)):
         if not relevance:
             count += 1
+            print(idx)
             print(SLOTS[slot])
             print(SETS[artifact_set])
             print('lvl:', lvl)
             print_artifact(artifact)
             print()
     print(count)
+    '''
     
-    with open(filename) as f:
-        data = json.load(f)
-        # Reloading feels stupid
-        visualize(relevant, data)
+    visualize(relevant, artifacts, slots, sets)
+    end = time.time()
+    print(end - start)

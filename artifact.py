@@ -21,6 +21,7 @@ SETS = (
     'GoldenTroupe',
     'HeartOfDepth',
     'HuskOfOpulentDreams',
+    'Instructor',
     'Lavawalker',
     'LongNightsOath',
     'MaidenBeloved',
@@ -35,6 +36,7 @@ SETS = (
     'ShimenawasReminiscence',
     'SongOfDaysPast',
     'TenacityOfTheMillelith',
+    'TheExile',
     'ThunderingFury',
     'Thundersoother',
     'UnfinishedReverie',
@@ -189,6 +191,7 @@ def dict_to_artifact(dicts):
         artifact = np.zeros(19, dtype=np.uint8)
         
         slot: int = SLOT_2_NUM[dicts['slotKey']]
+        rarity: int = dicts['rarity']
         lvl: int = int(dicts['level'])
         setKey: int = SET_2_NUM[dicts['setKey']]
         main: int = STAT_2_NUM[dicts['mainStatKey']]
@@ -205,11 +208,12 @@ def dict_to_artifact(dicts):
         if setKey == 1 and slot == 0 and artifact[8] != 0 and artifact[9] != 0:
             pass
 
-        return artifact, slot, lvl, setKey
+        return artifact, slot, rarity, lvl, setKey
         
     else:
         temp_artifacts = []
         temp_slots = []
+        temp_rarities = []
         temp_lvls = []
         temp_sets = []
         
@@ -218,19 +222,21 @@ def dict_to_artifact(dicts):
         #lvls = np.zeros(len(dicts), dtype=np.uint8)
         #sets = np.zeros(len(dicts), dtype=int)
         for dictionary in dicts:
-            if dictionary['rarity'] == 5:
-                artifact, slot, lvl, setKey = dict_to_artifact(dictionary)
-                temp_artifacts.append(artifact)
-                temp_slots.append(slot)
-                temp_lvls.append(lvl)
-                temp_sets.append(setKey)
+            artifact, slot, rarity, lvl, setKey = dict_to_artifact(dictionary)
+            temp_artifacts.append(artifact)
+            temp_slots.append(slot)
+            temp_rarities.append(rarity)
+            temp_lvls.append(lvl)
+            temp_sets.append(setKey)
         artifacts = np.zeros((len(temp_artifacts), 19), dtype=np.uint8)
         slots = np.zeros(len(temp_slots), dtype=np.uint8)
+        rarities = np.zeros(len(temp_rarities), dtype=np.uint8)
         lvls = np.zeros(len(temp_lvls), dtype=np.uint8)
         sets = np.zeros(len(temp_sets), dtype=int)
         for i in range(len(temp_artifacts)):
             artifacts[i] = temp_artifacts[i]
             slots[i] = temp_slots[i]
+            rarities[i] = temp_rarities[i]
             lvls[i] = temp_lvls[i]
             sets[i] = temp_sets[i]
         '''
@@ -238,8 +244,7 @@ def dict_to_artifact(dicts):
             if dictionary['rarity'] == 5:
                 artifacts[i], slots[i], lvls[i], sets[i] = dict_to_artifact(dictionary)
         '''
-
-        return artifacts, slots, lvls, sets
+        return artifacts, slots, rarities, lvls, sets
     
 def load(filename):
     with open(filename) as f:
@@ -266,7 +271,7 @@ def print_artifact(artifacts, human_readable=True) -> None:
             print_artifact(artifact)
             print()
 
-def _upgrade_helper(artifact, rng):    
+def _upgrade_helper(artifact, rng):
     if np.count_nonzero(artifact) == 4:
         sub_probs = SUB_PROBS.copy()
         sub_probs[np.nonzero(artifact)[0]] = 0

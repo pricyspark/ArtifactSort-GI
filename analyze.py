@@ -460,21 +460,37 @@ def rate(artifacts, slots, rarities, lvls, sets, ranker, num=None, threshold=Non
     count = 0
     for slot in range(5):
         # TODO: this won't work if there's 0 artifacts
-        mask = np.logical_and(rarities == 5, slots == slot)
-        original_idxs = np.where(mask)[0]
-        current_artifacts = artifacts[mask]
-        current_lvls = lvls[mask]
-        relevance[original_idxs, count] = ranker(current_artifacts, current_lvls, [], ALL_TARGETS[SLOTS[slot]], num_trials=1000)
+        slot_mask = np.logical_and(rarities == 5, slots == slot)
+        original_idxs = np.where(slot_mask)[0]
+        slot_artifacts = artifacts[slot_mask]
+        slot_lvls = lvls[slot_mask]
+        persist = []
+        relevance[original_idxs, count] = ranker(slot_artifacts, slot_lvls, persist, ALL_TARGETS[SLOTS[slot]], change=False, num_trials=1000)
         count += 1
         
         for setKey in range(len(SETS)):
-            new_mask = np.logical_and(mask, sets == setKey)
-            original_idxs = np.where(new_mask)[0]
-            current_artifacts = artifacts[new_mask]
-            current_lvls = lvls[new_mask]
-            if len(current_artifacts) == 0:
+            set_mask = sets[slot_mask] == setKey
+            #new_mask = np.logical_and(mask, sets == setKey)
+            original_idxs = np.where(slot_mask)[0][set_mask]
+            set_artifacts = slot_artifacts[set_mask]
+            set_lvls = slot_lvls[set_mask]
+            if len(set_artifacts) == 0:
                 continue
-            relevance[original_idxs, count] = ranker(current_artifacts, current_lvls, [], SET_TARGETS[SETS[setKey]][SLOTS[slot]], num_trials=1000)
+            set_persist = []
+            for asdf in persist:
+                try:
+                    poij = len(asdf)
+                    qwer = np.where(set_mask)[0]
+                    #temp = asdf[set_mask]
+                    if type(asdf) == np.ndarray:
+                        temp = asdf[set_mask]
+                    else:
+                        temp = [val for val, m in zip(asdf, set_mask) if m]
+                    set_persist.append(temp)
+                except Exception as e:
+                    set_persist.append(None)
+            #set_persist = [asdf[np.where(set_mask)[0]] for asdf in persist]
+            relevance[original_idxs, count] = ranker(set_artifacts, set_lvls, set_persist, SET_TARGETS[SETS[setKey]][SLOTS[slot]], change=False, num_trials=1000)
             count += 1
     
     max_relevance = np.max(relevance, axis=1)
@@ -556,7 +572,7 @@ if __name__ == '__main__':
     start = time.time()
     filename = 'artifacts/genshinData_GOOD_2025_07_03_02_41.json'
     artifacts, slots, rarities, lvls, sets = load(filename)
-    relevant = rate(artifacts, slots, rarities, lvls, sets, rank_value, num=500)
+    relevant = rate(artifacts, slots, rarities, lvls, sets, rank_estimate, num=100)
     
     count = 0
     '''

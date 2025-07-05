@@ -37,7 +37,7 @@ def rank(artifacts, lvls, targets, sets=None, k=1, num_trials=30, rng=None, seed
     #return relevance
     return np.argmax(relevance)
 
-def rank_value(artifacts, lvls, persist, targets, k=1, num_trials=1000, rng=None, seed=None):
+def rank_value(artifacts, lvls, persist, targets, change=True, k=1, num_trials=1000, rng=None, seed=None):
     num_artifacts = len(artifacts)
     try:
         _ = iter(lvls)
@@ -59,7 +59,7 @@ def rank_value(artifacts, lvls, persist, targets, k=1, num_trials=1000, rng=None
         for i in range(num_artifacts):
             maxed[i] = rng.choice(distributions[i], p=probs[i], size=num_trials)
         persist[1] = maxed
-    else:
+    elif change:
         changed = persist[0]
         distributions, probs = distro_accurate(artifacts[changed], lvls[changed])
         persist[1][changed] = rng.choice(distributions, p=probs, size=num_trials)
@@ -98,8 +98,10 @@ def rank_value(artifacts, lvls, persist, targets, k=1, num_trials=1000, rng=None
     persist[0] = np.argmax(relevance)
     return relevance
 
-def rank_estimate(artifacts, lvls, persist, targets, k=1, num_trials=10, rng=None, seed=None):
+def rank_estimate(artifacts, lvls, persist, targets, change=True, k=1, num_trials=10, rng=None, seed=None):
     # 
+    print('start')
+    print(time.time())
     num_artifacts = len(artifacts)
     if num_artifacts == 0:
         raise ValueError
@@ -146,7 +148,7 @@ def rank_estimate(artifacts, lvls, persist, targets, k=1, num_trials=10, rng=Non
         # numpy array corresponding to the probability of each single
         # upgrade.
         persist[2] = single_maxed
-    else:
+    elif change:
         changed = persist[0]
         distributions, probs = distro_accurate(artifacts[changed], lvls[changed])
         persist[1][changed] = rng.choice(distributions, p=probs, size=num_trials)
@@ -162,6 +164,8 @@ def rank_estimate(artifacts, lvls, persist, targets, k=1, num_trials=10, rng=Non
     # threshold. This is the relevance score. Don't recompute scores and
     # count. Compute scores once and get a threshold.
     
+    print('setup')
+    print(time.time())
     changed, maxed, single_maxed = persist
     relevance_std = np.zeros(num_artifacts, dtype=float)
     original_maxed = maxed.copy()
@@ -178,25 +182,23 @@ def rank_estimate(artifacts, lvls, persist, targets, k=1, num_trials=10, rng=Non
                     final_scores = score(maxed[:, k], targets)
                     final_scores[lvls == 20] = 0
                     maximum = np.max(final_scores)
-                    best = np.where(final_scores == maximum)[0]
                     if final_scores[i] == maximum:
-                        relevance[j] += 1 / len(best)
+                        relevance[j] += 1 / np.count_nonzero(final_scores == maximum)
                 else:
                     for target in targets:
                         final_scores = score(maxed[:, k], target)
                         final_scores[lvls == 20] = 0
                         maximum = np.max(final_scores)
-                        best = np.where(final_scores == maximum)[0]
                         if final_scores[i] == maximum:
-                            relevance[j] += 1 / len(best)
+                            relevance[j] += 1 / np.count_nonzero(final_scores == maximum)
                     
-        #print(relevance)
         mean = np.dot(relevance, current_probs)
         if mean >= 0.5 * num_trials:
             relevance_std[i] = 10000000000
-            #return i
-        var = np.dot(current_probs, (relevance - mean)**2)
-        relevance_std[i] = np.sqrt(var)
+            #break
+        else:
+            var = np.dot(current_probs, (relevance - mean)**2)
+            relevance_std[i] = np.sqrt(var)
         
         maxed[i] = original_maxed[i]
         
@@ -206,6 +208,12 @@ def rank_estimate(artifacts, lvls, persist, targets, k=1, num_trials=10, rng=Non
             
     #print(relevance_std)
     persist[0] = np.argmax(relevance_std)
+    
+    #for i in relevance_std:
+    #    print(i)
+    print('done')
+    print(time.time())
+    
     return relevance_std
 
 def rank_myopic(artifacts, lvls, distros, targets, k=1, num_trials=100, rng=None, seed=None):

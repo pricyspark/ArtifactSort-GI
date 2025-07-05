@@ -1,6 +1,6 @@
 import numpy as np
 from artifact import *
-from rank import *
+#from rank import *
 import math
 import time
 from targets import *
@@ -567,27 +567,3 @@ def visualize(mask, artifacts, slots, sets):
         for _ in range(len(row[0])):
             print('--------+', end='')
         print()
-        
-if __name__ == '__main__':
-    start = time.time()
-    filename = 'artifacts/genshinData_GOOD_2025_07_03_02_41.json'
-    artifacts, slots, rarities, lvls, sets = load(filename)
-    relevant = rate(artifacts, slots, rarities, lvls, sets, rank_estimate, num=100)
-    
-    count = 0
-    '''
-    for idx, (relevance, artifact, slot, lvl, artifact_set) in enumerate(zip(relevant, artifacts, slots, lvls, sets)):
-        if not relevance:
-            count += 1
-            print(idx)
-            print(SLOTS[slot])
-            print(SETS[artifact_set])
-            print('lvl:', lvl)
-            print_artifact(artifact)
-            print()
-    print(count)
-    '''
-    
-    visualize(relevant, artifacts, slots, sets)
-    end = time.time()
-    print(end - start)

@@ -1,5 +1,6 @@
 import numpy as np
 from analyze import *
+import time
 
 def rank(artifacts, lvls, targets, sets=None, k=1, num_trials=30, rng=None, seed=None):
     # TODO: implement sets
@@ -416,3 +417,27 @@ def rank_marginal_relevance(artifacts, lvls, targets, k=1, num_trials=100, rng=N
     print_artifact(artifacts[output])
     print()
     return np.argmax(entropy_reduction_value)
+
+if __name__ == '__main__':
+    start = time.time()
+    filename = 'artifacts/genshinData_GOOD_2025_07_03_02_41.json'
+    artifacts, slots, rarities, lvls, sets = load(filename)
+    relevant = rate(artifacts, slots, rarities, lvls, sets, rank_estimate, num=100)
+    
+    count = 0
+    '''
+    for idx, (relevance, artifact, slot, lvl, artifact_set) in enumerate(zip(relevant, artifacts, slots, lvls, sets)):
+        if not relevance:
+            count += 1
+            print(idx)
+            print(SLOTS[slot])
+            print(SETS[artifact_set])
+            print('lvl:', lvl)
+            print_artifact(artifact)
+            print()
+    print(count)
+    '''
+    
+    visualize(relevant, artifacts, slots, sets)
+    end = time.time()
+    print(end - start)

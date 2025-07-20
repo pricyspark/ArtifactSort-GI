@@ -161,9 +161,10 @@ def distro_accurate(artifacts, lvls=None, num_upgrades=None):
             for idx in np.where(artifacts == 0)[0]:
                 if sub_probs[idx] == 0:
                     continue
-                temp = artifacts.copy()
-                temp[idx] = 8 # This assume a 0.8333 coef
-                seed.append((temp, sub_probs[idx]))
+                for coef in (7, 8, 9, 10):
+                    temp = artifacts.copy()
+                    temp[idx] = coef
+                    seed.append((temp, sub_probs[idx] / 4))
         else:
             seed.append((artifacts.copy(), 1))
             
@@ -366,6 +367,7 @@ def simulate_exp(artifacts, lvls, targets, fun, mains=None):
         exp += UPGRADE_REQ_EXP[lvls[idx]]
         lvls[idx] = next_lvl(lvls[idx])
         #distros[0][idx], distros[1][idx] = distro_accurate(artifacts[idx], lvls[idx])
+        print(exp)
             
     return exp
 
@@ -494,17 +496,18 @@ def rate(artifacts, slots, rarities, lvls, sets, ranker, num=None, threshold=Non
             count += 1
     
     max_relevance = np.max(relevance, axis=1)
-    max_relevance[lvls == 20] = 999999
+    #max_relevance[lvls == 20] = 999999
     max_relevance[rarities != 5] = 999999
     if threshold is None:
         relevances = np.sort(max_relevance)
         threshold = relevances[num - 1]
         print(threshold)
-    relevant = np.logical_or(lvls == 20, max_relevance > threshold)
+    #relevant = np.logical_or(lvls == 20, max_relevance > threshold)
+    relevant = max_relevance > threshold
     return relevant
 
-def visualize(mask, artifacts, slots, sets):
-    rows = [(mask[i:i+8], artifacts[i:i+8], slots[i:i+8], sets[i:i+8]) for i in range(0, len(mask), 8)]
+def visualize(mask, artifacts, slots, sets, lvls):
+    rows = [(mask[i:i+8], artifacts[i:i+8], slots[i:i+8], sets[i:i+8], lvls[i:i+8]) for i in range(0, len(mask), 8)]
     
     # TODO: this only works if there are more than 8 artifacts, so the
     # first row is filled
@@ -522,6 +525,15 @@ def visualize(mask, artifacts, slots, sets):
                 print('        |', end='')
             else:
                 print(f'{SLOTS[row[2][idx]]:<8}|', end='')
+        print()
+        
+        # LVL
+        print('|', end='')
+        for idx in range(len(row[0])):
+            if row[0][idx]:
+                print('        |', end='')
+            else:
+                print(f'LVL: {str(row[4][idx]):<3}|', end='')
         print()
         
         # Set

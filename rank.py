@@ -19,14 +19,14 @@ def rank_value(artifacts, lvls, persist, targets, change=True, k=2, num_trials=1
         while len(persist) < 2:
             persist.append(None)
         persist[0] = -1
-        distributions, probs = distro_accurate(artifacts, lvls)
+        distributions, probs = distro(artifacts, lvls)
         maxed = np.zeros((num_artifacts, num_trials, 19), dtype=np.uint8)
         for i in range(num_artifacts):
             maxed[i] = rng.choice(distributions[i], p=probs[i], size=num_trials)
         persist[1] = maxed
     elif change:
         changed = persist[0]
-        distributions, probs = distro_accurate(artifacts[changed], lvls[changed])
+        distributions, probs = distro(artifacts[changed], lvls[changed])
         persist[1][changed] = rng.choice(distributions, p=probs, size=num_trials)
         
     changed, maxed = persist
@@ -93,7 +93,7 @@ def rank_value(artifacts, lvls, persist, targets, change=True, k=2, num_trials=1
     #print_artifact(artifacts[np.argmax(relevance)])
     if relevance[persist[0]] == 0 and change:
         print('max was 0')
-        distributions, probs = distro_accurate(artifacts, lvls)
+        distributions, probs = distro(artifacts, lvls)
         maxed = np.zeros((num_artifacts, num_trials, 19), dtype=np.uint8)
         for i in range(num_artifacts):
             maxed[i] = rng.choice(distributions[i], p=probs[i], size=num_trials)
@@ -122,7 +122,7 @@ def rank_estimate(artifacts, lvls, persist, targets, change=True, k=1, num_trial
         while len(persist) < 3:
             persist.append(None)
         persist[0] = -1
-        distributions, probs = distro_accurate(artifacts, lvls)
+        distributions, probs = distro(artifacts, lvls)
         maxed = np.zeros((num_artifacts, num_trials, 19), dtype=np.uint8)
         for i in range(num_artifacts):
             maxed[i] = rng.choice(distributions[i], p=probs[i], size=num_trials)
@@ -134,11 +134,11 @@ def rank_estimate(artifacts, lvls, persist, targets, change=True, k=1, num_trial
             if lvls[i] == 20:
                 continue
             
-            current_distribution, current_probs = distro_accurate(artifacts[i], num_upgrades=1)
+            current_distribution, current_probs = distro(artifacts[i], num_upgrades=1)
             single_maxed[-1][0] = []
             single_maxed[-1][1] = current_probs
             for j, upgrade in enumerate(current_distribution):
-                potential_distribution, potential_probs = distro_accurate(upgrade, next_lvl(lvls[i]))
+                potential_distribution, potential_probs = distro(upgrade, next_lvl(lvls[i]))
                 single_maxed[-1][0].append(rng.choice(potential_distribution, p=potential_probs, size=num_trials))
             
         # Single maxed is a list with num_artifacts elements. Each
@@ -152,14 +152,14 @@ def rank_estimate(artifacts, lvls, persist, targets, change=True, k=1, num_trial
         persist[2] = single_maxed
     elif change:
         changed = persist[0]
-        distributions, probs = distro_accurate(artifacts[changed], lvls[changed])
+        distributions, probs = distro(artifacts[changed], lvls[changed])
         persist[1][changed] = rng.choice(distributions, p=probs, size=num_trials)
         if lvls[changed] != 20:
-            current_distribution, current_probs = distro_accurate(artifacts[changed], num_upgrades=1)
+            current_distribution, current_probs = distro(artifacts[changed], num_upgrades=1)
             persist[2][changed][0] = []
             persist[2][changed][1] = current_probs
             for j, upgrade in enumerate(current_distribution):
-                potential_distribution, potential_probs = distro_accurate(upgrade, next_lvl(lvls[changed]))
+                potential_distribution, potential_probs = distro(upgrade, next_lvl(lvls[changed]))
                 persist[2][changed][0].append(rng.choice(potential_distribution, p=potential_probs, size=num_trials))
     # TODO: save scores instead of artifacts. Save a threshold score.
     # When computing potential new scores, count how many are above the

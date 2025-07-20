@@ -35,77 +35,6 @@ def _distribution(N, M):
 def next_lvl(lvl):
     return 4 * ((lvl // 4) + 1)
     
-def distro(artifacts, lvls=None, num_upgrades=None):
-    """Create a distribution possible max artifacts. If given a single
-    artifact, return twin arrays artifacts and probabilities. If given
-    multiple artifacts, return twin lists of arrays instead.
-
-    Args:
-        artifacts (_type_): _description_
-        lvls (_type_): _description_
-
-    Raises:
-        ValueError: _description_
-        ValueError: _description_
-
-    Returns:
-        _type_: _description_
-    """
-    
-    dist = []
-    probs = []
-    if artifacts.ndim == 1:
-        if lvls == 20:
-            return artifacts.reshape((1, -1)), np.array([1])
-        
-        if num_upgrades is None:
-            num_upgrades = 5 - lvls // 4
-        dist.append(artifacts.copy())
-        probs.append(0)
-        seed = []
-        if np.count_nonzero(artifacts) == 4:
-            num_upgrades -= 1
-            sub_probs = SUB_PROBS.copy()
-            sub_probs[np.nonzero(artifacts)[0]] = 0
-            sub_probs /= np.sum(sub_probs)
-            for idx in np.where(artifacts == 0)[0]:
-                if sub_probs[idx] == 0:
-                    continue
-                temp = artifacts.copy()
-                temp[idx] = 8 # This assume a 0.8333 coef
-                seed.append((temp, sub_probs[idx]))
-        else:
-            seed.append((artifacts.copy(), 1))
-            
-        main = find_main(artifacts)
-        upgrades = _distribution(4, num_upgrades)
-        for artifact, prob in seed:
-            for upgrade, upgrade_prob in upgrades:
-                substats = find_sub(artifact, main)
-                temp_artifact = artifact.copy()
-                for i in range(4):
-                    temp_artifact[substats[i]] += round(8.5 * upgrade[i])
-                dist.append(temp_artifact)
-                probs.append(prob * upgrade_prob)
-                
-        dist = np.array(dist, dtype=np.uint8)
-        probs = np.array(probs)
-        # TODO: get rid of this bug check
-        if not np.isclose(sum(probs), 1):
-            raise ValueError
-    else:
-        try:
-            _ = iter(lvls)
-        except:
-            lvls = np.full(len(artifacts), lvls)
-        
-        for artifact, lvl in zip(artifacts, lvls):
-            temp_dist, temp_probs = distro(artifact, lvls=lvl)
-            dist.append(temp_dist)
-            probs.append(temp_probs)
-
-    return dist, probs
-
 @functools.lru_cache(maxsize=10)
 def _temp(N):
     # start with “zero” sum
@@ -125,7 +54,7 @@ def _temp(N):
     # dist now maps each sum → probability
     return dict(sorted(new_dist.items()))
 
-def distro_accurate(artifacts, lvls=None, num_upgrades=None):
+def distro(artifacts, lvls=None, num_upgrades=None):
     """Create a distribution possible max artifacts. If given a single
     artifact, return twin arrays artifacts and probabilities. If given
     multiple artifacts, return twin lists of arrays instead.
@@ -212,7 +141,7 @@ def distro_accurate(artifacts, lvls=None, num_upgrades=None):
             lvls = np.full(len(artifacts), lvls)
         
         for artifact, lvl in zip(artifacts, lvls):
-            temp_dist, temp_probs = distro_accurate(artifact, lvls=lvl)
+            temp_dist, temp_probs = distro(artifact, lvls=lvl)
             dist.append(temp_dist)
             probs.append(temp_probs)
 
@@ -348,7 +277,7 @@ def simulate_exp(artifacts, lvls, targets, fun, mains=None):
     print_artifact(artifacts[goal])
     print()
     artifacts = original_artifacts.copy()
-    #distros = distro_accurate(artifacts, lvls)
+    #distros = distro(artifacts, lvls)
     persist = []
     
     exp = 0
@@ -366,7 +295,7 @@ def simulate_exp(artifacts, lvls, targets, fun, mains=None):
         smart_upgrade(artifacts[idx])
         exp += UPGRADE_REQ_EXP[lvls[idx]]
         lvls[idx] = next_lvl(lvls[idx])
-        #distros[0][idx], distros[1][idx] = distro_accurate(artifacts[idx], lvls[idx])
+        #distros[0][idx], distros[1][idx] = distro(artifacts[idx], lvls[idx])
         print(exp)
             
     return exp

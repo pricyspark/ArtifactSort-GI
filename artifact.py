@@ -1,730 +1,365 @@
-import random
-import math
 import numpy as np
 import copy
+import zlib
+import math
 import json
-import functools
-from memory_profiler import profile
 
-cache_size = 2000
+SETS = (
+    'ArchaicPetra',
+    'BlizzardStrayer',
+    'BloodstainedChivalry',
+    'CrimsonWitchOfFlames',
+    'DeepwoodMemories',
+    'DesertPavilionChronicle',
+    'EchoesOfAnOffering',
+    'EmblemOfSeveredFate',
+    'FinaleOfTheDeepGalleries',
+    'FlowerOfParadiseLost',
+    'FragmentOfHarmonicWhimsy',
+    'GildedDreams',
+    'GladiatorsFinale',
+    'GoldenTroupe',
+    'HeartOfDepth',
+    'HuskOfOpulentDreams',
+    'Instructor',
+    'Lavawalker',
+    'LongNightsOath',
+    'MaidenBeloved',
+    'MarechausseeHunter',
+    'NoblesseOblige',
+    'NymphsDream',
+    'ObsidianCodex',
+    'OceanHuedClam',
+    'PaleFlame',
+    'RetracingBolide',
+    'ScrollOfTheHeroOfCinderCity',
+    'ShimenawasReminiscence',
+    'SongOfDaysPast',
+    'TenacityOfTheMillelith',
+    'TheExile',
+    'ThunderingFury',
+    'Thundersoother',
+    'UnfinishedReverie',
+    'VermillionHereafter',
+    'ViridescentVenerer',
+    'VourukashasGlow',
+    'WanderersTroupe'
+)
+
+SET_2_NUM = {artifact_set: index for index, artifact_set in enumerate(SETS)}
+
+SLOTS = ('flower', 'plume', 'sands', 'goblet', 'circlet')
+
+SLOT_2_NUM = {slot: index for index, slot in enumerate(SLOTS)}
+
+STATS = (
+    'hp', 'atk', 'def', 'hp_', 'atk_', 'def_', 'enerRech_', 'eleMas', 
+    'critRate_', 'critDMG_', 'pyro_dmg_', 'electro_dmg_', 'cryo_dmg_', 
+    'hydro_dmg_', 'dendro_dmg_', 'anemo_dmg_', 'geo_dmg_', 'physical_dmg_', 
+    'heal_'
+)
+
+STAT_2_NUM = {stat: index for index, stat in enumerate(STATS)}
+
 MAIN_PROBS = {
-    'flower' : {'hp': 1},
-    'plume'  : {'atk': 1},
-    'sands'  : {'hp_': 8,
-                'atk_': 8,
-                'def_': 8,
-                'enerRech_': 3,
-                'eleMas': 3},
-    'goblet' : {'hp_': 77,
-                'atk_': 77,
-                'def_': 76,
-                'pyro_dmg_': 20, 
-                'electro_dmg_': 20,
-                'cryo_dmg_': 20,
-                'hydro_dmg_': 20,
-                'dendro_dmg_': 20,
-                'anemo_dmg_': 20,
-                'geo_dmg_': 20,
-                'physical_dmg_': 20,
-                'eleMas': 10},
-    'circlet': {'hp_': 11,
-                'atk_': 11,
-                'def_': 11,
-                'critRate_': 5,
-                'critDMG_': 5,
-                'heal_': 5,
-                'eleMas': 2}
+    'flower':  (1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+    'plume':   (0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+    'sands':   (0, 0, 0, 8/30, 8/30, 8/30, 3/30, 3/30, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+    'goblet':  (0, 0, 0, 77/400, 77/400, 76/400, 0, 10/400, 0, 0, 20/400, 20/400, 20/400, 20/400, 20/400, 20/400, 20/400, 20/400, 0),
+    'circlet': (0, 0, 0, 11/50, 11/50, 11/50, 0, 2/50, 5/50, 5/50, 0, 0, 0, 0, 0, 0, 0, 0, 5/50)
 }
 
-SUB_PROBS = {
-    'hp': 6,
-    'atk': 6,
-    'def': 6,
-    'hp_': 4,
-    'atk_': 4,
-    'def_': 4,
-    'enerRech_': 4,
-    'eleMas': 4,
-    'critRate_': 3,
-    'critDMG_': 3
-}
+SUB_PROBS = np.array((6, 6, 6, 4, 4, 4, 4, 4, 3, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0), dtype=float)
 
-MAIN_VALUES = {
-    'hp': 4780,
-    'atk': 311,
-    'hp_': 46.6,
-    'atk_': 46.6,
-    'def_': 58.3,
-    'pyro_dmg_':  46.6,
-    'electro_dmg_': 46.6,
-    'cryo_dmg_': 46.6,
-    'hydro_dmg_': 46.6,
-    'dendro_dmg_': 46.6,
-    'anemo_dmg_': 46.6,
-    'geo_dmg_': 46.6,
-    'physical_dmg_': 58.3,
-    'enerRech_': 51.8,
-    'eleMas': 186.5,
-    'critRate_': 31.1,
-    'critDMG_': 62.2,
-    'heal_': 34.9
-}
+MAIN_VALUES = ( 4780, 311, -1, 46.6, 46.6, 58.3, 51.8, 186.5, 31.1, 62.2, 
+                46.6, 46.6, 46.6, 46.6, 46.6, 46.6, 46.6, 58.3, 34.9)
+SUB_VALUES = (  298.75, 19.45, 23.13, 5.83, 5.83, 7.29, 6.48, 23.31, 3.89, 7.77, 
+                5.83, 5.83, 5.83, 5.83, 5.83, 5.83, 5.83, 5.83, 4.4875)
 
-SUB_VALUES = {
-    'hp': 298.75,
-    'atk': 19.45,
-    'def': 23.13,
-    'hp_': 5.83,
-    'atk_': 5.83,
-    'def_': 7.29,
-    'enerRech_': 6.48,
-    'eleMas': 23.31,
-    'critRate_': 3.89,
-    'critDMG_': 7.77
-}
+SUB_COEFS = np.array((7, 8, 9, 10), dtype=np.uint8)
 
-ARTIFACT_REQ_EXP = [
-    0,
-    3000,
-    6725,
-    11150,
-    16300,
-    22200,
-    28875,
-    36375,
-    44725,
-    53950,
-    64075,
-    75125,
-    87150,
-    100175,
-    115325,
-    132925,
-    153300,
-    176800,
-    203850,
-    234900,
+ARTIFACT_REQ_EXP = (
+    0, 3000, 6725, 11150, 
+    16300, 22200, 28875, 36375, 
+    44725, 53950, 64075, 75125, 
+    87150, 100175, 115325, 132925, 
+    153300, 176800, 203850, 234900, 
     270475
-]
+)
 
-# Generate all possible counts of increments that sum to time_steps
-def generate_permutations(total, count):
-    if count == 1:
-        yield [total]
+UPGRADE_REQ_EXP = (
+    16300, 13300, 9575, 5150, 28425, 22525, 15850, 8350, 42425, 33200, 
+    23075, 12025, 66150, 53125, 37975, 20375, 117175, 93675, 66625, 35575, 0
+) # TODO: check this
+
+MAX_REQ_EXP = (
+    270475, 267475, 263750, 259325,
+    254175, 248275, 241600, 234100,
+    225750, 216525, 206400, 195350,
+    183325, 170300, 155150, 137550,
+    117175, 93675, 66625, 35575,
+    0
+)
+
+def find_main(artifact):
+    mask = artifact == 160
+    if np.any(mask):
+        return np.where(mask == True)[0][0]
     else:
-        for i in range(total + 1):
-            for tail in generate_permutations(total - i, count - 1):
-                yield [i] + tail
-
-# Calculate the probability for each permutation
-def calculate_probability(counts, base_prob):
-    numerator = math.factorial(sum(counts))
-    denominator = 1
-    for count in counts:
-        denominator *= math.factorial(count)
-    multinomial_coeff = numerator / denominator
-    return multinomial_coeff * base_prob
-
-class Artifact:
-    def __init__(self, set, lvl, slot, main, substats, lock=False):
-        self.set: str = set
-        self.lvl: int = lvl
-        self.slot: str = slot
-        self.main: str = main
-        self.substats: dict = substats
-        self.lock = lock
-
-    @staticmethod
-    def serialize(json_dict):
-        """Convert artifact dictionary into artifact object.
-
-        Args:
-            json_dict (dict): Dictionary generated by json containing
-            artifact info.
-
-        Returns:
-            Artifact: _description_
-        """
-        set: str = json_dict['setKey']
-        lvl: int = json_dict['level']
-        slot: str = json_dict['slotKey']
-        main: str = json_dict['mainStatKey']
-        substats = {}
-        for substat in json_dict['substats']:
-            stat = substat['key']
-            value = substat['value']
-            coef = round(value / SUB_VALUES[stat], 1)
-            substats[substat['key']] = coef
-        lock = json_dict['lock']
-
-        return Artifact(set, lvl, slot, main, substats, lock=lock)
-
-    # TODO: round substat floats when printing, maybe by modifying or
-    # just the displayed value
-    def __str__(self):
-        return f'set: {self.set}\nlvl: {self.lvl}\nslot: {self.slot}\nmain: {self.main}\nsub: {str(self.substats)}'
+        return np.where(artifact == 80)[0][0]
     
-    def __repr__(self):
-        return f'set: {self.set}\nlvl: {self.lvl}\nslot: {self.slot}\nmain: {self.main}\nsub: {str(self.substats)}'
+def find_sub(artifact, main=None): # TODO: i'm skeptical of performance
+    if main is None:
+        main = find_main(artifact)
     
-    def __hash__(self):
-        return hash((self.lvl, self.slot, self.main, tuple(sorted(self.substats.items()))))
+    temp = artifact[main]
+    artifact[main] = 0
+    subs = np.nonzero(artifact)[0]
+    artifact[main] = temp
     
-    def __eq__(self, other):
-        return (self.lvl, self.slot, self.main, self.substats) == (other.lvl, other.slot, other.main, other.substats)
-    
-    def __ne__(self, other):
-        return not (self == other)
+    return subs
 
-    @staticmethod
-    def generate(set, lvl=0, slot=None, main=None, source='domain'):
-        """Randomly generate a single artifact.
-
-        Args:
-            lvl (int, optional): Generated artifact's level. Defaults to 0.
-            slot (_type_, optional): Generated artifact's slot. If None,
-            randomly assign a slot. Defaults to None.
-            source (str, optional): The source of the artifact, which
-            affects the probability of getting 4 substats at level 0.
-            Defaults to 'domain'.
-
-        Raises:
-            ValueError: If source is invalid.
-            ValueError: If main stat is invalid.
-
-        Returns:
-            Artifact: Randomly generated artifact
-        """
-        match source:
-            case 'domain':
-                prob = 0.2
-            case 'normal boss':
-                prob = 1/3
-            case 'weekly boss':
-                prob = 1/3
-            case 'strongbox':
-                prob = 1/3
-            case 'domain reliquary':
-                prob = 1/3
-            case _:
-                raise ValueError('Invalid artifact source.')
-            
-        num_substats = 4 if random.random() < prob else 3
+def generate(slot, main=None, lvls=None, source='domain', size=None, rng=None, seed=None):
+    try:
+        _ = iter(lvls)
+        lvls = np.array(lvls)
+        size = len(lvls)
+    except:
+        if size is None:
+            size = 1
+        if lvls is None:
+            lvls = 0
+        lvls = np.full(size, lvls)
         
-        if slot is None:
-            slot = random.choice(['flower', 'plume', 'sands', 'goblet', 'circlet'])
-            
-        if main is None:
-            main_options = MAIN_PROBS[slot]
-            main_stat = random.choices(list(main_options.keys()), weights=main_options.values())[0]
-        else:
-            if main not in MAIN_PROBS[slot].keys():
-                raise ValueError('Invalid main stat.')
-            main_stat = main
+    if rng is None:
+        rng = np.random.default_rng(seed)
 
-        copy_SUB_PROBS = SUB_PROBS.copy()
-        copy_SUB_PROBS.pop(main_stat, None)
-        prob = np.array(list(copy_SUB_PROBS.values()), dtype=float)
-        prob /= np.sum(prob)
-        sub_stats = np.random.choice(list(copy_SUB_PROBS.keys()), size=num_substats, replace=False, p=prob)
-
-        substats = {}
-        for sub in sub_stats:
-            substats[str(sub)] = random.choice((0.7, 0.8, 0.9, 1.0))
-
-        artifact = Artifact(set, 0, slot, main_stat, substats)
-        num_upgrades = lvl // 4 # TODO: find a better way to do this
-        for _ in range(num_upgrades):
-            artifact.random_upgrade()
-
-        return artifact
-
-    def random_upgrade(self):
-        """Randomly upgrade artifact in place a single time.
-
-        Raises:
-            ValueError: If artifact is already max level.
-        """
-        if self.lvl == 20:
-            raise ValueError('Cannot upgrade level 20 artifact')
+    # Figure out probability of starting with 4 substats
+    match source:
+        case 'domain':
+            prob = 1/5
+        case 'normal boss':
+            prob = 1/3
+        case 'weekly boss':
+            prob = 1/3
+        case 'strongbox':
+            prob = 1/3
+        case 'domain reliquary':
+            prob = 1/3
+        case _:
+            raise ValueError('Invalid artifact source.')
         
-        if len(self.substats.keys()) == 3:
-            copy_SUB_PROBS = SUB_PROBS.copy()
-            copy_SUB_PROBS.pop(self.main, None)
-            for substat in self.substats.keys():
-                copy_SUB_PROBS.pop(substat, None)
-
-            probs = np.array(list(copy_SUB_PROBS.values()), dtype=float)
-            probs /= np.sum(probs)
-
-            new_sub = random.choices(list(copy_SUB_PROBS.keys()), weights=probs)[0]
-            self.substats[new_sub] = random.choice((0.7, 0.8, 0.9, 1.0))
-
-        else:
-            temp = random.randint(0, 15)
-            upgrade_idx = temp // 4
-            upgrade_coef = [0.7, 0.8, 0.9, 1][temp % 4]
-            #upgrade_coef = 1
-            self.substats[list(self.substats.keys())[upgrade_idx]] += upgrade_coef
-        
-        self.lvl = (self.lvl // 4) * 4 + 4
-
-    @functools.lru_cache(maxsize=cache_size)
-    def upgrade_distro(self, lvl):
-        """Calculate the artifact's possible upgrades and their
-        probability distribution.
-
-        Args:
-            lvl (int): Target level after upgrading
-
-        Returns:
-            list: List of tuples of (possibility, probability) after
-            upgrading.
-        """
-        # Calculate the number of upgrades needed
-        num_upgrades = (lvl // 4) - (self.lvl // 4)
-
-        # Check if currently only 3 substats
-        add_substat = False
-        if len(self.substats) == 3:
-            num_upgrades -= 1
-            add_substat = True
-            self.substats[None] = 0.85
-
-        # Base probability for each sequence
-        base_prob = (1 / 4) ** num_upgrades
-
-        # Generate permutations and calculate probabilities
-        # TODO: verify all the copies are necessary
-        #possibilities = {self: 0}
-        possibilities = [(copy.deepcopy(self), 0)]
-        total_prob = 0
-        for counts in generate_permutations(num_upgrades, 4):
-            prob = calculate_probability(counts, base_prob)
-            temp = copy.deepcopy(self)
-            temp.lvl = lvl
-            for idx, substat in enumerate(temp.substats.keys()):
-                temp.substats[substat] += counts[idx] * 0.85 # TODO: add random upgrade coefs
-            
-            possibilities.append((temp, prob))
-            #possibilities[temp] = prob
-            total_prob += prob
-        #print(self)
-        #print()
-        #print(possibilities)
-        if add_substat:
-            # Pop the first artifact, which is a copy of the original
-            # artifact
-            possibilities.pop(0)
-
-            # Create list of possible extra substat
-            copy_SUB_PROBS = SUB_PROBS.copy()
-            copy_SUB_PROBS.pop(self.main, None) # TODO: raise KeyErrors
-            for substat in self.substats.keys():
-                copy_SUB_PROBS.pop(substat, None)
-            total = sum(copy_SUB_PROBS.values())
-            for substat in copy_SUB_PROBS:
-                copy_SUB_PROBS[substat] /= total
-
-            # Create a backup of the original possibiilities to base new
-            # copies off of
-            original_possibilities = possibilities.copy()
-
-            # Add back original artifact
-            possibilities = [(self, 0)]
-
-            # For each possible new substat
-            for sub, sub_prob in copy_SUB_PROBS.items():
-                # For each possible artifact
-                for (original_artifact, artifact_prob) in original_possibilities:
-                    # Create a new copy and replace the placeholder None
-                    # substat with the real one. Multiply by the substat
-                    # probability coefficient and append to the final
-                    # list of possibilities
-                    artifact = copy.deepcopy(original_artifact)
-                    artifact.substats[sub] = artifact.substats[None]
-                    artifact.substats.pop(None, None)
-                    possibilities.append((artifact, sub_prob * artifact_prob))
-
-            self.substats.pop(None, None)
-
-        return possibilities
+    output = np.zeros((size, 19), dtype=np.uint8)
     
-    @staticmethod
-    def sample_distro(distro: list):
-        possibilities = [t[0] for t in distro]
-        probs = [t[1] for t in distro]
-        return random.choices(possibilities, weights=probs, k=1)[0]
-    
-    @staticmethod
-    def fix_targets(targets: dict):
-        if not 'crit_' in targets:
-            return
-        
-        targets['critRate_'] = targets['crit_']
-        targets['critDMG_'] = targets['crit_']
-        targets.pop('crit_', None)
-
-    # TODO: maybe store scores for each (artifact, targets) pair to avoid
-    # repeat calculations
-    def score(self, targets: dict):
-        """Calculate the current score.
-
-        Args:
-            targets (dict): Dictionary mapping a stat to a weight to
-            base the score.
-
-        Returns:
-            float: Score
-        """
-        score = 0
-        if self.main in targets:
-            if self.main == 'hp' or self.main == 'atk':
-                score = 16/3 * targets[self.main]
+    for idx, lvl in enumerate(lvls):
+        # Figure out num_upgrades and num_substats for each artifact
+        num_upgrades = lvl // 4
+        num_substats = 4
+        if rng.random() > prob:
+            if num_upgrades == 0:
+                num_substats -= 1
             else:
-                score = 8 * targets[self.main] # TODO: make sure this is correct
-
-        if 'crit_' in targets:
-            if 'critRate_' in self.substats:
-                score += self.substats['critRate_'] * targets['crit_']
-            if 'critDMG_' in self.substats:
-                score += self.substats['critDMG_'] * targets['crit_']
-
-        for substat, value in self.substats.items():            
-            if substat not in targets:
-                continue
-
-            score += value * targets[substat]
-
-        return score
-
-    #@functools.lru_cache(maxsize=cache_size)
-    @staticmethod
-    def score_mean(distro: list, targets: dict):
-        """Calculate the average score if randomly upgrading an
-        artifact.
-
-        Args:
-            distro (list): List of tuples of (possibility, probability)
-            after upgrading. Generated by upgrade_distro.
-            targets (dict): Dictionary mapping a stat to a weight to
-            base the score. 
-
-        Raises:
-            ValueError: Distribution doesn't add to 1.
-
-        Returns:
-            float: Average score
-        """
-        mean = 0
-
-        probs = [t[1] for t in distro]
-
-        if not math.isclose(sum(probs), 1):
-            raise ValueError('Distribution does not add to 1.')
-
-        for artifact, prob in distro:
-            mean += artifact.score(targets) * prob
-
-        return mean
-    
-    #@functools.lru_cache(maxsize=cache_size)
-    @staticmethod
-    def score_second_moment(distro: list, targets: dict):
-        """Calculate the second moment of an artifact distribution.
-
-        Args:
-            distro (list): List of tuples of (possibility, probability)
-            after upgrading. Generated by upgrade_distro.
-            targets (dict): Dictionary mapping a stat to a weight to
-            base the score. 
-
-        Raises:
-            ValueError: Distribution does not add to 1.
-
-        Returns:
-            float: Second moment of score
-        """
-        probs = [t[1] for t in distro]
-
-        if not math.isclose(sum(probs), 1):
-            raise ValueError('Distribution does not add to 1.')
-        
-        second_moment = 0
-        
-        for artifact, prob in distro:
-            second_moment += (artifact.score(targets) ** 2) * prob
-
-        return math.sqrt(second_moment) 
-
-    # TODO: maybe fix this code duplication, but it would make it 2x
-    # slower without caching
-    #@functools.lru_cache(maxsize=cache_size)
-    @staticmethod
-    def score_std_dev(distro: list, targets: dict):
-        """Calculate the standard deviation of scores of an artifact
-        distribution.
-
-        Args:
-            distro (list): List of tuples of (possibility, probability)
-            after upgrading. Generated by upgrade_distro.
-            targets (dict): Dictionary mapping a stat to a weight to
-            base the score. 
-
-        Raises:
-            ValueError: Distribution does not add to 1.
-
-        Returns:
-            float: Standard deviation of score
-        """
-        probs = [t[1] for t in distro]
-
-        if not math.isclose(sum(probs), 1):
-            raise ValueError(f'Distribution does not add to 1.')
-        
-        mean = 0
-        second_moment = 0
-        
-        for artifact, prob in distro:
-            score = artifact.score(targets)
-            mean += score * prob
-            second_moment += (score ** 2) * prob
-
-        variance = second_moment - (mean ** 2)
-
-        return math.sqrt(variance) 
-
-    # TODO: test this, no idea if it actually works
-    @staticmethod
-    def std_dev_diff(distro: list, targets: dict):
-        """Calculate the decrease in standard deviation of scores if
-        upgrading the source artifact for a distribution.
-
-        Args:
-            distro (list): List of tuples of (possibility, probability)
-            after upgrading. Generated by upgrade_distro.
-            targets (dict): Dictionary mapping a stat to a weight to
-            base the score. 
-
-        Returns:
-            float: Difference in standard deviation of score
-        """
-        if len(distro) == 1:
-            raise ValueError('Maxed artifacts cannot be upgraded.')
-
-        current_std_dev = Artifact.score_std_dev(distro, targets)
-
-        for artifact, prob in distro:
-            if prob == 0:
-                current_artifact = artifact
-                break
-
-        new_std_dev = 0
-        single_distro = Artifact.upgrade_distro(current_artifact, 4 * ((current_artifact.lvl // 4) + 1))
-        for artifact, prob in single_distro:
-            sub_distro = Artifact.upgrade_distro(artifact, 20)
-            sub_std_dev = Artifact.score_std_dev(sub_distro, targets)
-            new_std_dev += sub_std_dev * prob
-        
-        return current_std_dev - new_std_dev
-
-    def upgrade_req_exp(self):
-        """Estimate how much EXP is needed to upgrade once.
-
-        Returns:
-            int: Required EXP
-        """
-        upgrade_lvl = 4 * ((self.lvl // 4) + 1)
-        return ARTIFACT_REQ_EXP[upgrade_lvl] - ARTIFACT_REQ_EXP[self.lvl]
-
-    def salvage_exp(self):
-        """Estimate how much EXP given when salvaged.
-
-        Returns:
-            int: Salvaged EXP
-        """
-        return int(3780 + 0.8 * ARTIFACT_REQ_EXP[self.lvl])
-
-    @staticmethod
-    def sort_potential(artifacts, targets_list, special_targets_list=None, 
-                       set_targets_list=None): # TODO: maybe think of better name
-        distros = []
-        for artifact in artifacts:
-            distros.append((artifact.upgrade_distro(20), artifact.set))
-
-        num_special_targets = 0 if special_targets_list is None else len(special_targets_list)
-        num_set_targets = 0 if set_targets_list is None else len(set_targets_list)
-        
-        means = np.zeros((len(artifacts), len(targets_list) + num_special_targets + num_set_targets))
-        sorted_idxs = np.zeros_like(means, dtype=int)
-
-        for idx, (targets, num) in enumerate(targets_list):
-            target_means = [Artifact.score_mean(distro, targets) for distro, _ in distros]
-
-            sorted_means = sorted(target_means, reverse=True)
-            sorted_idx = np.array([sorted_means.index(mean) for mean in target_means], dtype=int)
-            sorted_idx[sorted_idx >= num] = np.iinfo(sorted_idx.dtype).max
-            sorted_idxs[:, idx] = sorted_idx
-            means[:, idx] = target_means
-
-        if special_targets_list is not None:
-            for idx, (targets, num) in enumerate(special_targets_list):
-                idx += len(targets_list)
-                target_means = [Artifact.score_mean(distro, targets) for distro, _ in distros]
-
-                sorted_means = sorted(target_means, reverse=True)
-                sorted_idx = np.array([sorted_means.index(mean) for mean in target_means], dtype=int)
-                sorted_idx[sorted_idx >= num] = np.iinfo(sorted_idx.dtype).max
-                sorted_idxs[:, idx] = sorted_idx
-                means[:, idx] = target_means
-        
-        if set_targets_list is not None:
-            for idx, (set, targets, num) in enumerate(set_targets_list):
-                idx += len(targets_list) + num_special_targets
-                target_means = []
-                for distro, distro_set in distros:
-                    if set == distro_set:
-                        target_means.append(Artifact.score_mean(distro, targets))
-                    else:
-                        target_means.append(-1)
-
-                sorted_means = sorted(target_means, reverse=True)
-                sorted_idx = np.array([sorted_means.index(mean) for mean in target_means], dtype=int)
-                #sorted_idx[sorted_idx >= num] = np.iinfo(sorted_idx.dtype).max
-                sorted_idx[sorted_idx >= num] = np.iinfo(sorted_idx.dtype).max
-                try:
-                    if sorted_means.index(-1) < num:
-                        sorted_idx[sorted_idx >= sorted_means.index(-1)] = np.iinfo(sorted_idx.dtype).max
-                except:
-                    pass
-                sorted_idxs[:, idx] = sorted_idx
-                means[:, idx] = target_means
-
-        np.save('asdf.npy', sorted_idxs)
-        min_idx = list(np.min(sorted_idxs, axis=1))
-
-        #output = dict(zip(artifacts, zip(min_idx, means)))
-        #return dict(sorted(output.items(), key=lambda item: item[1][0], reverse=True))
-        output = dict(zip(artifacts, min_idx))
-        return dict(sorted(output.items(), key=lambda item: item[1], reverse=True))
-
-    @staticmethod
-    def read_json(filename, split=False):
-        """Read JSON of artifacts.
-
-        Args:
-            filename (str): JSON filename.
-            split (bool, optional): Whether to split the list of
-            artifacts into 6 separate lists based on their levels.
-            Defaults to False. 
-
-        Raises:
-            ValueError: If format isn't GOOD.
-
-        Returns:
-            list: List of List of Artifact if split, List of Artifact
-            otherwise.
-        """
-        with open(filename) as f:
-            data = json.load(f) 
-        
-        if data['format'] != 'GOOD':
-            raise ValueError('Format is not GOOD')
-        
-        artifacts = []
-        artifact_dicts = data['artifacts']
-
-        if split:
-            buckets = [[] for _ in range(6)]
-            for artifact_dict in artifact_dicts:
-                if artifact_dict['rarity'] != 5:
-                    continue
-
-                (buckets[artifact_dict['level'] // 4]).append(Artifact.serialize(artifact_dict))
-
-            return buckets
+                num_upgrades -= 1
+                
+        # Figure out main stat
+        main = rng.choice(19, p=MAIN_PROBS[slot])
+        if main < 3:
+            output[idx, main] = 160
         else:
-            for artifact_dict in artifact_dicts:
-                if artifact_dict['rarity'] != 5:
-                    continue
+            output[idx, main] = 80
+            
+        # Figure out unique substats
+        sub_probs = SUB_PROBS.copy()
+        sub_probs[main] = 0
+        sub_probs /= np.sum(sub_probs)
+        substats = rng.choice(19, size=num_substats, replace=False, p=sub_probs)
+        for substat in substats:
+            output[idx, substat] += rng.choice(SUB_COEFS)
+            
+        # Upgrade substats
+        upgrades = rng.choice(4, size=num_upgrades, replace=True)
+        for upgrade in upgrades:
+            output[idx, substats[upgrade]] += rng.choice(SUB_COEFS)
+            
+    return output
 
-                artifacts.append(Artifact.serialize(artifact_dict))
+def artifact_to_dict(artifacts):
+    pass
+
+def dict_to_artifact(dicts):
+    if type(dicts) == dict:
+        artifact = np.zeros(19, dtype=np.uint8)
         
-        return artifacts
-    
-    @staticmethod
-    def split_slot(artifacts):
-        """Split a list of artifacts into 5 seperate lists based on
-        their slots.
+        slot: int = SLOT_2_NUM[dicts['slotKey']]
+        rarity: int = dicts['rarity']
+        lvl: int = int(dicts['level'])
+        setKey: int = SET_2_NUM[dicts['setKey']]
+        main: int = STAT_2_NUM[dicts['mainStatKey']]
+        if main < 3:
+            artifact[main] = 160
+        else:
+            artifact[main] = 80
+            
+        for substat in dicts['substats']:
+            stat = STAT_2_NUM[substat['key']]
+            value = substat['value']
+            coef = round(value / SUB_VALUES[stat] * 10)
+            artifact[stat] = coef
+        if setKey == 1 and slot == 0 and artifact[8] != 0 and artifact[9] != 0:
+            pass
 
-        Args:
-            artifacts (list): List of Artifact objects.
-
-        Raises:
-            ValueError: Artifact is malformed and has an invalid slot.
-
-        Returns:
-            tuple: Tuple of 5 lists for each slot
-        """
-        flowers = []
-        plumes = []
-        sands = []
-        goblets = []
-        circlets = []
-        for artifact in artifacts:
-            match artifact.slot:
-                case 'flower':
-                    flowers.append(artifact)
-                case 'plume':
-                    plumes.append(artifact)
-                case 'sands':
-                    sands.append(artifact)
-                case 'goblet':
-                    goblets.append(artifact)
-                case 'circlet':
-                    circlets.append(artifact)
-                case _:
-                    raise ValueError('Invalid artifact slot')
+        return artifact, slot, rarity, lvl, setKey
         
-        return flowers, plumes, sands, goblets, circlets
+    else:
+        temp_artifacts = []
+        temp_slots = []
+        temp_rarities = []
+        temp_lvls = []
+        temp_sets = []
+        
+        #artifacts = np.zeros((len(dicts), 19), dtype=np.uint8)
+        #slots = np.zeros(len(dicts), dtype=np.uint8)
+        #lvls = np.zeros(len(dicts), dtype=np.uint8)
+        #sets = np.zeros(len(dicts), dtype=int)
+        for dictionary in dicts:
+            artifact, slot, rarity, lvl, setKey = dict_to_artifact(dictionary)
+            temp_artifacts.append(artifact)
+            temp_slots.append(slot)
+            temp_rarities.append(rarity)
+            temp_lvls.append(lvl)
+            temp_sets.append(setKey)
+        artifacts = np.zeros((len(temp_artifacts), 19), dtype=np.uint8)
+        slots = np.zeros(len(temp_slots), dtype=np.uint8)
+        rarities = np.zeros(len(temp_rarities), dtype=np.uint8)
+        lvls = np.zeros(len(temp_lvls), dtype=np.uint8)
+        sets = np.zeros(len(temp_sets), dtype=int)
+        for i in range(len(temp_artifacts)):
+            artifacts[i] = temp_artifacts[i]
+            slots[i] = temp_slots[i]
+            rarities[i] = temp_rarities[i]
+            lvls[i] = temp_lvls[i]
+            sets[i] = temp_sets[i]
+        '''
+        for i, dictionary in enumerate(dicts):
+            if dictionary['rarity'] == 5:
+                artifacts[i], slots[i], lvls[i], sets[i] = dict_to_artifact(dictionary)
+        '''
+        return artifacts, slots, rarities, lvls, sets
     
-    @staticmethod
-    def split_lvl(artifacts):
-        """Split a list of artifacts into 6 seperate lists based on
-        their levels.
+def load(filename):
+    with open(filename) as f:
+        data = json.load(f)
+    
+    if data['format'] != 'GOOD':
+        raise ValueError
+    
+    def cmp(artifact):
+        return artifact['id']
+    
+    return dict_to_artifact(sorted(data['artifacts'], key=cmp))
 
-        Args:
-            artifacts (list): List of Artifact objects.
-
-        Raises:
-            ValueError: Artifact is malformed and has an invalid level.
-
-        Returns:
-            tuple: Tuple of 6 lists for each level
-        """
-        # TODO: This is so stupid lmao but it works, im too lazy to make
-        # it smarter
-        zeros = []
-        fours = []
-        eights = []
-        twelves = []
-        sixteens = []
-        twenties = []
+def print_artifact(artifacts, human_readable=True) -> None:
+    if artifacts.ndim == 1:
+        stats = np.nonzero(artifacts)[0]
+        for stat in stats:
+            if human_readable:
+                print(STATS[stat], round(artifacts[stat] * SUB_VALUES[stat] / 10, 2))
+            else:
+                print(STATS[stat], artifacts[stat])
+    else:
         for artifact in artifacts:
-            match artifact.lvl // 4:
-                case 0:
-                    zeros.append(artifact)
-                case 1:
-                    fours.append(artifact)
-                case 2:
-                    eights.append(artifact)
-                case 3:
-                    twelves.append(artifact)
-                case 4:
-                    sixteens.append(artifact)
-                case 5:
-                    twenties.append(artifact)
-                case _:
-                    raise ValueError('Invalid artifact level')
+            print_artifact(artifact)
+            print()
 
-        return zeros, fours, eights, twelves, sixteens, twenties
+def _upgrade_helper(artifact, rng):
+    if np.count_nonzero(artifact) == 4:
+        sub_probs = SUB_PROBS.copy()
+        sub_probs[np.nonzero(artifact)[0]] = 0
+        sub_probs /= np.sum(sub_probs)
+        artifact[rng.choice(19, p=sub_probs)] = rng.choice(SUB_COEFS)
+    else:
+        # TODO: this seems like a dumb way to do this
+        main = find_main(artifact)
+        temp = artifact[main]
+        artifact[main] = 0
+        artifact[rng.choice(np.nonzero(artifact)[0])] += rng.choice(SUB_COEFS)
+        artifact[main] = temp
+
+def upgrade(artifacts, mains=None, seed=None):
+    # TODO: add mains optional param
+    
+    RNG = np.random.default_rng(seed)
+    if artifacts.ndim == 1:
+        _upgrade_helper(artifacts, RNG)
+    else:
+        for artifact in artifacts:
+            _upgrade_helper(artifact, RNG)
+
+def _smart_seed(artifacts):
+    if artifacts.ndim == 1:
+        return zlib.crc32(artifacts.tobytes())
+    else:
+        output = np.zeros(len(artifacts), dtype=np.int64)
+        for idx, artifact in enumerate(artifacts):
+            output[idx] = zlib.crc32(artifact.flatten().tobytes())
+        return output
+    
+def smart_upgrade(artifacts, mains=None):
+    if artifacts.ndim == 1:
+        RNG = np.random.default_rng(_smart_seed(artifacts))
+        _upgrade_helper(artifacts, RNG)
+    else:
+        seeds = _smart_seed(artifacts)
+        for artifact, seed in zip(artifacts, seeds):
+            RNG = np.random.default_rng(seed)
+            _upgrade_helper(artifact, RNG)
+            
+def smart_upgrade_until_max(artifacts, lvls, mains=None): # TODO: this is code duplication
+    num_upgrades = 5 - lvls // 4
+    
+    if artifacts.ndim == 1 or len(artifacts) == 1:
+        for _ in range(num_upgrades):
+            smart_upgrade(artifacts, mains)
+    else:
+        if mains is None:
+            mains = [None] * len(lvls)
+        for artifact, lvl, main in zip(artifacts, num_upgrades, mains):
+            for _ in range(lvl):
+                smart_upgrade(artifact, main)
+    
+def upgrade_until_max(artifacts, lvls, mains=None, seed=None):
+    num_upgrades = 5 - lvls // 4
+    
+    if artifacts.ndim == 1 or len(artifacts) == 1:
+        for _ in range(num_upgrades):
+            upgrade(artifacts, mains, seed)
+    else:
+        if mains is None:
+            mains = [None] * len(lvls)
+        for artifact, lvl, main in zip(artifacts, num_upgrades, mains):
+            for _ in range(lvl):
+                upgrade(artifact, main, seed) # TODO seed generator, otherwise they all get the same seed
+
+def estimate_lvl(artifacts):
+    # TODO: maybe make this more advanced, considering the number of
+    # rolls from each substat individually
+    if artifacts.ndim == 1:
+        substats = find_sub(artifacts)
+        rolls = round(np.sum(artifacts[substats]) / 8.5)
+        if rolls == 3:
+            return 0
+        if rolls == 9:
+            return 20
+        return 4 * (rolls - 4) + 2
+    else:
+        lvls = np.zeros(len(artifacts), dtype=int)
+        for idx, artifact in enumerate(artifacts):
+            lvls[idx] = estimate_lvl(artifact)
+            
+        return lvls
+
+if __name__ == '__main__':
+    artifacts = generate('sands', size=2)
+    print(artifacts)
+    upgrade_until_max(artifacts, np.array([0, 0]))
+    print(artifacts)

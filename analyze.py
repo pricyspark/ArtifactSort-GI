@@ -146,6 +146,21 @@ def distro(artifacts, lvls=None, num_upgrades=None):
             probs.append(temp_probs)
 
     return dist, probs
+
+def sample_upgrade(artifact, samples, num_upgrades=None, lvl=None, rng=None, seed=None):
+    if rng is None:
+        rng = np.random.default_rng(seed)
+
+    if num_upgrades is None:
+        num_upgrades = 5 - (lvl // 4)
+
+    output = np.tile(artifact, (samples, 1))
+    for i in range(len(samples)):
+        for _ in range(len(num_upgrades)):
+            upgrade(output[i], rng=rng)
+
+    return output
+
     
 def avg(distribution, probs, targets, scores=None) -> float:
     """Find distribution's score average.

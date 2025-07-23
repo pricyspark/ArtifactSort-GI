@@ -285,15 +285,17 @@ def _upgrade_helper(artifact, rng):
         artifact[rng.choice(np.nonzero(artifact)[0])] += rng.choice(SUB_COEFS)
         artifact[main] = temp
 
-def upgrade(artifacts, mains=None, seed=None):
+def upgrade(artifacts, mains=None, rng=None, seed=None):
     # TODO: add mains optional param
+
+    if rng is None:
+        rng = np.random.default_rng(seed)
     
-    RNG = np.random.default_rng(seed)
     if artifacts.ndim == 1:
-        _upgrade_helper(artifacts, RNG)
+        _upgrade_helper(artifacts, rng)
     else:
         for artifact in artifacts:
-            _upgrade_helper(artifact, RNG)
+            _upgrade_helper(artifact, rng)
 
 def _smart_seed(artifacts):
     if artifacts.ndim == 1:

@@ -271,7 +271,7 @@ def print_artifact(artifacts, human_readable=True) -> None:
             print_artifact(artifact)
             print()
 
-def _upgrade_helper(artifact, rng):
+def _upgrade_helper(artifact, rng, main=None):
     if np.count_nonzero(artifact) == 4:
         sub_probs = SUB_PROBS.copy()
         sub_probs[np.nonzero(artifact)[0]] = 0
@@ -279,11 +279,7 @@ def _upgrade_helper(artifact, rng):
         artifact[rng.choice(19, p=sub_probs)] = rng.choice(SUB_COEFS)
     else:
         # TODO: this seems like a dumb way to do this
-        main = find_main(artifact)
-        temp = artifact[main]
-        artifact[main] = 0
-        artifact[rng.choice(np.nonzero(artifact)[0])] += rng.choice(SUB_COEFS)
-        artifact[main] = temp
+        artifact[rng.choice(find_sub(artifact, main=main))] += rng.choice(SUB_COEFS)
 
 def upgrade(artifacts, mains=None, rng=None, seed=None):
     # TODO: add mains optional param
@@ -294,8 +290,10 @@ def upgrade(artifacts, mains=None, rng=None, seed=None):
     if artifacts.ndim == 1:
         _upgrade_helper(artifacts, rng)
     else:
-        for artifact in artifacts:
-            _upgrade_helper(artifact, rng)
+        if mains is None:
+            mains = [None] * len(artifacts)
+        for artifact, main in zip(artifacts, mains):
+            _upgrade_helper(artifact, rng, main=main)
 
 def _smart_seed(artifacts):
     if artifacts.ndim == 1:

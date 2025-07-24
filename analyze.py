@@ -155,9 +155,8 @@ def sample_upgrade(artifact, samples, num_upgrades=None, lvl=None, rng=None, see
         num_upgrades = 5 - (lvl // 4)
 
     output = np.tile(artifact, (samples, 1))
-    for i in range(len(samples)):
-        for _ in range(len(num_upgrades)):
-            upgrade(output[i], rng=rng)
+    for _ in range(num_upgrades):
+        upgrade(output, rng=rng)
 
     return output
 

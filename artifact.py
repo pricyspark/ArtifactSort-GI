@@ -278,17 +278,14 @@ def _upgrade_helper(artifact, rng, main=None):
         sub_probs /= np.sum(sub_probs)
         artifact[rng.choice(19, p=sub_probs)] = rng.choice(SUB_COEFS)
     else:
-        # TODO: this seems like a dumb way to do this
         artifact[rng.choice(find_sub(artifact, main=main))] += rng.choice(SUB_COEFS)
 
 def upgrade(artifacts, mains=None, rng=None, seed=None):
-    # TODO: add mains optional param
-
     if rng is None:
         rng = np.random.default_rng(seed)
     
     if artifacts.ndim == 1:
-        _upgrade_helper(artifacts, rng)
+        _upgrade_helper(artifacts, rng, main=mains)
     else:
         if mains is None:
             mains = [None] * len(artifacts)

@@ -6,6 +6,7 @@ import time
 from targets import *
 from scipy.stats import entropy
 import functools
+from itertools import product
 #import artifact as Artifact
 #from artifact import STATS, STAT_2_NUM, MAIN_PROBS, SUB_PROBS, MAIN_VALUES, SUB_VALUES, SUB_COEFS, ARTIFACT_REQ_EXP, UPGRADE_REQ_EXP
 
@@ -154,11 +155,27 @@ def sample_upgrade(artifact, samples, num_upgrades=None, lvl=None, rng=None, see
     if num_upgrades is None:
         num_upgrades = 5 - (lvl // 4)
 
-    output = np.tile(artifact, (samples, 1))
-    for _ in range(num_upgrades):
-        upgrade(output, rng=rng)
+    if lvl >= 4 and samples > 16 ** num_upgrades:
+        subs = find_sub(artifact)
+        
+        start = np.tile(artifact, (16 ** num_upgrades, 1))
+        for i, combo in enumerate(product(range(16))):
+            for upgrade in combo:
+                start[i, subs[upgrade // 4]] += SUB_COEFS[upgrade % 4]
 
-    return output
+        output = np.zeros((samples, 19), dtype=np.uint8)
+        num_repeats = samples // len(start)
+        num_left = samples - num_repeats * len(start)
+        output[: len(start) * num_repeats] = np.tile(start, (num_repeats, 1))
+        start = rng.shuffle(start)
+        output[len(start) * num_repeats:] = start[:num_left]
+
+    else:
+        output = np.tile(artifact, (samples, 1))
+        for _ in range(num_upgrades):
+            upgrade(output, rng=rng)
+
+        return output
 
     
 def avg(distribution, probs, targets, scores=None) -> float:

@@ -154,22 +154,16 @@ def sample_upgrade(artifact, samples, num_upgrades=None, lvl=None, rng=None, see
 
     if num_upgrades is None:
         num_upgrades = 5 - (lvl // 4)
-
-    if lvl >= 4 and samples > 16 ** num_upgrades:
+    # TODO: vectorize lvl 0. Randomly select all new substats for each sample first.
+    if lvl >= 4:
         subs = find_sub(artifact)
-        
-        start = np.tile(artifact, (16 ** num_upgrades, 1))
-        for i, combo in enumerate(product(range(16))):
-            for upgrade in combo:
-                start[i, subs[upgrade // 4]] += SUB_COEFS[upgrade % 4]
-
-        output = np.zeros((samples, 19), dtype=np.uint8)
-        num_repeats = samples // len(start)
-        num_left = samples - num_repeats * len(start)
-        output[: len(start) * num_repeats] = np.tile(start, (num_repeats, 1))
-        start = rng.shuffle(start)
-        output[len(start) * num_repeats:] = start[:num_left]
-
+        output = np.tile(artifact, (samples, 1))
+        rows = np.arange(samples)
+        for _ in range(num_upgrades):
+            cols = rng.choice(subs, size=samples)
+            increments = rng.choice(SUB_COEFS, size=samples)
+            output[rows, cols] += increments
+        return output
     else:
         output = np.tile(artifact, (samples, 1))
         for _ in range(num_upgrades):

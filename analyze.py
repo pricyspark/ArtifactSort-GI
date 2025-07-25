@@ -154,22 +154,54 @@ def sample_upgrade(artifact, samples, num_upgrades=None, lvl=None, rng=None, see
 
     if num_upgrades is None:
         num_upgrades = 5 - (lvl // 4)
-    # TODO: vectorize lvl 0. Randomly select all new substats for each sample first.
-    if lvl >= 4:
+    
+    output = np.tile(artifact, (samples, 1))
+    if num_upgrades == 0:
+        return output
+    
+    if np.count_nonzero(artifact) == 4:
+        #print(artifact)
+        # Calculate new substat probabilities
+        sub_probs = SUB_PROBS.copy()
+        sub_probs[np.nonzero(artifact)[0]] = 0
+        sub_probs /= np.sum(sub_probs)
+
+        current_subs = find_sub(artifact)
+        new_subs = rng.choice(19, p=sub_probs, size=samples)
+        #subs = np.hstack((np.tile(current_subs, (samples, 1)), new_subs.reshape((-1, 1))))
+        # TODO: see if you can "choice" over each row of a 2D array.
+        # If so, combine subs and don't use the weird override method.
+
+        # Add the new substats
+        rows = np.arange(samples)
+        increments = rng.choice(SUB_COEFS, size=samples)
+        output[rows, new_subs] += increments
+        
+        # Upgrade
+        for _ in range(num_upgrades - 1):
+            # Assume one of the original 3 substats upgrades
+            cols = rng.choice(current_subs, size=samples)
+            # Replace the upgraded substat with the new one with 25% chance
+            cols = np.where(rng.random(size=samples) < 0.75, cols, new_subs)
+            increments = rng.choice(SUB_COEFS, size=samples)
+            output[rows, cols] += increments
+        return output
+    else:
         subs = find_sub(artifact)
-        output = np.tile(artifact, (samples, 1))
         rows = np.arange(samples)
         for _ in range(num_upgrades):
             cols = rng.choice(subs, size=samples)
             increments = rng.choice(SUB_COEFS, size=samples)
             output[rows, cols] += increments
         return output
+    '''
     else:
         output = np.tile(artifact, (samples, 1))
         for _ in range(num_upgrades):
             upgrade(output, rng=rng)
 
         return output
+    '''
 
     
 def avg(distribution, probs, targets, scores=None) -> float:

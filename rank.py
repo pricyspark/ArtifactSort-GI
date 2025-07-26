@@ -134,11 +134,24 @@ def rank_temp(artifacts, lvls, persist, targets, change=True, k=2, num_trials=10
         for i in range(num_artifacts):
             maxed[i] = sample_upgrade(artifacts[i], num_trials, lvl=lvls[i], rng=rng)
         persist['maxed'] = maxed
-    elif change:
+        persist['targets'] = None
+    
+    if not np.array_equal(persist['targets'], targets):
+        persist['targets'] = targets
+        scores = np.zeros((num_artifacts, num_trials, len(targets)), dtype=np.uint32)
+        for i in range(num_trials):
+            for j in range(len(targets)):
+                scores[:, i, j] = score(persist['maxed'][:, i], targets[j])
+        persist['scores'] = scores    
+        
+    if persist['changed'] != -1:
         changed = persist['changed']
         persist['maxed'][changed] = sample_upgrade(artifacts[changed], num_trials, lvl=lvls[changed], rng=rng)
+        for i in range(num_trials):
+            for j in range(len(targets)):
+                persist['scores'][changed, i, j] = score(persist['maxed'][changed, i], targets[j])        
         
-    changed, maxed = persist['changed'], persist['maxed']
+    changed, maxed, scores = persist['changed'], persist['maxed'], persist['scores']
     relevance = np.zeros(num_artifacts, dtype=float)
     
     if num_artifacts <= k:
@@ -150,25 +163,36 @@ def rank_temp(artifacts, lvls, persist, targets, change=True, k=2, num_trials=10
             else:
                 relevance[i] /= MAX_REQ_EXP[lvls[i]]
                 #relevance[i] /= UPGRADE_REQ_EXP[lvls[i]]
-        persist['changed'] = np.argmax(relevance)
+        if change:
+            persist['changed'] = np.argmax(relevance)
         return relevance
     
-    for i in range(num_trials):
-        for target in targets:
-            final_scores = score(maxed[:, i], target)
-            if k == 1:
-                maximum = np.max(final_scores)
-                best = np.where(final_scores == maximum)[0]
-                relevance[best] += 1 / len(best)
-            else:
-                threshold = np.partition(final_scores, -k)[-k]
-                relevance[final_scores > threshold] += 1
-                asdf = np.where(final_scores == threshold)[0]
-                relevance[asdf] += 1 / len(asdf)
-            # each target is weighted equally. Don't divide by the
-            # number of targets, or else having more targets would
-            # make each target less valuable, which isn't the case.
+    if k == 1:
+        # maximum per (i, j)
+        cutoff = scores.max(axis=0)                    # shape (num_trials, num_targets)
+    else:
+        # k‑th largest via partition
+        cutoff = np.partition(scores, -k, axis=0)[-k]  # same shape
+
+    # 2) Mask of strictly above cutoff
+    above = scores > cutoff[None, ...]                 # shape (n_items, num_trials, num_targets)
+
+    # 3) Mask of exactly equal to cutoff
+    eq    = scores == cutoff[None, ...]                # same shape
+
+    # 4) Count ties so we can split fractional credit
+    tie_counts = eq.sum(axis=0)                        # shape (num_trials, num_targets)
+
+    # 5) Sum up:
+    #    - 1 point for every “above”
+    #    - 1/tie_counts for every “tie”
+    relevance = above.sum(axis=(1, 2)).astype(float)
+    relevance += (eq / tie_counts[None, ...]).sum(axis=(1, 2))
                 
+    relevance /= np.where(lvls == 20, 1, MAX_REQ_EXP[lvls])
+    if change:
+        relevance[lvls == 20] = 0
+    '''
     for i in range(num_artifacts):
         if lvls[i] == 20:
             if change:
@@ -177,8 +201,10 @@ def rank_temp(artifacts, lvls, persist, targets, change=True, k=2, num_trials=10
             relevance[i] /= MAX_REQ_EXP[lvls[i]]
             #relevance[i] /= UPGRADE_REQ_EXP[lvls[i]]
             #raise ValueError
+    '''
         
-    persist['changed'] = np.argmax(relevance)
+    if change:
+        persist['changed'] = np.argmax(relevance)
     #return relevance
     #print_artifact(artifacts[np.argmax(relevance)])
     if relevance[persist['changed']] == 0 and change:
@@ -369,8 +395,9 @@ def rank_estimate(artifacts, lvls, persist, targets, change=True, k=1, num_trial
 
 if __name__ == '__main__':
     '''
+    '''
     start = time.time()
-    num = 100
+    num = 10
     totals = np.zeros(num)
     time_avg = np.zeros(num)
     #targets = {'atk_': 6, 'atk': 2, 'crit_': 8}
@@ -393,7 +420,7 @@ if __name__ == '__main__':
 
     for i in range(num):
         artifacts = generate('flower', size=200, seed=i)
-        totals[i] = (simulate_exp(artifacts, np.zeros(200, dtype=int), targets, rank_value))
+        totals[i] = (simulate_exp(artifacts, np.zeros(200, dtype=int), targets, rank_temp))
         print(i, totals[i])
         print()
 
@@ -404,8 +431,8 @@ if __name__ == '__main__':
     print(time_avg[-1])
     end = time.time()
     print(end - start)
-    '''
     
+    '''
     start = time.time()
     filename = 'artifacts/genshinData_GOOD_2025_07_19_23_43.json'
     artifacts, slots, rarities, lvls, sets = load(filename)
@@ -416,5 +443,4 @@ if __name__ == '__main__':
     visualize(relevant, artifacts, slots, sets, lvls)
     end = time.time()
     print(end - start)
-    '''
     '''

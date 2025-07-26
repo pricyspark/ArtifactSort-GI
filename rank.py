@@ -112,14 +112,17 @@ def rank_temp(artifacts, lvls, persist, targets, change=True, k=2, num_trials=10
             lvls = 0
         lvls = np.full(num_artifacts, lvls)
     
-    # TODO: figure out a match statement
-    if type(targets) == dict:
-        targets = vectorize(targets)
-    elif type(targets) != np.ndarray:
-        temp = np.zeros((len(targets), 19), dtype=np.uint32)
-        for i, target in enumerate(targets):
-            temp[i] = vectorize(target)
-        targets = temp
+    match targets:
+        case dict():
+            targets = vectorize(targets).reshape((1, -1))
+        case np.ndarray():
+            if targets.ndim == 1:
+                targets = targets.reshape((1, -1))    
+        case _:
+            temp = np.zeros((len(targets), 19), dtype=np.uint32)
+            for i, target in enumerate(targets):
+                temp[i] = vectorize(target)
+            targets = temp
 
     if rng is None:
         rng = np.random.default_rng(seed)
@@ -153,39 +156,21 @@ def rank_temp(artifacts, lvls, persist, targets, change=True, k=2, num_trials=10
         return relevance
     
     for i in range(num_trials):
-        #maxed = np.zeros((num_artifacts, 19), dtype=np.uint8)
-        #for i in range(num_artifacts):
-        #    maxed[i] = rng.choice(distributions[i], p=probs[i])
-        if type(targets) == dict or (type(targets) == np.ndarray and targets.ndim == 1):
-            final_scores = score(maxed[:, i], targets)
-            #final_scores[lvls == 20] = 0
+        for target in targets:
+            final_scores = score(maxed[:, i], target)
             if k == 1:
                 maximum = np.max(final_scores)
                 best = np.where(final_scores == maximum)[0]
                 relevance[best] += 1 / len(best)
             else:
                 # TODO: this seems really slow
-                threshold = np.sort(final_scores)[-k]
+                threshold = np.partition(final_scores, -k)[-k]
                 relevance[final_scores > threshold] += 1
                 asdf = np.where(final_scores == threshold)[0]
                 relevance[asdf] += 1 / len(asdf)
-                #best = np.argpartition(final_scores, -k)[-k:]
-        else:
-            for target in targets:
-                final_scores = score(maxed[:, i], target)
-                if k == 1:
-                    maximum = np.max(final_scores)
-                    best = np.where(final_scores == maximum)[0]
-                    relevance[best] += 1 / len(best)
-                else:
-                    # TODO: this seems really slow
-                    threshold = np.sort(final_scores)[-k]
-                    relevance[final_scores > threshold] += 1
-                    asdf = np.where(final_scores == threshold)[0]
-                    relevance[asdf] += 1 / len(asdf)
-                # each target is weighted equally. Don't divide by the
-                # number of targets, or else having more targets would
-                # make each target less valuable, which isn't the case.
+            # each target is weighted equally. Don't divide by the
+            # number of targets, or else having more targets would
+            # make each target less valuable, which isn't the case.
                 
     for i in range(num_artifacts):
         if lvls[i] == 20:
@@ -427,7 +412,7 @@ if __name__ == '__main__':
     start = time.time()
     filename = 'artifacts/genshinData_GOOD_2025_07_19_23_43.json'
     artifacts, slots, rarities, lvls, sets = load(filename)
-    relevant = rate(artifacts, slots, rarities, lvls, sets, rank_value, num=100)
+    relevant = rate(artifacts, slots, rarities, lvls, sets, rank_temp, num=100)
     
     count = 0
     

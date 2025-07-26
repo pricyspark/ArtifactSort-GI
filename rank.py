@@ -112,6 +112,15 @@ def rank_temp(artifacts, lvls, persist, targets, change=True, k=2, num_trials=10
             lvls = 0
         lvls = np.full(num_artifacts, lvls)
     
+    # TODO: figure out a match statement
+    if type(targets) == dict:
+        targets = vectorize(targets)
+    elif type(targets) != np.ndarray:
+        temp = np.zeros((len(targets), 19), dtype=np.uint32)
+        for i, target in enumerate(targets):
+            temp[i] = vectorize(target)
+        targets = temp
+
     if rng is None:
         rng = np.random.default_rng(seed)
     

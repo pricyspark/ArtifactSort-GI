@@ -16,20 +16,20 @@ def rank_value(artifacts, lvls, persist, targets, change=True, k=2, num_trials=1
         rng = np.random.default_rng(seed)
     
     if len(persist) == 0:
-        while len(persist) < 2:
-            persist.append(None)
-        persist[0] = -1
+        persist['changed'] = -1
         distributions, probs = distro(artifacts, lvls)
         maxed = np.zeros((num_artifacts, num_trials, 19), dtype=np.uint8)
         for i in range(num_artifacts):
             maxed[i] = rng.choice(distributions[i], p=probs[i], size=num_trials)
-        persist[1] = maxed
+        persist['maxed'] = maxed
     elif change:
-        changed = persist[0]
+        changed = persist['changed']
         distributions, probs = distro(artifacts[changed], lvls[changed])
-        persist[1][changed] = rng.choice(distributions, p=probs, size=num_trials)
+        persist['maxed'][changed] = rng.choice(distributions, p=probs, size=num_trials)
         
-    changed, maxed = persist
+    changed = persist['changed']
+    maxed = persist['maxed']
+    #changed, maxed = persist['changed'], persist['maxed']
     relevance = np.zeros(num_artifacts, dtype=float)
     
     if num_artifacts <= k:
@@ -41,7 +41,7 @@ def rank_value(artifacts, lvls, persist, targets, change=True, k=2, num_trials=1
             else:
                 relevance[i] /= MAX_REQ_EXP[lvls[i]]
                 #relevance[i] /= UPGRADE_REQ_EXP[lvls[i]]
-        persist[0] = np.argmax(relevance)
+        persist['changed'] = np.argmax(relevance)
         return relevance
     
     for i in range(num_trials):
@@ -88,16 +88,16 @@ def rank_value(artifacts, lvls, persist, targets, change=True, k=2, num_trials=1
             #relevance[i] /= UPGRADE_REQ_EXP[lvls[i]]
             #raise ValueError
         
-    persist[0] = np.argmax(relevance)
+    persist['changed'] = np.argmax(relevance)
     #return relevance
     #print_artifact(artifacts[np.argmax(relevance)])
-    if relevance[persist[0]] == 0 and change:
+    if relevance[persist['changed']] == 0 and change:
         print('max was 0')
         distributions, probs = distro(artifacts, lvls)
         maxed = np.zeros((num_artifacts, num_trials, 19), dtype=np.uint8)
         for i in range(num_artifacts):
             maxed[i] = rng.choice(distributions[i], p=probs[i], size=num_trials)
-        persist[1] = maxed
+        persist['maxed'] = maxed
         return rank_value(artifacts, lvls, persist, targets, change, k, num_trials, rng)
     
     return relevance
@@ -128,19 +128,17 @@ def rank_temp(artifacts, lvls, persist, targets, change=True, k=2, num_trials=10
         rng = np.random.default_rng(seed)
     
     if len(persist) == 0:
-        while len(persist) < 2:
-            persist.append(None)
-        persist[0] = -1
+        persist['changed'] = -1
 
         maxed = np.zeros((num_artifacts, num_trials, 19), dtype=np.uint8)
         for i in range(num_artifacts):
             maxed[i] = sample_upgrade(artifacts[i], num_trials, lvl=lvls[i], rng=rng)
-        persist[1] = maxed
+        persist['maxed'] = maxed
     elif change:
-        changed = persist[0]
-        persist[1][changed] = sample_upgrade(artifacts[changed], num_trials, lvl=lvls[changed], rng=rng)
+        changed = persist['changed']
+        persist['maxed'][changed] = sample_upgrade(artifacts[changed], num_trials, lvl=lvls[changed], rng=rng)
         
-    changed, maxed = persist
+    changed, maxed = persist['changed'], persist['maxed']
     relevance = np.zeros(num_artifacts, dtype=float)
     
     if num_artifacts <= k:
@@ -152,7 +150,7 @@ def rank_temp(artifacts, lvls, persist, targets, change=True, k=2, num_trials=10
             else:
                 relevance[i] /= MAX_REQ_EXP[lvls[i]]
                 #relevance[i] /= UPGRADE_REQ_EXP[lvls[i]]
-        persist[0] = np.argmax(relevance)
+        persist['changed'] = np.argmax(relevance)
         return relevance
     
     for i in range(num_trials):
@@ -163,7 +161,6 @@ def rank_temp(artifacts, lvls, persist, targets, change=True, k=2, num_trials=10
                 best = np.where(final_scores == maximum)[0]
                 relevance[best] += 1 / len(best)
             else:
-                # TODO: this seems really slow
                 threshold = np.partition(final_scores, -k)[-k]
                 relevance[final_scores > threshold] += 1
                 asdf = np.where(final_scores == threshold)[0]
@@ -181,16 +178,16 @@ def rank_temp(artifacts, lvls, persist, targets, change=True, k=2, num_trials=10
             #relevance[i] /= UPGRADE_REQ_EXP[lvls[i]]
             #raise ValueError
         
-    persist[0] = np.argmax(relevance)
+    persist['changed'] = np.argmax(relevance)
     #return relevance
     #print_artifact(artifacts[np.argmax(relevance)])
-    if relevance[persist[0]] == 0 and change:
+    if relevance[persist['changed']] == 0 and change:
         print('max was 0')
         distributions, probs = distro(artifacts, lvls)
         maxed = np.zeros((num_artifacts, num_trials, 19), dtype=np.uint8)
         for i in range(num_artifacts):
             maxed[i] = rng.choice(distributions[i], p=probs[i], size=num_trials)
-        persist[1] = maxed
+        persist['maxed'] = maxed
         return rank_value(artifacts, lvls, persist, targets, change, k, num_trials, rng)
     
     return relevance

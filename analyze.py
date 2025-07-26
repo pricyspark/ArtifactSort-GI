@@ -452,7 +452,7 @@ def rate(artifacts, slots, rarities, lvls, sets, ranker, num=None, threshold=Non
         original_idxs = np.where(slot_mask)[0]
         slot_artifacts = artifacts[slot_mask]
         slot_lvls = lvls[slot_mask]
-        persist = []
+        persist = {}
         relevance[original_idxs, count] = ranker(slot_artifacts, slot_lvls, persist, ALL_TARGETS[SLOTS[slot]], change=False, num_trials=1000)
         count += 1
         
@@ -464,19 +464,21 @@ def rate(artifacts, slots, rarities, lvls, sets, ranker, num=None, threshold=Non
             set_lvls = slot_lvls[set_mask]
             if len(set_artifacts) == 0:
                 continue
-            set_persist = []
-            for asdf in persist:
+            set_persist = {}
+            for a, b in persist.items():
                 try:
-                    poij = len(asdf)
+                    poij = len(b)
                     qwer = np.where(set_mask)[0]
                     #temp = asdf[set_mask]
-                    if type(asdf) == np.ndarray:
-                        temp = asdf[set_mask]
+                    if type(b) == np.ndarray:
+                        temp = b[set_mask]
                     else:
-                        temp = [val for val, m in zip(asdf, set_mask) if m]
-                    set_persist.append(temp)
+                        temp = [val for val, m in zip(b, set_mask) if m]
+                    set_persist[a] = temp
+                    #set_persist.append(temp)
                 except Exception as e:
-                    set_persist.append(None)
+                    set_persist[a] = None
+                    #set_persist.append(None)
             #set_persist = [asdf[np.where(set_mask)[0]] for asdf in persist]
             relevance[original_idxs, count] = ranker(set_artifacts, set_lvls, set_persist, SET_TARGETS[SETS[setKey]][SLOTS[slot]], change=False, num_trials=1000)
             count += 1

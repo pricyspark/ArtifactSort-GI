@@ -821,7 +821,16 @@ SET_TARGETS = {
             {'atk_': 6, 'atk': 2, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7},
 
             {'def_': 6, 'def': 2, 'crit_': 8, 'enerRech_': 10},
-            {'def_': 6, 'def': 2, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7}
+            {'def_': 6, 'def': 2, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7},
+            
+            {'hp_': 6, 'hp': 2, 'crit_': 8, 'enerRech_': 6},
+            {'hp_': 6, 'hp': 2, 'crit_': 8, 'enerRech_': 6, 'eleMas': 7},
+
+            {'atk_': 6, 'atk': 2, 'crit_': 8, 'enerRech_': 6},
+            {'atk_': 6, 'atk': 2, 'crit_': 8, 'enerRech_': 6, 'eleMas': 7},
+
+            {'def_': 6, 'def': 2, 'crit_': 8, 'enerRech_': 6},
+            {'def_': 6, 'def': 2, 'crit_': 8, 'enerRech_': 6, 'eleMas': 7}
         ),
         'plume': (
             {'hp_': 6, 'hp': 2, 'crit_': 8, 'enerRech_': 10},
@@ -831,7 +840,16 @@ SET_TARGETS = {
             {'atk_': 6, 'atk': 2, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7},
 
             {'def_': 6, 'def': 2, 'crit_': 8, 'enerRech_': 10},
-            {'def_': 6, 'def': 2, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7}
+            {'def_': 6, 'def': 2, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7},
+            
+            {'hp_': 6, 'hp': 2, 'crit_': 8, 'enerRech_': 6},
+            {'hp_': 6, 'hp': 2, 'crit_': 8, 'enerRech_': 6, 'eleMas': 7},
+
+            {'atk_': 6, 'atk': 2, 'crit_': 8, 'enerRech_': 6},
+            {'atk_': 6, 'atk': 2, 'crit_': 8, 'enerRech_': 6, 'eleMas': 7},
+
+            {'def_': 6, 'def': 2, 'crit_': 8, 'enerRech_': 6},
+            {'def_': 6, 'def': 2, 'crit_': 8, 'enerRech_': 6, 'eleMas': 7}
         ),
         'sands': (
             {'hp_': 6, 'hp': 2, 'crit_': 8, 'enerRech_': 10},
@@ -844,7 +862,19 @@ SET_TARGETS = {
 
             {'def_': 6, 'def': 2, 'crit_': 8, 'enerRech_': 10},
             {'def_': 6, 'def': 2, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7},
-            {'def_': 6, 'def': 2, 'enerRech_': 10, 'eleMas': 16}
+            {'def_': 6, 'def': 2, 'enerRech_': 10, 'eleMas': 16},
+            
+            {'hp_': 6, 'hp': 2, 'crit_': 8, 'enerRech_': 6},
+            {'hp_': 6, 'hp': 2, 'crit_': 8, 'enerRech_': 6, 'eleMas': 7},
+            {'hp_': 6, 'hp': 2, 'enerRech_': 6, 'eleMas': 16},
+
+            {'atk_': 6, 'atk': 2, 'crit_': 8, 'enerRech_': 6},
+            {'atk_': 6, 'atk': 2, 'crit_': 8, 'enerRech_': 6, 'eleMas': 7},
+            {'atk_': 6, 'atk': 2, 'enerRech_': 6, 'eleMas': 16},
+
+            {'def_': 6, 'def': 2, 'crit_': 8, 'enerRech_': 6},
+            {'def_': 6, 'def': 2, 'crit_': 8, 'enerRech_': 6, 'eleMas': 7},
+            {'def_': 6, 'def': 2, 'enerRech_': 6, 'eleMas': 16}
         ),
         'goblet': (
             {'hp_': 6, 'hp': 2, 'crit_': 8, 'enerRech_': 10},
@@ -930,6 +960,90 @@ SET_TARGETS = {
             {'def_': 6, 'def': 2, 'physical_dmg_': 8, 'crit_': 8, 'enerRech_': 10},
             {'def_': 6, 'def': 2, 'physical_dmg_': 8, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7},
             {'def_': 6, 'def': 2, 'physical_dmg_': 8, 'enerRech_': 10, 'eleMas': 16},
+            
+            {'hp_': 6, 'hp': 2, 'crit_': 8, 'enerRech_': 6},
+            {'hp_': 6, 'hp': 2, 'crit_': 8, 'enerRech_': 6, 'eleMas': 7},
+            {'hp_': 6, 'hp': 2, 'enerRech_': 6, 'eleMas': 16},
+            {'hp_': 6, 'hp': 2, 'pyro_dmg_': 8, 'crit_': 8, 'enerRech_': 6},
+            {'hp_': 6, 'hp': 2, 'pyro_dmg_': 8, 'crit_': 8, 'enerRech_': 6, 'eleMas': 7},
+            {'hp_': 6, 'hp': 2, 'pyro_dmg_': 8, 'enerRech_': 6, 'eleMas': 16},
+            {'hp_': 6, 'hp': 2, 'electro_dmg_': 8, 'crit_': 8, 'enerRech_': 6},
+            {'hp_': 6, 'hp': 2, 'electro_dmg_': 8, 'crit_': 8, 'enerRech_': 6, 'eleMas': 7},
+            {'hp_': 6, 'hp': 2, 'electro_dmg_': 8, 'enerRech_': 6, 'eleMas': 16},
+            {'hp_': 6, 'hp': 2, 'cryo_dmg_': 8, 'crit_': 8, 'enerRech_': 6},
+            {'hp_': 6, 'hp': 2, 'cryo_dmg_': 8, 'crit_': 8, 'enerRech_': 6, 'eleMas': 7},
+            {'hp_': 6, 'hp': 2, 'cryo_dmg_': 8, 'enerRech_': 6, 'eleMas': 16},
+            {'hp_': 6, 'hp': 2, 'hydro_dmg_': 8, 'crit_': 8, 'enerRech_': 6},
+            {'hp_': 6, 'hp': 2, 'hydro_dmg_': 8, 'crit_': 8, 'enerRech_': 6, 'eleMas': 7},
+            {'hp_': 6, 'hp': 2, 'hydro_dmg_': 8, 'enerRech_': 6, 'eleMas': 16},
+            {'hp_': 6, 'hp': 2, 'dendro_dmg_': 8, 'crit_': 8, 'enerRech_': 6},
+            {'hp_': 6, 'hp': 2, 'dendro_dmg_': 8, 'crit_': 8, 'enerRech_': 6, 'eleMas': 7},
+            {'hp_': 6, 'hp': 2, 'dendro_dmg_': 8, 'enerRech_': 6, 'eleMas': 16},
+            {'hp_': 6, 'hp': 2, 'anemo_dmg_': 8, 'crit_': 8, 'enerRech_': 6},
+            {'hp_': 6, 'hp': 2, 'anemo_dmg_': 8, 'crit_': 8, 'enerRech_': 6, 'eleMas': 7},
+            {'hp_': 6, 'hp': 2, 'anemo_dmg_': 8, 'enerRech_': 6, 'eleMas': 16},
+            {'hp_': 6, 'hp': 2, 'geo_dmg_': 8, 'crit_': 8, 'enerRech_': 6},
+            {'hp_': 6, 'hp': 2, 'geo_dmg_': 8, 'crit_': 8, 'enerRech_': 6, 'eleMas': 7},
+            {'hp_': 6, 'hp': 2, 'geo_dmg_': 8, 'enerRech_': 6, 'eleMas': 16},
+            {'hp_': 6, 'hp': 2, 'physical_dmg_': 8, 'crit_': 8, 'enerRech_': 6},
+            {'hp_': 6, 'hp': 2, 'physical_dmg_': 8, 'crit_': 8, 'enerRech_': 6, 'eleMas': 7},
+            {'hp_': 6, 'hp': 2, 'physical_dmg_': 8, 'enerRech_': 6, 'eleMas': 16},
+
+            {'atk_': 6, 'atk': 2, 'crit_': 8, 'enerRech_': 6},
+            {'atk_': 6, 'atk': 2, 'crit_': 8, 'enerRech_': 6, 'eleMas': 7},
+            {'atk_': 6, 'atk': 2, 'enerRech_': 6, 'eleMas': 16},
+            {'atk_': 6, 'atk': 2, 'pyro_dmg_': 8, 'crit_': 8, 'enerRech_': 6},
+            {'atk_': 6, 'atk': 2, 'pyro_dmg_': 8, 'crit_': 8, 'enerRech_': 6, 'eleMas': 7},
+            {'atk_': 6, 'atk': 2, 'pyro_dmg_': 8, 'enerRech_': 6, 'eleMas': 16},
+            {'atk_': 6, 'atk': 2, 'electro_dmg_': 8, 'crit_': 8, 'enerRech_': 6},
+            {'atk_': 6, 'atk': 2, 'electro_dmg_': 8, 'crit_': 8, 'enerRech_': 6, 'eleMas': 7},
+            {'atk_': 6, 'atk': 2, 'electro_dmg_': 8, 'enerRech_': 6, 'eleMas': 16},
+            {'atk_': 6, 'atk': 2, 'cryo_dmg_': 8, 'crit_': 8, 'enerRech_': 6},
+            {'atk_': 6, 'atk': 2, 'cryo_dmg_': 8, 'crit_': 8, 'enerRech_': 6, 'eleMas': 7},
+            {'atk_': 6, 'atk': 2, 'cryo_dmg_': 8, 'enerRech_': 6, 'eleMas': 16},
+            {'atk_': 6, 'atk': 2, 'hydro_dmg_': 8, 'crit_': 8, 'enerRech_': 6},
+            {'atk_': 6, 'atk': 2, 'hydro_dmg_': 8, 'crit_': 8, 'enerRech_': 6, 'eleMas': 7},
+            {'atk_': 6, 'atk': 2, 'hydro_dmg_': 8, 'enerRech_': 6, 'eleMas': 16},
+            {'atk_': 6, 'atk': 2, 'dendro_dmg_': 8, 'crit_': 8, 'enerRech_': 6},
+            {'atk_': 6, 'atk': 2, 'dendro_dmg_': 8, 'crit_': 8, 'enerRech_': 6, 'eleMas': 7},
+            {'atk_': 6, 'atk': 2, 'dendro_dmg_': 8, 'enerRech_': 6, 'eleMas': 16},
+            {'atk_': 6, 'atk': 2, 'anemo_dmg_': 8, 'crit_': 8, 'enerRech_': 6},
+            {'atk_': 6, 'atk': 2, 'anemo_dmg_': 8, 'crit_': 8, 'enerRech_': 6, 'eleMas': 7},
+            {'atk_': 6, 'atk': 2, 'anemo_dmg_': 8, 'enerRech_': 6, 'eleMas': 16},
+            {'atk_': 6, 'atk': 2, 'geo_dmg_': 8, 'crit_': 8, 'enerRech_': 6},
+            {'atk_': 6, 'atk': 2, 'geo_dmg_': 8, 'crit_': 8, 'enerRech_': 6, 'eleMas': 7},
+            {'atk_': 6, 'atk': 2, 'geo_dmg_': 8, 'enerRech_': 6, 'eleMas': 16},
+            {'atk_': 6, 'atk': 2, 'physical_dmg_': 8, 'crit_': 8, 'enerRech_': 6},
+            {'atk_': 6, 'atk': 2, 'physical_dmg_': 8, 'crit_': 8, 'enerRech_': 6, 'eleMas': 7},
+            {'atk_': 6, 'atk': 2, 'physical_dmg_': 8, 'enerRech_': 6, 'eleMas': 16},
+
+            {'def_': 6, 'def': 2, 'crit_': 8, 'enerRech_': 6},
+            {'def_': 6, 'def': 2, 'crit_': 8, 'enerRech_': 6, 'eleMas': 7},
+            {'def_': 6, 'def': 2, 'enerRech_': 6, 'eleMas': 16},
+            {'def_': 6, 'def': 2, 'pyro_dmg_': 8, 'crit_': 8, 'enerRech_': 6},
+            {'def_': 6, 'def': 2, 'pyro_dmg_': 8, 'crit_': 8, 'enerRech_': 6, 'eleMas': 7},
+            {'def_': 6, 'def': 2, 'pyro_dmg_': 8, 'enerRech_': 6, 'eleMas': 16},
+            {'def_': 6, 'def': 2, 'electro_dmg_': 8, 'crit_': 8, 'enerRech_': 6},
+            {'def_': 6, 'def': 2, 'electro_dmg_': 8, 'crit_': 8, 'enerRech_': 6, 'eleMas': 7},
+            {'def_': 6, 'def': 2, 'electro_dmg_': 8, 'enerRech_': 6, 'eleMas': 16},
+            {'def_': 6, 'def': 2, 'cryo_dmg_': 8, 'crit_': 8, 'enerRech_': 6},
+            {'def_': 6, 'def': 2, 'cryo_dmg_': 8, 'crit_': 8, 'enerRech_': 6, 'eleMas': 7},
+            {'def_': 6, 'def': 2, 'cryo_dmg_': 8, 'enerRech_': 6, 'eleMas': 16},
+            {'def_': 6, 'def': 2, 'hydro_dmg_': 8, 'crit_': 8, 'enerRech_': 6},
+            {'def_': 6, 'def': 2, 'hydro_dmg_': 8, 'crit_': 8, 'enerRech_': 6, 'eleMas': 7},
+            {'def_': 6, 'def': 2, 'hydro_dmg_': 8, 'enerRech_': 6, 'eleMas': 16},
+            {'def_': 6, 'def': 2, 'dendro_dmg_': 8, 'crit_': 8, 'enerRech_': 6},
+            {'def_': 6, 'def': 2, 'dendro_dmg_': 8, 'crit_': 8, 'enerRech_': 6, 'eleMas': 7},
+            {'def_': 6, 'def': 2, 'dendro_dmg_': 8, 'enerRech_': 6, 'eleMas': 16},
+            {'def_': 6, 'def': 2, 'anemo_dmg_': 8, 'crit_': 8, 'enerRech_': 6},
+            {'def_': 6, 'def': 2, 'anemo_dmg_': 8, 'crit_': 8, 'enerRech_': 6, 'eleMas': 7},
+            {'def_': 6, 'def': 2, 'anemo_dmg_': 8, 'enerRech_': 6, 'eleMas': 16},
+            {'def_': 6, 'def': 2, 'geo_dmg_': 8, 'crit_': 8, 'enerRech_': 6},
+            {'def_': 6, 'def': 2, 'geo_dmg_': 8, 'crit_': 8, 'enerRech_': 6, 'eleMas': 7},
+            {'def_': 6, 'def': 2, 'geo_dmg_': 8, 'enerRech_': 6, 'eleMas': 16},
+            {'def_': 6, 'def': 2, 'physical_dmg_': 8, 'crit_': 8, 'enerRech_': 6},
+            {'def_': 6, 'def': 2, 'physical_dmg_': 8, 'crit_': 8, 'enerRech_': 6, 'eleMas': 7},
+            {'def_': 6, 'def': 2, 'physical_dmg_': 8, 'enerRech_': 6, 'eleMas': 16}
         ),
         'circlet': (
             {'hp_': 6, 'hp': 2, 'crit_': 8, 'enerRech_': 10},

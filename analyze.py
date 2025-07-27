@@ -103,18 +103,7 @@ def distro(artifacts, lvls=None, num_upgrades=None):
         for artifact, prob in seed:
             for upgrade, upgrade_prob in upgrades:
                 substats = find_sub(artifact, main)
-                # TODO: make this not disgusting
-                '''
-                for first, first_prob in _temp(upgrade[0]).items():
-                    # Do something
-                    for second, second_prob in _temp(upgrade[1]).items():
-                        # Do something
-                        for third, third_prob in _temp(upgrade[2]).items():
-                            # Do something
-                            for fourth, fourth_prob in _temp(upgrade[3]).items():
-                                # Do something
-                '''
-                
+                # TODO: make this not disgusting                
                 for first, first_prob in _temp(upgrade[0]).items():
                     first_temp = artifact.copy()
                     first_temp[substats[0]] += first
@@ -132,9 +121,6 @@ def distro(artifacts, lvls=None, num_upgrades=None):
                                 
         dist = np.array(dist, dtype=np.uint8)
         probs = np.array(probs)
-        # TODO: get rid of this bug check
-        if not np.isclose(sum(probs), 1):
-            raise ValueError
     else:
         try:
             _ = iter(lvls)
@@ -146,6 +132,64 @@ def distro(artifacts, lvls=None, num_upgrades=None):
             dist.append(temp_dist)
             probs.append(temp_probs)
 
+    return dist, probs
+
+def single_distro(artifacts):
+    if artifacts.ndim == 1:
+        # Rename to "artifact" to make things less confusing
+        artifact = artifacts
+        # TODO: clean this shit up
+        if np.count_nonzero(artifact) == 4:
+            sub_probs = SUB_PROBS.copy()
+            sub_probs[np.nonzero(artifact)[0]] = 0
+            sub_probs /= np.sum(sub_probs)
+            
+            num_possibilities = np.count_nonzero(sub_probs) * 4
+            dist = np.tile(artifact, (num_possibilities + 1, 1))
+            probs = np.zeros((num_possibilities + 1), dtype=float)
+            
+            dist = np.tile(artifact, (num_possibilities + 1, 1))
+            
+            nz_mask = sub_probs != 0
+            nz_idx  = np.nonzero(nz_mask)[0]           # shape (M,)
+            M       = nz_idx.size
+
+            # 2. build row and column indices for dist update
+            #    rows: for each i in [0..M-1], rows = 1 + 4*i + [0,1,2,3]
+            i = np.arange(M)
+            j = np.arange(4, dtype=np.uint8)
+            rows = 1 + 4*i[:, None] + j               # shape (M,4)
+            cols = nz_idx[:, None]                    # shape (M,1)
+
+            # 3. add j+7 to dist at those positions in one shot
+            dist[rows, cols] += (j + 7)               # broadcasts to (M,4)
+            probs[1:] = np.repeat(sub_probs[sub_probs != 0], 4) / 4
+            
+        else:
+            dist = np.tile(artifact, (17, 1))
+            probs = np.full(17, 1/16, dtype=float)
+            probs[0] = 0
+            
+            nz_idx  = find_sub(artifact)           # shape (M,)
+            M       = nz_idx.size
+
+            # 2. build row and column indices for dist update
+            #    rows: for each i in [0..M-1], rows = 1 + 4*i + [0,1,2,3]
+            i = np.arange(M)
+            j = np.arange(4, dtype=np.uint8)
+            rows = 1 + 4*i[:, None] + j               # shape (M,4)
+            cols = nz_idx[:, None]                    # shape (M,1)
+
+            # 3. add j+7 to dist at those positions in one shot
+            dist[rows, cols] += (j + 7)               # broadcasts to (M,4)
+    else:
+        dist = []
+        probs = []
+        for artifact in artifacts:
+            temp_dist, temp_probs = single_distro(artifact)
+            dist.append(temp_dist)
+            probs.append(temp_probs)
+            
     return dist, probs
 
 def sample_upgrade(artifact, samples, num_upgrades=None, lvl=None, rng=None, seed=None):
@@ -169,8 +213,9 @@ def sample_upgrade(artifact, samples, num_upgrades=None, lvl=None, rng=None, see
         current_subs = find_sub(artifact)
         new_subs = rng.choice(19, p=sub_probs, size=samples)
         #subs = np.hstack((np.tile(current_subs, (samples, 1)), new_subs.reshape((-1, 1))))
-        # TODO: see if you can "choice" over each row of a 2D array.
-        # If so, combine subs and don't use the weird override method.
+        # TODO: see if combining current and new subs together and
+        # choosing from each row is faster. Pro: No weird overriding.
+        # Con: Creates a 2D array of choices instead of 2 1D arrays.
 
         # Add the new substats
         rows = np.arange(samples)

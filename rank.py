@@ -12,106 +12,6 @@ def rank_value(artifacts, lvls, persist, targets, change=True, k=2, num_trials=1
             lvls = 0
         lvls = np.full(num_artifacts, lvls)
     
-    if rng is None:
-        rng = np.random.default_rng(seed)
-    
-    if len(persist) == 0:
-        persist['changed'] = -1
-        distributions, probs = distro(artifacts, lvls)
-        maxed = np.zeros((num_artifacts, num_trials, 19), dtype=np.uint8)
-        for i in range(num_artifacts):
-            maxed[i] = rng.choice(distributions[i], p=probs[i], size=num_trials)
-        persist['maxed'] = maxed
-    elif change:
-        changed = persist['changed']
-        distributions, probs = distro(artifacts[changed], lvls[changed])
-        persist['maxed'][changed] = rng.choice(distributions, p=probs, size=num_trials)
-        
-    changed = persist['changed']
-    maxed = persist['maxed']
-    #changed, maxed = persist['changed'], persist['maxed']
-    relevance = np.zeros(num_artifacts, dtype=float)
-    
-    if num_artifacts <= k:
-        relevance[:] = num_trials
-        for i in range(num_artifacts):
-            if lvls[i] == 20:
-                if change:
-                    relevance[i] = 0
-            else:
-                relevance[i] /= MAX_REQ_EXP[lvls[i]]
-                #relevance[i] /= UPGRADE_REQ_EXP[lvls[i]]
-        persist['changed'] = np.argmax(relevance)
-        return relevance
-    
-    for i in range(num_trials):
-        #maxed = np.zeros((num_artifacts, 19), dtype=np.uint8)
-        #for i in range(num_artifacts):
-        #    maxed[i] = rng.choice(distributions[i], p=probs[i])
-        if type(targets) == dict or (type(targets) == np.ndarray and targets.ndim == 1):
-            final_scores = score(maxed[:, i], targets)
-            #final_scores[lvls == 20] = 0
-            if k == 1:
-                maximum = np.max(final_scores)
-                best = np.where(final_scores == maximum)[0]
-                relevance[best] += 1 / len(best)
-            else:
-                # TODO: this seems really slow
-                threshold = np.sort(final_scores)[-k]
-                relevance[final_scores > threshold] += 1
-                asdf = np.where(final_scores == threshold)[0]
-                relevance[asdf] += 1 / len(asdf)
-                #best = np.argpartition(final_scores, -k)[-k:]
-        else:
-            for target in targets:
-                final_scores = score(maxed[:, i], target)
-                if k == 1:
-                    maximum = np.max(final_scores)
-                    best = np.where(final_scores == maximum)[0]
-                    relevance[best] += 1 / len(best)
-                else:
-                    # TODO: this seems really slow
-                    threshold = np.sort(final_scores)[-k]
-                    relevance[final_scores > threshold] += 1
-                    asdf = np.where(final_scores == threshold)[0]
-                    relevance[asdf] += 1 / len(asdf)
-                # each target is weighted equally. Don't divide by the
-                # number of targets, or else having more targets would
-                # make each target less valuable, which isn't the case.
-                
-    for i in range(num_artifacts):
-        if lvls[i] == 20:
-            if change:
-                relevance[i] = 0
-        else:
-            relevance[i] /= MAX_REQ_EXP[lvls[i]]
-            #relevance[i] /= UPGRADE_REQ_EXP[lvls[i]]
-            #raise ValueError
-        
-    persist['changed'] = np.argmax(relevance)
-    #return relevance
-    #print_artifact(artifacts[np.argmax(relevance)])
-    if relevance[persist['changed']] == 0 and change:
-        print('max was 0')
-        distributions, probs = distro(artifacts, lvls)
-        maxed = np.zeros((num_artifacts, num_trials, 19), dtype=np.uint8)
-        for i in range(num_artifacts):
-            maxed[i] = rng.choice(distributions[i], p=probs[i], size=num_trials)
-        persist['maxed'] = maxed
-        return rank_value(artifacts, lvls, persist, targets, change, k, num_trials, rng)
-    
-    return relevance
-
-def rank_temp(artifacts, lvls, persist, targets, change=True, k=2, num_trials=1000, rng=None, seed=None):
-    num_artifacts = len(artifacts)
-    try:
-        _ = iter(lvls)
-        lvls = np.array(lvls)
-    except:
-        if lvls is None:
-            lvls = 0
-        lvls = np.full(num_artifacts, lvls)
-    
     match targets:
         case dict():
             targets = vectorize(targets).reshape((1, -1))
@@ -213,7 +113,7 @@ def rank_temp(artifacts, lvls, persist, targets, change=True, k=2, num_trials=10
             persist['maxed'][i] = sample_upgrade(artifacts[i], num_trials, lvl=lvls[i], rng=rng)
         persist['targets'] = None
         persist['changed'] = -1
-        return rank_temp(artifacts, lvls, persist, targets, change, k, num_trials, rng)
+        return rank_value(artifacts, lvls, persist, targets, change, k, num_trials, rng)
         
     return relevance
 
@@ -434,7 +334,7 @@ if __name__ == '__main__':
     start = time.time()
     filename = 'artifacts/genshinData_GOOD_2025_07_26_19_37.json'
     artifacts, slots, rarities, lvls, sets = load(filename)
-    relevant = rate(artifacts, slots, rarities, lvls, sets, rank_temp, num=100)
+    relevant = rate(artifacts, slots, rarities, lvls, sets, rank_value, num=100)
     
     count = 0
     

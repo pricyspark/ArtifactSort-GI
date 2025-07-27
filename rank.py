@@ -209,13 +209,12 @@ def rank_temp(artifacts, lvls, persist, targets, change=True, k=2, num_trials=10
     #print_artifact(artifacts[np.argmax(relevance)])
     if relevance[persist['changed']] == 0 and change:
         print('max was 0')
-        distributions, probs = distro(artifacts, lvls)
-        maxed = np.zeros((num_artifacts, num_trials, 19), dtype=np.uint8)
         for i in range(num_artifacts):
-            maxed[i] = rng.choice(distributions[i], p=probs[i], size=num_trials)
-        persist['maxed'] = maxed
-        return rank_value(artifacts, lvls, persist, targets, change, k, num_trials, rng)
-    
+            persist['maxed'][i] = sample_upgrade(artifacts[i], num_trials, lvl=lvls[i], rng=rng)
+        persist['targets'] = None
+        persist['changed'] = -1
+        return rank_temp(artifacts, lvls, persist, targets, change, k, num_trials, rng)
+        
     return relevance
 
 def rank_estimate(artifacts, lvls, persist, targets, change=True, k=1, num_trials=30, rng=None, seed=None):
@@ -395,9 +394,8 @@ def rank_estimate(artifacts, lvls, persist, targets, change=True, k=1, num_trial
 
 if __name__ == '__main__':
     '''
-    '''
     start = time.time()
-    num = 10
+    num = 30
     totals = np.zeros(num)
     time_avg = np.zeros(num)
     #targets = {'atk_': 6, 'atk': 2, 'crit_': 8}
@@ -431,10 +429,10 @@ if __name__ == '__main__':
     print(time_avg[-1])
     end = time.time()
     print(end - start)
-    
     '''
+    
     start = time.time()
-    filename = 'artifacts/genshinData_GOOD_2025_07_19_23_43.json'
+    filename = 'artifacts/genshinData_GOOD_2025_07_26_19_37.json'
     artifacts, slots, rarities, lvls, sets = load(filename)
     relevant = rate(artifacts, slots, rarities, lvls, sets, rank_temp, num=100)
     
@@ -443,4 +441,5 @@ if __name__ == '__main__':
     visualize(relevant, artifacts, slots, sets, lvls)
     end = time.time()
     print(end - start)
+    '''
     '''

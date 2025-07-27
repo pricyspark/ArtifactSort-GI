@@ -335,7 +335,7 @@ def simulate_exp(artifacts, lvls, targets, fun, mains=None):
     print()
     artifacts = original_artifacts.copy()
     #distros = distro(artifacts, lvls)
-    persist = []
+    persist = {}
     
     exp = 0
     
@@ -444,6 +444,8 @@ def choose_samples(x, y, qid):
     return x[idxs], y[idxs], qid[idxs]
 
 def rate(artifacts, slots, rarities, lvls, sets, ranker, num=None, threshold=None):
+    # TODO: change persist to persist_artifact and persist_meta, for
+    # more intuitive control over things like set masking
     relevance = np.zeros((len(artifacts), 5 * (1 + len(SETS))), dtype=float)
     count = 0
     for slot in range(5):
@@ -458,17 +460,15 @@ def rate(artifacts, slots, rarities, lvls, sets, ranker, num=None, threshold=Non
         
         for setKey in range(len(SETS)):
             set_mask = sets[slot_mask] == setKey
+            if np.all(set_mask == 0):
+                continue
             #new_mask = np.logical_and(mask, sets == setKey)
             original_idxs = np.where(slot_mask)[0][set_mask]
             set_artifacts = slot_artifacts[set_mask]
             set_lvls = slot_lvls[set_mask]
-            if len(set_artifacts) == 0:
-                continue
             set_persist = {}
             for a, b in persist.items():
                 try:
-                    poij = len(b)
-                    qwer = np.where(set_mask)[0]
                     #temp = asdf[set_mask]
                     if type(b) == np.ndarray:
                         temp = b[set_mask]
@@ -477,7 +477,7 @@ def rate(artifacts, slots, rarities, lvls, sets, ranker, num=None, threshold=Non
                     set_persist[a] = temp
                     #set_persist.append(temp)
                 except Exception as e:
-                    set_persist[a] = None
+                    set_persist[a] = b
                     #set_persist.append(None)
             #set_persist = [asdf[np.where(set_mask)[0]] for asdf in persist]
             relevance[original_idxs, count] = ranker(set_artifacts, set_lvls, set_persist, SET_TARGETS[SETS[setKey]][SLOTS[slot]], change=False, num_trials=1000)

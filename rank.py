@@ -51,11 +51,10 @@ def rank_value(artifacts, lvls, persist, targets, change=True, k=2, num_trials=1
         persist['maxed'][changed] = sample_upgrade(artifacts[changed], num_trials, lvl=lvls[changed], rng=rng)
         persist['scores'][changed] = score(persist['maxed'][changed], targets.T)
         
-    changed, maxed, scores = persist['changed'], persist['maxed'], persist['scores']
-    relevance = np.zeros(num_artifacts, dtype=float)
+    scores = persist['scores']
     
     if num_artifacts <= k:
-        relevance[:] = num_trials
+        relevance = np.full((num_artifacts), num_trials, dtype=float)
         relevance /= np.where(lvls == 20, 1, MAX_REQ_EXP[lvls])
         
         if change:
@@ -190,11 +189,12 @@ def rank_entropy(artifacts, lvls, persist, targets, change=True, k=2, num_trials
                 distros_scores.append(None)
                 continue
             
-            distros_scores.append(np.zeros((len(distro_maxed), num_trials, num_targets), dtype=float))
-            
+            distros_scores.append(score(distro_maxed, targets.T))
+            '''
             for maxed in distro_maxed:
                 for j in range(num_targets):
                     distros_scores[-1][:, :, j] = score(maxed, targets[j])
+            '''
         
         persist['distros_scores'] = distros_scores
                         
@@ -214,10 +214,39 @@ def rank_entropy(artifacts, lvls, persist, targets, change=True, k=2, num_trials
             for i, upgrade in enumerate(upgrades):
                 persist['distros_maxed'][changed][i] = sample_upgrade(upgrade, num_trials, lvl=next_lvl, rng=rng)
                 
-            for maxed in persist['distros_maxed'][changed]:
-                for i in range(num_trials):
-                    for j in range(num_targets):
-                        persist['distros_scores'][:, i, j] = score(maxed[:, i], targets[j])
+            distro_maxed = persist['distros_maxed'][changed]
+            persist['distros_scores'][changed] = score(distro_maxed, targets.T)
+            
+    scores, distros_scores = persist['scores'], persist['distros_scores']
+    
+    if k == 1:
+        # maximum per (i, j)
+        cutoff = scores.max(axis=0)                    # shape (num_trials, num_targets)
+    else:
+        # k‑th largest via partition
+        cutoff = np.partition(scores, -k, axis=0)[-k]  # same shape
+
+    # 2) Mask of strictly above cutoff
+    above = scores > cutoff[None, ...]                 # shape (n_items, num_trials, num_targets)
+
+    # 3) Mask of exactly equal to cutoff
+    eq    = scores == cutoff[None, ...]                # same shape
+
+    # 4) Count ties so we can split fractional credit
+    tie_counts = eq.sum(axis=0)                        # shape (num_trials, num_targets)
+
+    # 5) Sum up:
+    #    - 1 point for every “above”
+    #    - 1/tie_counts for every “tie”
+    relevance = above.sum(axis=(1, 2)).astype(float)
+    relevance += (eq / tie_counts[None, ...]).sum(axis=(1, 2))
+    
+    print(relevance)
+    relevance_entropy = entropy(relevance)
+    print(relevance_entropy)
+    '''
+    
+    '''
                         
     raise NotImplementedError
     return None
@@ -399,6 +428,7 @@ def rank_estimate(artifacts, lvls, persist, targets, change=True, k=1, num_trial
 
 if __name__ == '__main__':
     '''
+    '''
     start = time.time()
     num = 10
     totals = np.zeros(num)
@@ -423,7 +453,7 @@ if __name__ == '__main__':
 
     for i in range(num):
         artifacts = generate('flower', size=200, seed=i)
-        totals[i] = (simulate_exp(artifacts, np.zeros(200, dtype=int), targets, rank_value))
+        totals[i] = (simulate_exp(artifacts, np.zeros(200, dtype=int), targets, rank_entropy))
         print(i, totals[i])
         print()
 
@@ -434,8 +464,8 @@ if __name__ == '__main__':
     print(time_avg[-1])
     end = time.time()
     print(end - start)
-    '''
     
+    '''
     start = time.time()
     filename = 'artifacts/genshinData_GOOD_2025_07_26_19_37.json'
     artifacts, slots, rarities, lvls, sets = load(filename)
@@ -446,5 +476,4 @@ if __name__ == '__main__':
     visualize(relevant, artifacts, slots, sets, lvls)
     end = time.time()
     print(end - start)
-    '''
     '''

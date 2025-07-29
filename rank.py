@@ -3,7 +3,37 @@ from analyze import *
 import time
 #from scipy.stats import entropy
 
-def rank_value(artifacts, lvls, persist, targets, CHANGE=True, k=2, num_trials=1000, rng=None, seed=None):
+'''
+def calc_relevance(scores, k):
+    if k == 1:
+        # maximum per (i, j)
+        cutoff = scores.max(axis=0)                    # shape (num_trials, num_targets)
+    else:
+        # k‑th largest via partition
+        cutoff = np.partition(scores, -k, axis=0)[-k]  # same shape
+
+    # 2) Mask of strictly above cutoff
+    above = scores > cutoff[None, ...]                 # shape (n_items, num_trials, num_targets)
+    above_count = above.sum(axis=0)
+    leftover = k - above_count
+
+    # 3) Mask of exactly equal to cutoff
+    eq    = scores == cutoff[None, ...]                # same shape
+
+    # 4) Count ties so we can split fractional credit
+    tie_counts = eq.sum(axis=0)                        # shape (num_trials, num_targets)
+    frac_per_tie = np.where(tie_counts > 0, leftover / tie_counts, 0)
+    eq_contrib = eq * frac_per_tie[None, ...]
+
+    # 5) Sum up:
+    #    - 1 point for every “above”
+    #    - 1/tie_counts for every “tie”
+    relevance = above.sum(axis=1).astype(float)
+    relevance += eq_contrib.sum(axis=1)
+    return relevance
+'''
+
+def rank_value(artifacts, lvls, persist, targets, CHANGE=True, k=1, num_trials=1000, rng=None, seed=None):
     num_artifacts = len(artifacts)
     try:
         _ = iter(lvls)
@@ -86,6 +116,7 @@ def rank_value(artifacts, lvls, persist, targets, CHANGE=True, k=2, num_trials=1
     #    - 1/tie_counts for every “tie”
     relevance = above.sum(axis=(1, 2)).astype(float)
     relevance += eq_contrib.sum(axis=(1, 2))
+    # relevance = np.sum(calc_relevance(scores, k), axis=1) # This extra function call and sum adds non-negligible overhead
     relevance /= np.where(lvls == 20, 1, MAX_REQ_EXP[lvls])
     if CHANGE:
         relevance[lvls == 20] = 0
@@ -104,7 +135,7 @@ def rank_value(artifacts, lvls, persist, targets, CHANGE=True, k=2, num_trials=1
         
     return relevance
 
-def rank_entropy(artifacts, lvls, persist, targets, CHANGE=True, k=2, num_trials=1000, rng=None, seed=None):
+def rank_entropy(artifacts, lvls, persist, targets, CHANGE=True, k=1, num_trials=100, rng=None, seed=None):
     num_artifacts = len(artifacts)
     try:
         _ = iter(lvls)
@@ -133,16 +164,6 @@ def rank_entropy(artifacts, lvls, persist, targets, CHANGE=True, k=2, num_trials
         
     if len(persist) == 0:
         
-        '''
-        changed
-        maxed
-        distros
-        distros_maxed
-        scores
-        distros_scores
-        targets
-        '''
-        
         maxed = np.zeros((num_artifacts, num_trials, 19), dtype=np.uint8)
         for i in range(num_artifacts):
             maxed[i] = sample_upgrade(artifacts[i], num_trials, lvl=lvls[i], rng=rng)
@@ -155,7 +176,7 @@ def rank_entropy(artifacts, lvls, persist, targets, CHANGE=True, k=2, num_trials
                 distros_maxed.append(None)
                 continue
             
-            next_lvl = 4 * (lvls[i] // 4 + 1)
+            next = next_lvl(lvls[i])
             
             upgrades, probs = single_distro(artifact)
             
@@ -163,7 +184,7 @@ def rank_entropy(artifacts, lvls, persist, targets, CHANGE=True, k=2, num_trials
             distros_maxed.append(np.zeros((len(upgrades), num_trials, 19), dtype=np.uint8))
             
             for j, upgrade in enumerate(upgrades):
-                distros_maxed[-1][j] = sample_upgrade(upgrade, num_trials, lvl=next_lvl, rng=rng)
+                distros_maxed[-1][j] = sample_upgrade(upgrade, num_trials, lvl=next, rng=rng)
                 
         persist['changed'] = -1
         persist['maxed'] = maxed
@@ -183,11 +204,6 @@ def rank_entropy(artifacts, lvls, persist, targets, CHANGE=True, k=2, num_trials
                 continue
             
             distros_scores.append(score(distro_maxed, targets.T))
-            '''
-            for maxed in distro_maxed:
-                for j in range(num_targets):
-                    distros_scores[-1][:, :, j] = score(maxed, targets[j])
-            '''
         
         persist['distros_scores'] = distros_scores
                         
@@ -201,7 +217,7 @@ def rank_entropy(artifacts, lvls, persist, targets, CHANGE=True, k=2, num_trials
             persist['distros_maxed'][changed] = None
             persist['distros_scores'][changed] = None
         else:
-            next_lvl = 4 * (lvls[changed] // 4 + 1)
+            next = next_lvl(lvls[changed])
             
             upgrades, probs = single_distro(artifacts[changed])
             persist['distros'][changed] = (upgrades, probs)
@@ -212,7 +228,7 @@ def rank_entropy(artifacts, lvls, persist, targets, CHANGE=True, k=2, num_trials
                 persist['distros_maxed'][changed] = np.zeros((len(upgrades), num_trials, 19), dtype=np.uint8)
 
             for i, upgrade in enumerate(upgrades):
-                persist['distros_maxed'][changed][i] = sample_upgrade(upgrade, num_trials, lvl=next_lvl, rng=rng)
+                persist['distros_maxed'][changed][i] = sample_upgrade(upgrade, num_trials, lvl=next, rng=rng)
                 
             persist['distros_scores'][changed] = score(persist['distros_maxed'][changed], targets.T)
             
@@ -264,6 +280,7 @@ def rank_entropy(artifacts, lvls, persist, targets, CHANGE=True, k=2, num_trials
     for i in range(num_targets):
         current_entropies[i] = entropy(relevance[:, i])
     
+    temp_check = True
     information_gain = np.tile(current_entropies, (num_artifacts, 1))
     for i, artifact in enumerate(artifacts):
         if lvls[i] == 20:
@@ -273,36 +290,52 @@ def rank_entropy(artifacts, lvls, persist, targets, CHANGE=True, k=2, num_trials
         probs = distros[i][1]
         temp = scores[i].copy()
         
+        scores[i] = 0
+        if k == 1:
+            base_cutoff = scores.max(axis=0)
+        else:
+            base_cutoff = np.partition(scores, -k, axis=0)[-k]
+
+        above = scores > base_cutoff[None, ...]
+        above_count = above.sum(axis=0)
+        leftover = k - above_count
+
+        eq    = scores == base_cutoff[None, ...]
+
+        tie_counts = eq.sum(axis=0)
+        frac_per_tie = np.where(tie_counts > 0, leftover / tie_counts, 0)
+        eq_contrib = eq * frac_per_tie[None, ...]
+        base_relevance = above.sum(axis=1).astype(float)
+        base_relevance += eq_contrib.sum(axis=1)
+        
+        base_ent = entropy(base_relevance, axis=0)
+        
+        
         for upgrade, prob in zip(distros_scores[i], probs):
             if prob == 0:
                 continue
             
-            scores[i] = upgrade
+            temp_check = False
+            if not np.any(upgrade > base_cutoff):
+                information_gain[i] -= prob * base_ent
+                continue
+            
+            scores[i] = upgrade # (num_trials, num_targets)
             
             if k == 1:
-                # maximum per (i, j)
-                cutoff = scores.max(axis=0)                    # shape (num_trials, num_targets)
+                cutoff = scores.max(axis=0)
             else:
-                # k‑th largest via partition
-                cutoff = np.partition(scores, -k, axis=0)[-k]  # same shape
+                cutoff = np.partition(scores, -k, axis=0)[-k]
 
-            # 2) Mask of strictly above cutoff
-            above = scores > cutoff[None, ...]                 # shape (n_items, num_trials, num_targets)
+            above = scores > cutoff[None, ...]
             above_count = above.sum(axis=0)
             leftover = k - above_count
 
-            # 3) Mask of exactly equal to cutoff
-            eq    = scores == cutoff[None, ...]                # same shape
+            eq    = scores == cutoff[None, ...]
 
-            # 4) Count ties so we can split fractional credit
-            tie_counts = eq.sum(axis=0)                        # shape (num_trials, num_targets)
+            tie_counts = eq.sum(axis=0)
             frac_per_tie = np.where(tie_counts > 0, leftover / tie_counts, 0)
             eq_contrib = eq * frac_per_tie[None, ...]
-            
-
-            # 5) Sum up:
-            #    - 1 point for every “above”
-            #    - 1/tie_counts for every “tie”
             relevance = above.sum(axis=1).astype(float)
             relevance += eq_contrib.sum(axis=1)
             
@@ -312,7 +345,22 @@ def rank_entropy(artifacts, lvls, persist, targets, CHANGE=True, k=2, num_trials
         #print(info_gain[i])
         scores[i] = temp
     
+    information_gain[np.isclose(information_gain, 0)] = 0
     information_gain[information_gain < 0] = 0
+    
+    if temp_check == (np.max(information_gain) == 0):
+        print('match')
+    else:
+        print('dont match')
+        print(temp_check)
+        print(np.max(information_gain) == 0)
+        print(information_gain)
+    
+    if np.max(information_gain) == 0:
+        print('qpweoifhjap')
+        persist = {}
+        return rank_entropy(artifacts, lvls, persist, targets, CHANGE, k, num_trials * 2, rng)
+    
     relevance = np.sum(information_gain, axis=1)
     
     if np.sum(information_gain) == 0:
@@ -530,8 +578,8 @@ if __name__ == '__main__':
     )
 
     for i in range(num):
-        artifacts = generate('flower', size=20, seed=i)
-        totals[i] = (simulate_exp(artifacts, np.zeros(20, dtype=int), targets, rank_entropy))
+        artifacts = generate('flower', size=200, seed=i)
+        totals[i] = (simulate_exp(artifacts, np.zeros(200, dtype=int), targets, rank_value))
         print(i, totals[i])
         print()
 
@@ -547,7 +595,7 @@ if __name__ == '__main__':
     start = time.time()
     filename = 'artifacts/genshinData_GOOD_2025_07_26_19_37.json'
     artifacts, slots, rarities, lvls, sets = load(filename)
-    relevant = rate(artifacts, slots, rarities, lvls, sets, rank_entropy, num=100)
+    relevant = rate(artifacts, slots, rarities, lvls, sets, rank_value, num=100)
     
     count = 0
     

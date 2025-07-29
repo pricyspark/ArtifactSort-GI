@@ -3,7 +3,7 @@ from analyze import *
 import time
 #from scipy.stats import entropy
 
-def rank_value(artifacts, lvls, persist, targets, change=True, k=2, num_trials=1000, rng=None, seed=None):
+def rank_value(artifacts, lvls, persist, targets, CHANGE=True, k=2, num_trials=1000, rng=None, seed=None):
     num_artifacts = len(artifacts)
     try:
         _ = iter(lvls)
@@ -57,7 +57,7 @@ def rank_value(artifacts, lvls, persist, targets, change=True, k=2, num_trials=1
         relevance = np.full((num_artifacts), num_trials, dtype=float)
         relevance /= np.where(lvls == 20, 1, MAX_REQ_EXP[lvls])
         
-        if change:
+        if CHANGE:
             persist['changed'] = np.argmax(relevance)
         return relevance
     
@@ -80,23 +80,6 @@ def rank_value(artifacts, lvls, persist, targets, change=True, k=2, num_trials=1
     tie_counts = eq.sum(axis=0)                        # shape (num_trials, num_targets)
     frac_per_tie = np.where(tie_counts > 0, leftover / tie_counts, 0)
     eq_contrib = eq * frac_per_tie[None, ...]
-    
-    '''
-    temp = above.sum(axis=1) + eq_contrib.sum(axis=1)
-    
-    if np.max(temp) > k / 2:
-        flat_idx = temp.argmax()
-        row_idx = flat_idx // temp.shape[1]
-        if lvls[row_idx] != 20:
-            if change:
-                persist['changed'] = row_idx
-            print()
-            print('asdf')
-            print(row_idx)
-            print_artifact(artifacts[row_idx])
-            print()
-            return row_idx
-    '''
 
     # 5) Sum up:
     #    - 1 point for every “above”
@@ -104,34 +87,24 @@ def rank_value(artifacts, lvls, persist, targets, change=True, k=2, num_trials=1
     relevance = above.sum(axis=(1, 2)).astype(float)
     relevance += eq_contrib.sum(axis=(1, 2))
     relevance /= np.where(lvls == 20, 1, MAX_REQ_EXP[lvls])
-    if change:
+    if CHANGE:
         relevance[lvls == 20] = 0
-    '''
-    for i in range(num_artifacts):
-        if lvls[i] == 20:
-            if change:
-                relevance[i] = 0
-        else:
-            relevance[i] /= MAX_REQ_EXP[lvls[i]]
-            #relevance[i] /= UPGRADE_REQ_EXP[lvls[i]]
-            #raise ValueError
-    '''
         
-    if change:
+    if CHANGE:
         persist['changed'] = np.argmax(relevance)
     #return relevance
     #print_artifact(artifacts[np.argmax(relevance)])
-    if relevance[persist['changed']] == 0 and change:
+    if relevance[persist['changed']] == 0 and CHANGE:
         print('max was 0')
         for i in range(num_artifacts):
             persist['maxed'][i] = sample_upgrade(artifacts[i], num_trials, lvl=lvls[i], rng=rng)
         persist['targets'] = None
         persist['changed'] = -1
-        return rank_value(artifacts, lvls, persist, targets, change, k, num_trials, rng)
+        return rank_value(artifacts, lvls, persist, targets, CHANGE, k, num_trials, rng)
         
     return relevance
 
-def rank_entropy(artifacts, lvls, persist, targets, change=True, k=2, num_trials=100, rng=None, seed=None):
+def rank_entropy(artifacts, lvls, persist, targets, CHANGE=True, k=2, num_trials=1000, rng=None, seed=None):
     num_artifacts = len(artifacts)
     try:
         _ = iter(lvls)
@@ -233,11 +206,15 @@ def rank_entropy(artifacts, lvls, persist, targets, change=True, k=2, num_trials
             upgrades, probs = single_distro(artifacts[changed])
             persist['distros'][changed] = (upgrades, probs)
             
+            distro_maxed = persist['distros_maxed'][changed]
+            if len(distro_maxed) != len(upgrades):
+                print('reshape')
+                persist['distros_maxed'][changed] = np.zeros((len(upgrades), num_trials, 19), dtype=np.uint8)
+
             for i, upgrade in enumerate(upgrades):
                 persist['distros_maxed'][changed][i] = sample_upgrade(upgrade, num_trials, lvl=next_lvl, rng=rng)
                 
-            distro_maxed = persist['distros_maxed'][changed]
-            persist['distros_scores'][changed] = score(distro_maxed, targets.T)
+            persist['distros_scores'][changed] = score(persist['distros_maxed'][changed], targets.T)
             
     scores, distros, distros_scores = persist['scores'], persist['distros'], persist['distros_scores']
     
@@ -271,29 +248,28 @@ def rank_entropy(artifacts, lvls, persist, targets, change=True, k=2, num_trials
         flat_idx = temp.argmax()
         row_idx = flat_idx // temp.shape[1]
         if lvls[row_idx] != 20:
-            if change:
+            if CHANGE:
                 persist['changed'] = row_idx
             print()
-            print('asdf')
+            print('asdf', flat_idx % temp.shape[1])
             print(row_idx)
             print_artifact(artifacts[row_idx])
             print()
             return row_idx
     
-    relevance = above.sum(axis=(1, 2)).astype(float)
-    relevance += eq_contrib.sum(axis=(1, 2))
+    relevance = above.sum(axis=1).astype(float)
+    relevance += eq_contrib.sum(axis=1)
     
-    print(relevance)
-    print(np.sum(relevance))
-    current_entropy = entropy(relevance)
-    print(current_entropy)
+    current_entropies = np.zeros(num_targets, dtype=float)
+    for i in range(num_targets):
+        current_entropies[i] = entropy(relevance[:, i])
     
-    info_gain = np.zeros(num_artifacts, dtype=float) - 10
+    information_gain = np.tile(current_entropies, (num_artifacts, 1))
     for i, artifact in enumerate(artifacts):
         if lvls[i] == 20:
+            information_gain[i] = -10
             continue
         
-        potential_entropy = 0
         probs = distros[i][1]
         temp = scores[i].copy()
         
@@ -327,26 +303,33 @@ def rank_entropy(artifacts, lvls, persist, targets, change=True, k=2, num_trials
             # 5) Sum up:
             #    - 1 point for every “above”
             #    - 1/tie_counts for every “tie”
-            relevance = above.sum(axis=(1, 2)).astype(float)
-            relevance += eq_contrib.sum(axis=(1, 2))
-            upgrade_entropy = entropy(relevance)
-            potential_entropy += prob * upgrade_entropy
+            relevance = above.sum(axis=1).astype(float)
+            relevance += eq_contrib.sum(axis=1)
             
-        info_gain[i] = current_entropy - potential_entropy
+            for j in range(num_targets):
+                information_gain[i, j] -= prob * entropy(relevance[:, j])
+            
         #print(info_gain[i])
         scores[i] = temp
     
-    if change:
-        changed = np.argmax(info_gain)
+    information_gain[information_gain < 0] = 0
+    relevance = np.sum(information_gain, axis=1)
+    
+    if np.sum(information_gain) == 0:
+        print('qpweoifhjap')
+    
+    if CHANGE:
+        changed = np.argmax(relevance)
         persist['changed'] = changed
         print()
         print(changed)
         print_artifact(artifacts[changed])
+        print(information_gain[changed])
         print()
     
-    return info_gain
+    return changed
     
-def rank_estimate(artifacts, lvls, persist, targets, change=True, k=1, num_trials=30, rng=None, seed=None):
+def rank_estimate(artifacts, lvls, persist, targets, CHANGE=True, k=1, num_trials=30, rng=None, seed=None):
     # 
     num_artifacts = len(artifacts)
     if num_artifacts == 0:
@@ -394,7 +377,7 @@ def rank_estimate(artifacts, lvls, persist, targets, change=True, k=1, num_trial
         # numpy array corresponding to the probability of each single
         # upgrade.
         persist[2] = single_maxed
-    elif change:
+    elif CHANGE:
         changed = persist[0]
         distributions, probs = distro(artifacts[changed], lvls[changed])
         persist[1][changed] = rng.choice(distributions, p=probs, size=num_trials)
@@ -525,7 +508,7 @@ if __name__ == '__main__':
     '''
     '''
     start = time.time()
-    num = 100
+    num = 10
     totals = np.zeros(num)
     time_avg = np.zeros(num)
     #targets = {'atk_': 6, 'atk': 2, 'crit_': 8}
@@ -547,8 +530,8 @@ if __name__ == '__main__':
     )
 
     for i in range(num):
-        artifacts = generate('flower', size=200, seed=i)
-        totals[i] = (simulate_exp(artifacts, np.zeros(200, dtype=int), targets, rank_entropy))
+        artifacts = generate('flower', size=20, seed=i)
+        totals[i] = (simulate_exp(artifacts, np.zeros(20, dtype=int), targets, rank_entropy))
         print(i, totals[i])
         print()
 

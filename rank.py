@@ -306,8 +306,8 @@ def rank_entropy(artifacts, lvls, persist, targets, CHANGE=True, k=2, num_trials
             relevance = above.sum(axis=1).astype(float)
             relevance += eq_contrib.sum(axis=1)
             
-            for j in range(num_targets):
-                information_gain[i, j] -= prob * entropy(relevance[:, j])
+            ent = entropy(relevance, axis=0)
+            information_gain[i] -= prob * ent
             
         #print(info_gain[i])
         scores[i] = temp

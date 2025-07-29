@@ -135,7 +135,7 @@ def rank_value(artifacts, lvls, persist, targets, CHANGE=True, k=1, num_trials=1
         
     return relevance
 
-def rank_entropy(artifacts, lvls, persist, targets, CHANGE=True, k=1, num_trials=100, rng=None, seed=None):
+def rank_entropy(artifacts, lvls, persist, targets, CHANGE=True, k=1, num_trials=1000, rng=None, seed=None):
     num_artifacts = len(artifacts)
     try:
         _ = iter(lvls)
@@ -297,15 +297,18 @@ def rank_entropy(artifacts, lvls, persist, targets, CHANGE=True, k=1, num_trials
             base_cutoff = np.partition(scores, -k, axis=0)[-k]
 
         above = scores > base_cutoff[None, ...]
-        above_count = above.sum(axis=0)
+        above_count = np.count_nonzero(above, axis=0)
+        #above_count = above.sum(axis=0)
         leftover = k - above_count
 
         eq    = scores == base_cutoff[None, ...]
 
-        tie_counts = eq.sum(axis=0)
+        #tie_counts = eq.sum(axis=0)
+        tie_counts = np.count_nonzero(eq, axis=0)
         frac_per_tie = np.where(tie_counts > 0, leftover / tie_counts, 0)
         eq_contrib = eq * frac_per_tie[None, ...]
-        base_relevance = above.sum(axis=1).astype(float)
+        #base_relevance = above.sum(axis=1).astype(float)
+        base_relevance = np.count_nonzero(above, axis=1).astype(float)
         base_relevance += eq_contrib.sum(axis=1)
         
         base_ent = entropy(base_relevance, axis=0)
@@ -316,7 +319,16 @@ def rank_entropy(artifacts, lvls, persist, targets, CHANGE=True, k=1, num_trials
                 continue
             
             temp_check = False
-            if not np.any(upgrade > base_cutoff):
+            
+            '''
+            greater = upgrade > base_cutoff
+            eq = upgrade == base_cutoff
+            less = upgrade < base_cutoff
+            
+            useless = np.count_nonzero(less, axis=0) == num_trials
+            '''
+            
+            if not np.any(upgrade >= base_cutoff):
                 information_gain[i] -= prob * base_ent
                 continue
             
@@ -328,15 +340,18 @@ def rank_entropy(artifacts, lvls, persist, targets, CHANGE=True, k=1, num_trials
                 cutoff = np.partition(scores, -k, axis=0)[-k]
 
             above = scores > cutoff[None, ...]
-            above_count = above.sum(axis=0)
+            above_count = np.count_nonzero(above, axis=0)
+            #above_count = above.sum(axis=0)
             leftover = k - above_count
 
             eq    = scores == cutoff[None, ...]
 
-            tie_counts = eq.sum(axis=0)
+            #tie_counts = eq.sum(axis=0)
+            tie_counts = np.count_nonzero(eq, axis=0)
             frac_per_tie = np.where(tie_counts > 0, leftover / tie_counts, 0)
             eq_contrib = eq * frac_per_tie[None, ...]
-            relevance = above.sum(axis=1).astype(float)
+            #relevance = above.sum(axis=1).astype(float)
+            relevance = np.count_nonzero(above, axis=1).astype(float)
             relevance += eq_contrib.sum(axis=1)
             
             ent = entropy(relevance, axis=0)
@@ -377,186 +392,11 @@ def rank_entropy(artifacts, lvls, persist, targets, CHANGE=True, k=1, num_trials
     
     return changed
     
-def rank_estimate(artifacts, lvls, persist, targets, CHANGE=True, k=1, num_trials=30, rng=None, seed=None):
-    # 
-    num_artifacts = len(artifacts)
-    if num_artifacts == 0:
-        raise ValueError
-    try:
-        _ = iter(lvls)
-        lvls = np.array(lvls)
-    except:
-        if lvls is None:
-            lvls = 0
-        lvls = np.full(num_artifacts, lvls)
-    
-    if rng is None:
-        rng = np.random.default_rng(seed)
-        
-    if len(persist) == 0:
-        while len(persist) < 3:
-            persist.append(None)
-        persist[0] = -1
-        distributions, probs = distro(artifacts, lvls)
-        maxed = np.zeros((num_artifacts, num_trials, 19), dtype=np.uint8)
-        for i in range(num_artifacts):
-            maxed[i] = rng.choice(distributions[i], p=probs[i], size=num_trials)
-        persist[1] = maxed
-        
-        single_maxed = []
-        for i in range(num_artifacts):
-            single_maxed.append([None, None])
-            if lvls[i] == 20:
-                continue
-            
-            current_distribution, current_probs = distro(artifacts[i], num_upgrades=1)
-            single_maxed[-1][0] = []
-            single_maxed[-1][1] = current_probs
-            for j, upgrade in enumerate(current_distribution):
-                potential_distribution, potential_probs = distro(upgrade, next_lvl(lvls[i]))
-                single_maxed[-1][0].append(rng.choice(potential_distribution, p=potential_probs, size=num_trials))
-            
-        # Single maxed is a list with num_artifacts elements. Each
-        # element is a list with elements corresponding to each of the
-        # possible single upgrades for that artifact. This list has two
-        # elements. The first is a list numpy arrays. Each numpy array
-        # is a sample maxed artifacts. There is an array for each
-        # possible artifact after a single upgrade. The second is a
-        # numpy array corresponding to the probability of each single
-        # upgrade.
-        persist[2] = single_maxed
-    elif CHANGE:
-        changed = persist[0]
-        distributions, probs = distro(artifacts[changed], lvls[changed])
-        persist[1][changed] = rng.choice(distributions, p=probs, size=num_trials)
-        if lvls[changed] != 20:
-            current_distribution, current_probs = distro(artifacts[changed], num_upgrades=1)
-            persist[2][changed][0] = []
-            persist[2][changed][1] = current_probs
-            for j, upgrade in enumerate(current_distribution):
-                potential_distribution, potential_probs = distro(upgrade, next_lvl(lvls[changed]))
-                persist[2][changed][0].append(rng.choice(potential_distribution, p=potential_probs, size=num_trials))
-    # TODO: save scores instead of artifacts. Save a threshold score.
-    # When computing potential new scores, count how many are above the
-    # threshold. This is the relevance score. Don't recompute scores and
-    # count. Compute scores once and get a threshold.
-    
-    changed, maxed, single_maxed = persist
-    relevance_std = np.zeros(num_artifacts, dtype=float)
-    #original_maxed = maxed.copy()
-    
-    if type(targets) == dict or (type(targets) == np.ndarray and targets.ndim == 1):
-        scores = np.zeros((num_trials, num_artifacts), dtype=float)
-        for k in range(num_trials):
-            scores[k] = score(maxed[:, k], targets)
-        scores[:, lvls == 20] = 0
-    else:
-        scores = np.zeros((num_trials, len(targets), num_artifacts), dtype=float)
-        for k in range(num_trials):
-            for j, target in enumerate(targets):
-                scores[k, j] = score(maxed[:, k], target)
-        scores[:, :, lvls == 20] = 0
-    
-    for i in range(num_artifacts):
-        if lvls[i] == 20:
-            continue
-        
-        upgrades, current_probs = single_maxed[i]
-        relevance = np.zeros(len(upgrades), dtype=float)
-        
-        if type(targets) == dict or (type(targets) == np.ndarray and targets.ndim == 1):
-            for upgrade_id, upgrade in enumerate(upgrades):
-                for trial_id in range(num_trials):
-                    old_max = np.max(scores[trial_id, np.arange(num_artifacts) != i])
-                    upgrade_score = score(upgrade[trial_id], targets)
-                    if upgrade_score > old_max:
-                        relevance[upgrade_id] += 1
-                    elif upgrade_score == old_max:
-                        relevance[upgrade_id] += 1 / (np.count_nonzero(scores[trial_id, np.arange(num_artifacts) != i] == old_max) + 1)
-            mean = np.dot(relevance, current_probs)
-            if mean >= 0.5 * num_trials:
-                relevance_std[i] = 10000000000
-                print('threshold')
-            else:
-                variance = np.dot(current_probs, (relevance - mean)**2)
-                relevance_std[i] = np.sqrt(variance)
-        else:
-            variance = 0
-            for target_id, target in enumerate(targets):
-                relevance = np.zeros(len(upgrades), dtype=float)
-                for upgrade_id, upgrade in enumerate(upgrades):
-                    for trial_id in range(num_trials):
-                        old_max = np.max(scores[trial_id, target_id, np.arange(num_artifacts) != i])
-                        upgrade_score = score(upgrade[trial_id], target)
-                        if upgrade_score > old_max:
-                            relevance[upgrade_id] += 1
-                        elif upgrade_score == old_max:
-                            relevance[upgrade_id] += 1 / (np.count_nonzero(scores[trial_id, target_id, np.arange(num_artifacts) != i] == old_max) + 1)
-        
-                mean = np.dot(relevance, current_probs)
-                if mean >= 0.5 * num_trials:
-                    relevance_std[i] = 10000000000
-                    print('threshold', target_id)
-                    variance = -1
-                    break
-                variance += np.dot(current_probs, (relevance - mean)**2)
-            if variance != -1:
-                relevance_std[i] = np.sqrt(variance)
-
-
-        '''
-            for k in range(num_trials):
-                if type(targets) == dict or (type(targets) == np.ndarray and targets.ndim == 1):
-                    old_max = np.max(scores[k, np.arange(num_artifacts) != i])
-                    upgrade_score = score(upgrade[k], targets)
-                    if upgrade_score > old_max:
-                        relevance[j] += 1
-                    elif upgrade_score == old_max:
-                        relevance[j] += 1 / (np.count_nonzero(scores[k, np.arange(num_artifacts) != i] == old_max) + 1)
-                    #threshold = 0.5 * num_trials
-                else:
-                    for l, target in enumerate(targets):
-                        old_max = np.max(scores[k, l, np.arange(num_artifacts) != i])
-                        upgrade_score = score(upgrade[k], target)
-                        if upgrade_score > old_max:
-                            relevance[j] += 1
-                        elif upgrade_score == old_max:
-                            relevance[j] += 1 / (np.count_nonzero(scores[k, l, np.arange(num_artifacts) != i] == old_max) + 1)
-                    #threshold = 0.5 * num_trials * len(targets)
-                    
-        mean = np.dot(relevance, current_probs)
-        if mean >= 0.5 * num_trials:
-            relevance_std[i] = 10000000000
-            print('threshold')
-            #break
-        else:
-            var = np.dot(current_probs, (relevance - mean)**2)
-            relevance_std[i] = np.sqrt(var)
-        '''
-        
-        #maxed[i] = original_maxed[i]
-        
-    for i in range(num_artifacts):
-        if lvls[i] == 20:
-            relevance_std[i] = 0
-        else:
-            relevance_std[i] /= MAX_REQ_EXP[lvls[i]]
-            
-    #print(relevance_std)
-    persist[0] = np.argmax(relevance_std)
-    print(np.max(relevance_std))
-    print_artifact(artifacts[persist[0]])
-    
-    #for i in relevance_std:
-    #    print(i)
-    
-    return relevance_std
-
 if __name__ == '__main__':
     '''
     '''
     start = time.time()
-    num = 10
+    num = 1
     totals = np.zeros(num)
     time_avg = np.zeros(num)
     #targets = {'atk_': 6, 'atk': 2, 'crit_': 8}
@@ -578,8 +418,8 @@ if __name__ == '__main__':
     )
 
     for i in range(num):
-        artifacts = generate('flower', size=200, seed=i)
-        totals[i] = (simulate_exp(artifacts, np.zeros(200, dtype=int), targets, rank_value))
+        artifacts = generate('flower', size=20, seed=i)
+        totals[i] = (simulate_exp(artifacts, np.zeros(20, dtype=int), targets, rank_entropy))
         print(i, totals[i])
         print()
 

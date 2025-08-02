@@ -32,6 +32,8 @@ def calc_relevance(scores, k):
     relevance += eq_contrib.sum(axis=1)
     return relevance
 '''
+def my_entropy(array, axis=None):
+    return -np.sum(array * np.log(array), axis=axis)
 
 def rank_value(artifacts, lvls, persist, targets, CHANGE=True, k=2, num_trials=1000, rng=None, seed=None):
     num_artifacts = len(artifacts)
@@ -135,7 +137,7 @@ def rank_value(artifacts, lvls, persist, targets, CHANGE=True, k=2, num_trials=1
         
     return relevance
 
-def rank_entropy(artifacts, lvls, persist, targets, CHANGE=True, k=1, num_trials=200, rng=None, seed=None):
+def rank_entropy(artifacts, lvls, persist, targets, CHANGE=True, k=2, num_trials=100, rng=None, seed=None):
     num_artifacts = len(artifacts)
     try:
         _ = iter(lvls)
@@ -236,50 +238,46 @@ def rank_entropy(artifacts, lvls, persist, targets, CHANGE=True, k=1, num_trials
     if k == 1:
         # maximum per (i, j)
         cutoff = scores.max(axis=0)                    # shape (num_trials, num_targets)
+    elif k == 2:
+        k_plus_cutoff, k_cutoff, k_minus_cutoff = np.partition(scores, (-k - 1, -k, -k + 1), axis=0)[-k - 1:]
+        #cutoff = np.partition(scores, -k, axis=0)[-k]  # same shape
     else:
-        # k‑th largest via partition
-        cutoff = np.partition(scores, -k, axis=0)[-k]  # same shape
+        k_plus_cutoff, k_cutoff, k_minus_cutoff = np.partition(scores, (-k - 1, -k, -k + 1), axis=0)[-k - 1:-k + 1]
+        #cutoff = np.partition(scores, -k, axis=0)[-k]  # same shape
 
     # 2) Mask of strictly above cutoff
-    above = scores > cutoff[None, ...]                 # shape (n_items, num_trials, num_targets)
-    above_count = above.sum(axis=0)
+    above = scores > k_cutoff[None, ...]                 # shape (n_items, num_trials, num_targets)
+    above_count = np.count_nonzero(above, axis=0)
+    #above_count = above.sum(axis=0)
     leftover = k - above_count
 
     # 3) Mask of exactly equal to cutoff
-    eq    = scores == cutoff[None, ...]                # same shape
+    eq    = scores == k_cutoff[None, ...]                # same shape
 
     # 4) Count ties so we can split fractional credit
-    tie_counts = eq.sum(axis=0)                        # shape (num_trials, num_targets)
-    frac_per_tie = np.where(tie_counts > 0, leftover / tie_counts, 0)
+    tie_counts = np.count_nonzero(eq, axis=0)
+    #tie_counts = eq.sum(axis=0)                        # shape (num_trials, num_targets)
+    frac_per_tie = leftover / tie_counts
     eq_contrib = eq * frac_per_tie[None, ...]
     
-
-    # 5) Sum up:
-    #    - 1 point for every “above”
-    #    - 1/tie_counts for every “tie”
-    temp = above.sum(axis=1) + eq_contrib.sum(axis=1)
+    relevance = np.count_nonzero(above, axis=1).astype(float)
+    relevance += eq_contrib.sum(axis=1)
     
-    if np.max(temp) > k / 2:
-        flat_idx = temp.argmax()
-        row_idx = flat_idx // temp.shape[1]
+    if np.max(relevance) > k / 2:
+        flat_idx = relevance.argmax()
+        row_idx = flat_idx // relevance.shape[1]
         if lvls[row_idx] != 20:
             if CHANGE:
                 persist['changed'] = row_idx
             print()
-            print('asdf', flat_idx % temp.shape[1])
+            print('asdf', flat_idx % relevance.shape[1])
             print(row_idx)
             print_artifact(artifacts[row_idx])
             print()
             return row_idx
     
-    relevance = above.sum(axis=1).astype(float)
-    relevance += eq_contrib.sum(axis=1)
+    current_entropies = entropy(relevance, axis=0)
     
-    current_entropies = np.zeros(num_targets, dtype=float)
-    for i in range(num_targets):
-        current_entropies[i] = entropy(relevance[:, i])
-    
-    temp_check = True
     information_gain = np.tile(current_entropies, (num_artifacts, 1))
     for i, artifact in enumerate(artifacts):
         if lvls[i] == 20:
@@ -289,252 +287,23 @@ def rank_entropy(artifacts, lvls, persist, targets, CHANGE=True, k=1, num_trials
         probs = distros[i][1]
         temp = scores[i].copy()
         
+        new_k_cutoff = np.where(scores[i] < k_cutoff, k_cutoff, k_plus_cutoff)
+        new_k_minus_cutoff = np.where(scores[i] < k_minus_cutoff, k_minus_cutoff, k_cutoff)
         scores[i] = 0
         
-        '''
-        if k == 1:
-            k_cutoff = scores.max(axis=0)
-        else:
-            k_cutoff, k_1_cutoff = np.partition(scores, [-k, -k+1], axis=0)[-k]
-            
-        k_above = scores > k_cutoff[None, ...]
-        k_above_count = np.count_nonzero(k_above, axis=0)
-        
-        k_eq    = scores == k_cutoff[None, ...]
-        k_tie_counts = np.count_nonzero(k_eq, axis=0)
-        
-        k_1_above = scores > k_1_cutoff[None, ...]
-        k_1_above_count = np.count_nonzero(k_1_above, axis=0)
-        
-        k_1_eq = scores == k_1_cutoff[None, ...]
-        k_1_tie_counts = np.count_nonzero(k_1_eq, axis=0)    
-        '''
-        
-            
-
-        '''
-        k_above = scores > k_cutoff[None, ...]
-        k_above_count = np.count_nonzero(k_above, axis=0)
-        k_leftover = k - k_above_count
-
-        k_eq    = scores == k_cutoff[None, ...]
-        k_tie_counts = np.count_nonzero(k_eq, axis=0)
-        k_frac_per_tie = np.where(k_tie_counts > 0, k_leftover / k_tie_counts, 0)
-        eq_contrib = k_eq * k_frac_per_tie[None, ...]
-        base_relevance = np.count_nonzero(k_above, axis=1).astype(float)
-        base_relevance += eq_contrib.sum(axis=1)
-        
-        base_ent = entropy(base_relevance, axis=0)
-        '''
-        
+        #k_plus_cutoff, k_cutoff, k_minus_cutoff = np.partition(scores, (-k - 1, -k, -k + 1), axis=0)[-k - 1:]
         
         for upgrade, prob in zip(distros_scores[i], probs):
             if prob == 0:
                 continue
-            
-            '''
-            precompute:
-            mask for where current is = (k - 1) threshold
-            mask for where current is = k treshold
-            
-            mask for where new is > (k - 1) threshold
-            mask for where new is = (k - 1) threshold
-            mask for where new is = k threshold
-            
-            
-            precompute entropy from other artifacts for each possible case
-            '''
-            
-            
-            
-            '''
-            
-            INSERTING
-            
-            if in top k:
-                if in top k - 1:
-                    top k, change
-                if in edge k - 1:
-                    if new is in k - 1:
-                        edge of k, cutoff is old (k - 1)
-                    if new is in edge k - 1:
-                        edge of k, cutoff is old (k - 1), edge size increments
-                    if new is not in k - 1:
-                        top k, no change
-            if in edge k
-                if top k - 1 == top k:
-                    if new is in top k:
-                        edge of k, cutoff is old (k - 1), no change
-                    if new is in edge:
-                        edge of k, cutoff is old (k - 1), edge size increments
-                if top k - 1 != top k:
-                    if new is in top k:
-                        not in k
-                    if new is in edge k:
-                        edge of k, edge size increments
-            if not in k:
-                not in k
-                    
-                
-            if in top k:
-                if in top k - 1:
-                    A
-                if in edge k - 1:
-                    if new is in k - 1:
-                        B
-                    if new is in edge k - 1:
-                        C
-                    if new is not in k - 1:
-                        A
-            if in edge k
-                if top k - 1 == top k:
-                    if new is in top k:
-                        B
-                    if new is in edge:
-                        C
-                if top k - 1 != top k:
-                    if new is in top k:
-                        D
-                    if new is in edge k:
-                        E
-            if not in k:
-                D
-                    
-                    
-            A: 
-                if in top k - 1
-                if in edge k - 1 AND new is not in k - 1
-            B:
-                if in edge k - 1 AND new is in k - 1
-            C:
-                if in edge k - 1 AND new is in edge k - 1
-            D: 
-                if in edge k AND not in edge k - 1 AND new is in top k
-                if not in k
-            E:
-                if in edge k AND not in edge k - 1 AND new is in edge k
-            
-            
-            
-                
-            in top k - 1:
-                top k
-            in edge k - 1:
-                new is in k - 1
-                    edge of k, cutoff is old (k - 1) 
-                new is in edge k - 1
-                    edge of k, cutoff is old (k - 1), edge size increments
-                new is not in k - 1
-                    top k
-            in edge k:
-                new is in k
-                    not in k
-                new is in edge k
-                    edge of k, edge size increments
-            not in k:
-                not in k
-                
-                
-            new is in k - 1:
-                in edge k - 1:
-                    edge of k, cutoff is old (k - 1)
-                in edge k:
-                    not in k
-            new is in edge k - 1:
-                in edge k - 1:
-                    edge of k, cutoff is old (k - 1), edge size increments
-                in edge k:
-                    not in k
-            new is in edge k:
-                in edge k:
-                    edge of k, edge size increments
-                
-            
-            
-            
-            
-                
-            top k: 
-                if in top k - 1
-                if in edge k - 1 AND new is not in k - 1
-            edge of k, cutoff is old (k - 1):
-                if in edge k - 1 AND new is in k - 1
-            edge of k, cutoff is old (k - 1), edge size increments:
-                if in edge k - 1 AND new is in edge k - 1
-            not in k:
-                if in edge k AND not in edge k - 1 AND new is in top k
-                if not in k
-            edge of k, edge size increments:
-                if in edge k AND not in edge k - 1 AND new is in edge k
-            '''
-            
-            '''
-            
-            DELETING
-            
-            old is in k:
-                if k cutoff == k + 1 cutoff:
-                    nothing
-                else:    
-                    in edge k:
-                        in k
-                    in edge k + 1:
-                        in edge k, cutoff is old (k + 1)
-            old is in edge k:
-                if k cutoff == k + 1 cutoff:
-                    decrement edge
-                else:
-                    in edge k:
-                        in k
-                    in edge k + 1:
-                        in edge k, cutoff is old (k + 1)
-            
-            in top k:
-                top k
-            in edge k:
-                if in edge of k + 1:
-                    nothing happens
-                is not in k + 1:
-                    in k
-            in edge k + 1:
-                edge of k, cutoff is old (k + 1)
-            not in k + 1:
-                not in k
-            
-            
-            
-            if in top k:
-                top k
-            if in edge k:
-                if top k == top k + 1:
-                    
-                if top k != top k + 1:
-            if not in k:
-                if not in top k + 1:
-                    not in k
-                if in edge k + 1:
-                    if old was in k:
-                        edge of k, cutoff is old (k + 1)
-                    if old was in edge k:
-                        edge of k, cutoff is old (k + 1)
-            '''
-            
-            temp_check = False
-            
-            '''
-            greater = upgrade > k_cutoff
-            eq = upgrade == k_cutoff
-            less = upgrade < k_cutoff
-            
-            useless = np.count_nonzero(less, axis=0) == num_trials
-            '''
             
             scores[i] = upgrade # (num_trials, num_targets)
             
             if k == 1:
                 cutoff = scores.max(axis=0)
             else:
-                cutoff = np.partition(scores, -k, axis=0)[-k]
+                potential_cutoff = np.minimum(upgrade, new_k_minus_cutoff)
+                cutoff = np.maximum(potential_cutoff, new_k_cutoff)
 
             above = scores > cutoff[None, ...]
             above_count = np.count_nonzero(above, axis=0)
@@ -557,18 +326,10 @@ def rank_entropy(artifacts, lvls, persist, targets, CHANGE=True, k=1, num_trials
         #print(info_gain[i])
         scores[i] = temp
     
-    information_gain[np.isclose(information_gain, 0)] = 0
+    #information_gain[np.isclose(information_gain, 0)] = 0
     information_gain[information_gain < 0] = 0
     
-    if temp_check == (np.max(information_gain) == 0):
-        print('match')
-    else:
-        print('dont match')
-        print(temp_check)
-        print(np.max(information_gain) == 0)
-        print(information_gain)
-    
-    if np.max(information_gain) == 0:
+    if np.isclose(np.max(information_gain), 0):
         print('qpweoifhjap')
         persist = {}
         asdf =  rank_entropy(artifacts, lvls, persist, targets, CHANGE, k, num_trials * 2, rng)
@@ -598,7 +359,7 @@ if __name__ == '__main__':
     '''
     '''
     start = time.time()
-    num = 10
+    num = 1
     totals = np.zeros(num)
     time_avg = np.zeros(num)
     #targets = {'atk_': 6, 'atk': 2, 'crit_': 8}
@@ -620,8 +381,8 @@ if __name__ == '__main__':
     )
 
     for i in range(num):
-        artifacts = generate('flower', size=200, seed=i)
-        totals[i] = (simulate_exp(artifacts, np.zeros(200, dtype=int), targets, rank_entropy))
+        artifacts = generate('flower', size=50, seed=i)
+        totals[i] = (simulate_exp(artifacts, np.zeros(50, dtype=int), targets, rank_entropy))
         print(i, totals[i])
         print()
 

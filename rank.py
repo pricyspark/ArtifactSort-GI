@@ -256,21 +256,15 @@ def rank_entropy(artifacts, lvls, persist, targets, CHANGE=True, k=2, num_trials
 
     k_plus_above = scores > k_plus_cutoff
     k_plus_above_count = np.count_nonzero(k_plus_above, axis=0)
-    k_plus_leftover = k - k_plus_above_count
 
     k_plus_eq    = scores == k_plus_cutoff
     k_plus_tie_count = np.count_nonzero(k_plus_eq, axis=0)
-    k_plus_frac_per_tie = k_plus_leftover / k_plus_tie_count
-    k_plus_eq_contrib = k_plus_eq * k_plus_frac_per_tie
 
     k_minus_above = scores > k_minus_cutoff
     k_minus_above_count = np.count_nonzero(k_minus_above, axis=0)
-    k_minus_leftover = k - k_minus_above_count
 
     k_minus_eq    = scores == k_minus_cutoff
     k_minus_tie_count = np.count_nonzero(k_minus_eq, axis=0)
-    k_minus_frac_per_tie = k_minus_leftover / k_minus_tie_count
-    k_minus_eq_contrib = k_minus_eq * k_minus_frac_per_tie
 
     
     relevance = np.count_nonzero(k_above, axis=1).astype(float)
@@ -306,9 +300,14 @@ def rank_entropy(artifacts, lvls, persist, targets, CHANGE=True, k=2, num_trials
         
         new_k_above = scores > new_k_cutoff
         new_k_above_count = np.count_nonzero(new_k_above, axis=0)
-        new_k_eq = scores == new_k_cutoff
-        new_k_tie_count = np.count_nonzero(new_k_eq, axis=0)
-        #k_plus_cutoff, k_cutoff, k_minus_cutoff = np.partition(scores, (-k - 1, -k, -k + 1), axis=0)[-k - 1:]
+        
+        adjusted_k_plus_above_count = k_plus_above_count - k_plus_above[i]
+        adjusted_k_minus_above_count = k_minus_above_count - k_minus_above[i]
+        adjusted_k_above_count = k_above_count - k_above[i]
+        
+        adjusted_k_plus_tie_count = k_plus_tie_count - k_plus_eq[i]
+        adjusted_k_minus_tie_count = k_minus_tie_count - k_minus_eq[i]
+        adjusted_k_tie_count = k_tie_count - k_eq[i]
         
         for upgrade, prob in zip(distros_scores[i], probs):
             if prob == 0:
@@ -321,8 +320,7 @@ def rank_entropy(artifacts, lvls, persist, targets, CHANGE=True, k=2, num_trials
             else:
                 potential_cutoff = np.minimum(upgrade, new_k_minus_cutoff)
                 cutoff = np.maximum(potential_cutoff, new_k_cutoff)
-                
-            '''
+            
             # TARGET
             above = scores > cutoff
             eq = scores == cutoff
@@ -334,41 +332,42 @@ def rank_entropy(artifacts, lvls, persist, targets, CHANGE=True, k=2, num_trials
             target_relevance = np.count_nonzero(above, axis=1).astype(float)
             target_relevance += eq_contrib.sum(axis=1)
                 
-            ent = my_entropy(target_relevance, axis=0)
-            information_gain[i] -= prob * ent
+            #ent = my_entropy(target_relevance, axis=0)
+            #information_gain[i] -= prob * ent
+            '''
             '''
             
+            '''
             # TEST
             upgrade_above = upgrade > cutoff
             upgrade_eq = upgrade == cutoff
             
-            above = np.zeros_like(k_above)
+            above = np.zeros((num_artifacts, num_trials, num_targets), dtype=bool)
             above[:, cutoff == upgrade] = new_k_above[:, cutoff == upgrade]
             above[:, cutoff == k_plus_cutoff] = k_plus_above[:, cutoff == k_plus_cutoff]
             above[:, cutoff == k_minus_cutoff] = k_minus_above[:, cutoff == k_minus_cutoff]
             above[:, cutoff == k_cutoff] = k_above[:, cutoff == k_cutoff]
             above[i] = upgrade_above
             
-            eq = np.zeros_like(k_eq)
+            eq = np.zeros((num_artifacts, num_trials, num_targets), dtype=bool)
             eq[:, cutoff == k_plus_cutoff] = k_plus_eq[:, cutoff == k_plus_cutoff]
             eq[:, cutoff == k_minus_cutoff] = k_minus_eq[:, cutoff == k_minus_cutoff]
             eq[:, cutoff == k_cutoff] = k_eq[:, cutoff == k_cutoff]
             eq[i] = upgrade_eq
             
-            above_count = np.zeros_like(k_above_count)
-            above_count[cutoff == upgrade] = (new_k_above_count - new_k_above[i])[cutoff == upgrade]
-            above_count[cutoff == k_plus_cutoff] = (k_plus_above_count - k_plus_above[i])[cutoff == k_plus_cutoff]
-            above_count[cutoff == k_minus_cutoff] = (k_minus_above_count - k_minus_above[i])[cutoff == k_minus_cutoff]
-            above_count[cutoff == k_cutoff] = (k_above_count - k_above[i])[cutoff == k_cutoff]
+            above_count = np.zeros((num_trials, num_targets), dtype=int)
+            above_count[cutoff == upgrade] = new_k_above_count[cutoff == upgrade]
+            above_count[cutoff == k_plus_cutoff] = adjusted_k_plus_above_count[cutoff == k_plus_cutoff]
+            above_count[cutoff == k_minus_cutoff] = adjusted_k_minus_above_count[cutoff == k_minus_cutoff]
+            above_count[cutoff == k_cutoff] = adjusted_k_above_count[cutoff == k_cutoff]
             above_count += upgrade_above
             
             leftover = k - above_count
             
-            tie_count = np.zeros_like(k_tie_count)
-            tie_count[cutoff == upgrade] = (0 - new_k_eq[i])[cutoff == upgrade]
-            tie_count[cutoff == k_plus_cutoff] = (k_plus_tie_count - k_plus_eq[i])[cutoff == k_plus_cutoff]
-            tie_count[cutoff == k_minus_cutoff] = (k_minus_tie_count - k_minus_eq[i])[cutoff == k_minus_cutoff]
-            tie_count[cutoff == k_cutoff] = (k_tie_count - k_eq[i])[cutoff == k_cutoff]
+            tie_count = np.zeros((num_trials, num_targets), dtype=int)
+            tie_count[cutoff == k_plus_cutoff] = adjusted_k_plus_tie_count[cutoff == k_plus_cutoff]
+            tie_count[cutoff == k_minus_cutoff] = adjusted_k_minus_tie_count[cutoff == k_minus_cutoff]
+            tie_count[cutoff == k_cutoff] = adjusted_k_tie_count[cutoff == k_cutoff]
             tie_count += upgrade_eq
             
             frac_per_tie = leftover / tie_count
@@ -376,8 +375,83 @@ def rank_entropy(artifacts, lvls, persist, targets, CHANGE=True, k=2, num_trials
             test_relevance = np.count_nonzero(above, axis=1).astype(float)
             test_relevance += eq_contrib.sum(axis=1)
             
-            ent = my_entropy(test_relevance, axis=0)
+            if not np.allclose(target_relevance, test_relevance):
+                raise ValueError
+            
+            ent = entropy(test_relevance, axis=0)
             information_gain[i] -= prob * ent
+            '''
+            
+            # CHAT
+            upgrade_above = upgrade > cutoff
+            upgrade_eq = upgrade == cutoff
+            mode_upgrade = (cutoff == upgrade)
+            mode_kplus   = (cutoff == k_plus_cutoff)
+            mode_kminus  = (cutoff == k_minus_cutoff)
+            mode_k       = (cutoff == k_cutoff)
+
+            # 1) above_count and tie_count without temp arrays or repeated indexing
+            above_count = np.where(
+                mode_k, adjusted_k_above_count,
+                np.where(mode_kplus,  adjusted_k_plus_above_count,
+                np.where(mode_kminus, adjusted_k_minus_above_count,
+                np.where(mode_upgrade, new_k_above_count, 0)))
+            )
+            above_count += upgrade_above  # bool -> int, adds 1 where upgrade_above is True
+            
+            leftover   = k - above_count
+            
+            tie_count  = np.where(
+                mode_kplus,  adjusted_k_plus_tie_count,
+                np.where(mode_kminus, adjusted_k_minus_tie_count, np.where(mode_k, adjusted_k_tie_count, 0))
+            )
+            tie_count += upgrade_eq  # include upgraded artifact's ties
+
+            # Avoid division warnings; when tie_count==0, frac is never used because eq is False there.
+            with np.errstate(divide='ignore', invalid='ignore'):
+                frac = (leftover / tie_count).astype(np.float32)
+                frac[tie_count == 0] = 0.0
+
+            # 2) above term WITHOUT building a 3D boolean "above" tensor
+            #    Sum along trials immediately, masked by the mode for each (trial, target).
+            eff_k       = mode_k
+            eff_kminus  = mode_kminus & ~eff_k
+            eff_kplus   = mode_kplus  & ~(eff_k | eff_kminus)
+            eff_upgrade = mode_upgrade & ~(eff_k | eff_kminus | eff_kplus)
+
+            # --- ABOVE term without building a 3D scratch array ---
+            above_sum = (
+                (new_k_above  & eff_upgrade[None, ...]).sum(axis=1, dtype=np.int32) +
+                (k_plus_above & eff_kplus[None,   ...]).sum(axis=1, dtype=np.int32) +
+                (k_minus_above& eff_kminus[None,  ...]).sum(axis=1, dtype=np.int32) +
+                (k_above      & eff_k[None,       ...]).sum(axis=1, dtype=np.int32)
+            )
+
+            # Row i is fully overridden by the upgrade in your original code
+            above_sum[i] = upgrade_above.sum(axis=0, dtype=np.int32).astype(np.float32)
+            
+            # 3) tie contribution via einsum (no big temp like eq * frac_per_tie)
+            #    For each bank, only positions in its mode contribute.
+            def eq_contrib(eq_bank, eff_mask):
+                # sum over trials with fractional tie credit
+                return np.einsum('ijk,jk->ik', eq_bank & eff_mask[None, ...], frac, optimize=True)
+
+            eq_term = (
+                eq_contrib(k_plus_eq,  eff_kplus) +
+                eq_contrib(k_minus_eq, eff_kminus) +
+                eq_contrib(k_eq,       eff_k)
+            )
+
+            # Row i override
+            eq_term[i] = np.einsum('jk,jk->k', upgrade_eq, frac, optimize=True).astype(np.float32)
+
+            # --- final relevance and entropy ---
+            test_relevance = above_sum + eq_term                                   # shape: (num_artifacts, num_targets)
+            ent = my_entropy(test_relevance, axis=0)                     # per-target entropy
+            information_gain[i] -= prob * ent
+            if not np.allclose(test_relevance, target_relevance):
+                raise ValueError
+                        
             '''
 
             
@@ -517,6 +591,7 @@ def rank_entropy(artifacts, lvls, persist, targets, CHANGE=True, k=2, num_trials
             ent = my_entropy(relevance_attempt, axis=0)
             information_gain[i] -= prob * ent
             '''
+            #print('iteration')
             
         #print(info_gain[i])
         scores[i] = temp

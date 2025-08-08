@@ -305,7 +305,9 @@ def rank_entropy(artifacts, lvls, persist, targets, CHANGE=True, k=2, num_trials
         scores[i] = 0
         
         new_k_above = scores > new_k_cutoff
+        new_k_above_count = np.count_nonzero(new_k_above, axis=0)
         new_k_eq = scores == new_k_cutoff
+        new_k_tie_count = np.count_nonzero(new_k_eq, axis=0)
         #k_plus_cutoff, k_cutoff, k_minus_cutoff = np.partition(scores, (-k - 1, -k, -k + 1), axis=0)[-k - 1:]
         
         for upgrade, prob in zip(distros_scores[i], probs):
@@ -335,6 +337,8 @@ def rank_entropy(artifacts, lvls, persist, targets, CHANGE=True, k=2, num_trials
             relevance += eq_contrib.sum(axis=1)
             
             
+            upgrade_above = upgrade > cutoff
+            upgrade_eq = upgrade == cutoff
             
             new_above = np.zeros_like(k_above)
             new_above[:, cutoff == upgrade] = new_k_above[:, cutoff == upgrade]
@@ -348,7 +352,29 @@ def rank_entropy(artifacts, lvls, persist, targets, CHANGE=True, k=2, num_trials
             # it must be unique, and thus the eq part of relevance will give it a value
             # of 1 anyways. So leave this, and if cutoff == upgrade for eq, don't do anything.
             
-            new_above[i] = upgrade > cutoff
+            actual_above_count = np.zeros_like(k_above_count)
+            actual_above_count[cutoff == upgrade] = (new_k_above_count - new_k_above[i])[cutoff == upgrade]
+            actual_above_count[cutoff == k_plus_cutoff] = (k_plus_above_count - k_plus_above[i])[cutoff == k_plus_cutoff]
+            actual_above_count[cutoff == k_minus_cutoff] = (k_minus_above_count - k_minus_above[i])[cutoff == k_minus_cutoff]
+            actual_above_count[cutoff == k_cutoff] = (k_above_count - k_above[i])[cutoff == k_cutoff]
+            actual_above_count += upgrade_above
+            new_above[i] = upgrade_above
+            target_above_count = np.count_nonzero(new_above, axis=0)
+            
+            a = np.allclose(target_above_count[cutoff == upgrade], actual_above_count[cutoff == upgrade])
+            b = np.allclose(target_above_count[cutoff == k_plus_cutoff], actual_above_count[cutoff == k_plus_cutoff])
+            c = np.allclose(target_above_count[cutoff == k_minus_cutoff], actual_above_count[cutoff == k_minus_cutoff])
+            d = np.allclose(target_above_count[cutoff == k_cutoff], actual_above_count[cutoff == k_cutoff])
+            if not a:
+                raise ValueError
+            if not b:
+                raise ValueError
+            if not c:
+                raise ValueError
+            if not d:
+                raise ValueError
+            
+            something_leftover = k - actual_above_count
             
             new_eq = np.zeros_like(k_above)
             #eq_attempt[:, cutoff == upgrade] = 0
@@ -356,8 +382,34 @@ def rank_entropy(artifacts, lvls, persist, targets, CHANGE=True, k=2, num_trials
             new_eq[:, cutoff == k_minus_cutoff] = k_minus_eq[:, cutoff == k_minus_cutoff]
             #eq_attempt[:, cutoff == upgrade] = (scores == cutoff)[:, cutoff == upgrade]
             new_eq[:, cutoff == k_cutoff] = k_eq[:, cutoff == k_cutoff]
-
-            new_eq[i] = upgrade == cutoff
+            
+            
+            actual_tie_count = np.zeros_like(k_tie_count)
+            actual_tie_count[cutoff == upgrade] = (0 - new_k_eq[i])[cutoff == upgrade]
+            actual_tie_count[cutoff == k_plus_cutoff] = (k_plus_tie_count - k_plus_eq[i])[cutoff == k_plus_cutoff]
+            actual_tie_count[cutoff == k_minus_cutoff] = (k_minus_tie_count - k_minus_eq[i])[cutoff == k_minus_cutoff]
+            actual_tie_count[cutoff == k_cutoff] = (k_tie_count - k_eq[i])[cutoff == k_cutoff]
+            actual_tie_count += upgrade_eq
+            new_eq[i] = upgrade_eq
+            target_tie_count = np.count_nonzero(new_eq, axis=0)
+            
+            a = np.allclose(target_tie_count[cutoff == upgrade], actual_tie_count[cutoff == upgrade])
+            b = np.allclose(target_tie_count[cutoff == k_plus_cutoff], actual_tie_count[cutoff == k_plus_cutoff])
+            c = np.allclose(target_tie_count[cutoff == k_minus_cutoff], actual_tie_count[cutoff == k_minus_cutoff])
+            d = np.allclose(target_tie_count[cutoff == k_cutoff], actual_tie_count[cutoff == k_cutoff])
+            if not a:
+                where = np.where(target_tie_count != actual_tie_count)
+                target = target_tie_count[target_tie_count != actual_tie_count]
+                actual = actual_tie_count[target_tie_count != actual_tie_count]
+                current_cutoffs = cutoff[target_tie_count != actual_tie_count]
+                current_upgrade = upgrade[target_tie_count != actual_tie_count]
+                raise ValueError
+            if not b:
+                raise ValueError
+            if not c:
+                raise ValueError
+            if not d:
+                raise ValueError
 
 
             #if not np.allclose(eq_attempt, eq):
@@ -376,6 +428,9 @@ def rank_entropy(artifacts, lvls, persist, targets, CHANGE=True, k=2, num_trials
             
             above_count = np.count_nonzero(above, axis=0)
             leftover = k - above_count
+            
+            if not np.array_equal(leftover, something_leftover):
+                raise ValueError
 
             tie_count = np.count_nonzero(eq, axis=0)
             frac_per_tie = leftover / tie_count

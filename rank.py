@@ -276,6 +276,10 @@ def rank_entropy(artifacts, lvls, persist, targets, CHANGE=True, k=2, num_trials
         
         probs = distros[i][1]           # (X,)
         upgrades = distros_scores[i]    # (X,T,U)
+        
+        upgrades = upgrades[probs != 0]
+        probs = probs[probs != 0]
+        
         original = scores[i]            # (T,U)
 
         if k == 1:

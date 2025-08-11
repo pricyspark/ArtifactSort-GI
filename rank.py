@@ -137,7 +137,7 @@ def rank_value(artifacts, lvls, persist, targets, CHANGE=True, k=2, num_trials=1
         
     return relevance
 
-def rank_entropy(artifacts, lvls, persist, targets, CHANGE=True, k=2, num_trials=100, rng=None, seed=None):
+def rank_entropy(artifacts, lvls, persist, targets, CHANGE=True, k=2, num_trials=200, rng=None, seed=None):
     num_artifacts = len(artifacts)
     try:
         _ = iter(lvls)
@@ -235,14 +235,20 @@ def rank_entropy(artifacts, lvls, persist, targets, CHANGE=True, k=2, num_trials
             
     scores, distros, distros_scores = persist['scores'], persist['distros'], persist['distros_scores']
     
+    if num_artifacts <= k:
+        relevance = np.full((num_artifacts), num_trials, dtype=float)
+        relevance /= np.where(lvls == 20, 1, MAX_REQ_EXP[lvls])
+        
+        if CHANGE:
+            persist['changed'] = np.argmax(relevance)
+        return relevance
+    
     if k == 1:
         pass
     elif k == 2:
-        k_plus_cutoff, k_cutoff, k_minus_cutoff = np.partition(scores, (-k - 1, -k, -k + 1), axis=0)[-k - 1:]
-        #cutoff = np.partition(scores, -k, axis=0)[-k]  # same shape
+        k_plus_cutoff, k_cutoff, k_minus_cutoff = np.partition(scores, (-k - 1, -k, -k + 1), axis=0)[-k - 1:] # (T,U)
     else:
         k_plus_cutoff, k_cutoff, k_minus_cutoff = np.partition(scores, (-k - 1, -k, -k + 1), axis=0)[-k - 1:-k + 1]
-        #cutoff = np.partition(scores, -k, axis=0)[-k]  # same shape
 
     above = scores > k_cutoff           # (N,T,U)
     eq = scores == k_cutoff             # (N,T,U)
@@ -250,8 +256,9 @@ def rank_entropy(artifacts, lvls, persist, targets, CHANGE=True, k=2, num_trials
     leftover = k - above_count          # (T,U)
     eq_count = eq.sum(axis=0)           # (T,U)
     frac_per_tie = leftover / eq_count  # (T,U)
-    points = above.astype(float) + eq * frac_per_tie[None, ...] # (N,T,U)
-    
+    points_eq = eq * frac_per_tie[None, ...] # (N,T,U)
+    points = above.astype(float) + points_eq # (N,T,U)
+
     base_relevance = points.sum(axis=1) # (N,U)
     if np.max(base_relevance) > k / 2:
         flat_idx = base_relevance.argmax()
@@ -260,7 +267,7 @@ def rank_entropy(artifacts, lvls, persist, targets, CHANGE=True, k=2, num_trials
             if CHANGE:
                 persist['changed'] = row_idx
             print()
-            print('asdf', flat_idx % base_relevance.shape[1])
+            print('early stop', flat_idx % base_relevance.shape[1])
             print(row_idx)
             print_artifact(artifacts[row_idx])
             print()
@@ -268,10 +275,13 @@ def rank_entropy(artifacts, lvls, persist, targets, CHANGE=True, k=2, num_trials
         
     base_entropy = entropy(base_relevance, axis=0) # (U,)
     information_gain = np.tile(base_entropy, (num_artifacts, 1)) # (N,U)
+    
+    if np.max(information_gain) == np.inf:
+        raise ValueError
 
     for i, artifact in enumerate(artifacts):
         if lvls[i] == 20:
-            information_gain[i] = -1
+            information_gain[i] = 0
             continue
         
         probs = distros[i][1]           # (X,)
@@ -280,130 +290,188 @@ def rank_entropy(artifacts, lvls, persist, targets, CHANGE=True, k=2, num_trials
         upgrades = upgrades[probs != 0]
         probs = probs[probs != 0]
         
+        num_upgrades = len(upgrades)
+        
         original = scores[i]            # (T,U)
 
         if k == 1:
             pass
         else:
-            new_k_cutoff = np.where(original < k_cutoff, k_cutoff, k_plus_cutoff)               # (T,U)
-            new_k_minus_cutoff = np.where(original < k_minus_cutoff, k_minus_cutoff, k_cutoff)  # (T,U)
-            potential = np.minimum(upgrades, new_k_minus_cutoff[None, ...])                     # (X,T,U)
-            cutoffs = np.maximum(potential, new_k_cutoff[None, ...])                            # (X,T,U)
+            new_k_cutoff        = np.where(original < k_cutoff, k_cutoff, k_plus_cutoff)        # (T,U)
+            new_k_minus_cutoff  = np.where(original < k_minus_cutoff, k_minus_cutoff, k_cutoff) # (T,U)
+            potential           = np.minimum(upgrades, new_k_minus_cutoff[None, ...])           # (X,T,U)
+            cutoffs             = np.maximum(potential, new_k_cutoff[None, ...])                # (X,T,U)
             
-        upgrades_above = upgrades > cutoffs # (X,T,U)
-        upgrades_eq = upgrades == cutoffs # (X,T,U)
+        upgrades_above  = upgrades > cutoffs    # (X,T,U)
+        upgrades_eq     = upgrades == cutoffs   # (X,T,U)
         
-        cutoffs_all = cutoffs[:, None, ...]         # (X,1,T,U)
-        above_all = scores[None, ...] > cutoffs_all # (X,N,T,U)
-        eq_all = scores[None, ...] == cutoffs_all   # (X,N,T,U)
+        original_above = above[i]   # (T,U)
+        original_eq = eq[i]         # (T,U)
         
+        same_mask = (
+            (upgrades_above == original_above[None, ...]) & 
+            (upgrades_eq == original_eq[None, ...]) &
+            (cutoffs == k_cutoff[None, ...])
+        )                       # (X,T,U)
+        diff_mask = ~same_mask  # (X,T,U)
+        
+        x, t, u = np.where(same_mask)
+        
+        nx, nt, nu = np.where(diff_mask)
+        
+        cutoffs_all = cutoffs[:, None, ...]             # (X,1,T,U)
+        above_all   = scores[None, ...] > cutoffs_all   # (X,N,T,U)
+        eq_all      = scores[None, ...] == cutoffs_all  # (X,N,T,U)
+        
+        above_all[:, i, ...]    = upgrades_above
+        eq_all[:, i, ...]       = upgrades_eq
+        
+        '''
+        # This technically works, but is slower. It's faster to do
+        repeat boolean comparisons than to copy over precalculated
+        boolean arrays.
+        
+        matches = above[:, t, u].T  # (N,num matches)
+        above_all[x, :, t, u] = matches
+        above_all[nx, :, nt, nu] = (scores[:, nt, nu] > cutoffs_all[nx, 0, nt, nu]).T
         above_all[:, i, ...] = upgrades_above
-        eq_all[:, i, ...] = upgrades_eq
+        '''
         
-        above_count_all = above_all.sum(axis=1)                                 # (X,T,U)
-        leftover_all = k - above_count_all                                      # (X,T,U)
-        eq_count_all = eq_all.sum(axis=1)                                       # (X,T,U)
-        frac_per_tie_all = leftover_all / eq_count_all                          # (X,T,U)
-        points_all = above_all.astype(float) + eq_all * frac_per_tie_all[:, None, ...]   # (X,N,T,U)
+        above_count_all = np.zeros((num_upgrades, num_trials, num_targets)) # (X,T,U)
+        above_count_all[x, t, u] = above_count[t, u]
+        above_count_all[nx, nt, nu] = above_all[nx, :, nt, nu].sum(axis=1)
         
-        relevance_all = points_all.sum(axis=2) # (X,N,U)
-        entropy_all = entropy(relevance_all, axis=1) # (X,U)
+        eq_count_all = np.zeros((num_upgrades, num_trials, num_targets))    # (X,T,U)
+        eq_count_all[x, t, u] = eq_count[t, u]
+        eq_count_all[nx, nt, nu] = eq_all[nx, :, nt, nu].sum(axis=1)
         
-        expected_entropy = probs @ entropy_all # (U,)
-        information_gain[i] -= expected_entropy # (N,U)
+        # above_count_all = above_all.sum(axis=1)
+        leftover_all        = k - above_count_all           # (X,T,U)
+        #eq_count_all        = eq_all.sum(axis=1)            # (X,T,U)
+        frac_per_tie_all    = leftover_all / eq_count_all   # (X,T,U)
+        start = time.time()
+        #relevance_above = above_all.sum(axis=2).astype(float)                   # (X,N,U)
+        '''
+        relevance_above = (
+            np.transpose(above_all, (0, 1, 3, 2))  # (X, N, U, T) contiguous over T
+            .sum(axis=-1, dtype=np.int32)          # avoid bool->float cast during the sum
+            .astype(float)
+        )
+        end = time.time()
+        print('old', end - start)
+        '''
         
+        # above (N,T,U)
+        # above_all (X,N,T,U)
+        # same_mask (X,T,U)
+        '''
+        counts = same_mask.sum(axis=0) # (T,U)
         
+        attempt = above * counts[None, ...]
+        temp = above_all.copy()
+        neg_mask = ~diff_mask
+        x, t, u = np.where(neg_mask)
+        temp[x, :, t, u] = 0
+        another = temp.sum(axis=2)
+        another_mask = np.tile(diff_mask[:, None, ...], (1, num_artifacts, 1, 1))
+        butt = above_all.sum(axis=2, where=another_mask) # (X,N,U)
+        a = np.allclose(another, butt)
+        '''
         
+        # above (N,T,U)
+        # above_all (X,N,T,U)
+        # same_mask (X,T,U)
+        # diff_mask (X,T,U)
+        '''
+        attempt = above.sum(axis=1) # (N,U)
+        attempt = np.tile(attempt, (num_upgrades, 1, 1)) # (X,N,U)
+        idk = np.tile(above[None, ...], (num_upgrades, 1, 1, 1))
+        another_mask = np.tile(diff_mask[:, None, ...], (1, num_artifacts, 1, 1))
+        attempt -= idk.sum(axis=2, where=another_mask)
+        attempt += above_all.sum(axis=2, where=another_mask)
+        '''
         
-
-    '''
-    scores (N,T,U)
-    
-    for each cutoff, (X of them)
-        above = scores > cutoff[None, ...] (N,T,U)
+        '''
+        start = time.time()
+        base    = above.sum(axis=1)[None, ...]                                # (1, N, U)
+        middle = time.time()
+        removed = np.einsum('xtu,ntu->xnu', diff_mask.astype(int), above)     # (X, N, U)
+        added   = np.einsum('xntu,xtu->xnu', above_all.astype(int), diff_mask)# (X, N, U)
+        attempt = base - removed + added
+        end = time.time()
+        print('new')
+        print('first', middle - start)
+        print('second', end - middle)
+        '''
         
-    
-
-    k_above = scores > k_cutoff
-    k_eq    = scores == k_cutoff
-    k_above_count = k_above.sum(axis=0)                          # (T,U)
-    k_leftover    = k - k_above_count
-    k_tie_count   = k_eq.sum(axis=0)                             # (T,U)
-    k_frac_per_tie = np.divide(k_leftover, k_tie_count,
-                            out=np.zeros_like(k_leftover, dtype=float),
-                            where=(k_tie_count > 0))
-    credits0 = k_above.astype(float) + k_eq * k_frac_per_tie[None, ...]  # (N,T,U)
-
-    # Early exit based on total relevance over all targets
-    relevance_total = credits0.sum(axis=(1, 2))                  # (N,)
-    if np.max(relevance_total) > k / 2:
-        row_idx = int(np.argmax(relevance_total))
-        if lvls[row_idx] != 20:
-            if CHANGE:
-                persist['changed'] = row_idx
-            print()
-            print('asdf', 0)  # placeholder to mirror your original print; no column in global relevance
-            print(row_idx)
-            print_artifact(artifacts[row_idx])
-            print()
-            return row_idx
-
-    # Baseline per-target entropy H0(T,U)
-    H0 = my_entropy(credits0, axis=0)                             # (T,U)
-    information_gain = np.tile(H0[None, ...], (num_artifacts, 1, 1))  # (N,T,U)
-
-    # Per-artifact evaluation (vectorized over upgrades)
-    for i, artifact in enumerate(artifacts):
-        if lvls[i] == 20:
-            information_gain[i] = -10.0
-            continue
-
-        probs    = distros[i][1]          # (X,)
-        upgrades = distros_scores[i]      # (X,T,U)
-        base_i   = scores[i]              # (T,U)
-
-        # Cutoffs per-upgrade (X,T,U)
-        if k == 1:
-            pass
-        else:
-            new_k_cutoff       = np.where(base_i < k_cutoff,       k_cutoff,       k_plus_cutoff)
-            new_k_minus_cutoff = np.where(base_i < k_minus_cutoff, k_minus_cutoff, k_cutoff)
-            potential = np.minimum(upgrades, new_k_minus_cutoff[None, ...])        # (X,T,U)
-            cutoffs   = np.maximum(potential, new_k_cutoff[None, ...])             # (X,T,U)
-
-        # Compare all items vs cutoffs, but swap in upgrades for item i
-        cf = cutoffs[:, None, ...]                      # (X,1,T,U)
-        above_all = (scores[None, ...] > cf)            # (X,N,T,U)
-        eq_all    = (scores[None, ...] == cf)
-
-        i_above = (upgrades > cutoffs)                  # (X,T,U)
-        i_eq    = (upgrades == cutoffs)
-        above_all[:, i, :, :] = i_above
-        eq_all[:, i, :, :]    = i_eq
-
-        # Per-upgrade per-target credits
-        above_count = above_all.sum(axis=1)             # (X,T,U)
-        leftover    = k - above_count
-        tie_count   = eq_all.sum(axis=1)                # (X,T,U)
-        frac_per_tie = np.divide(leftover, tie_count,
-                                out=np.zeros_like(leftover, dtype=float),
-                                where=(tie_count > 0))
-        credits = above_all.astype(float) + eq_all * frac_per_tie[:, None, ...]  # (X,N,T,U)
-
-        # Per-target entropy across artifacts for each upgrade → (X,T,U)
-        ent = my_entropy(credits, axis=1)
-
-        exp_ent = np.zeros((num_trials, num_targets))
-        # Expected future entropy per-target
-        for _, prob in enumerate(probs):
-            exp_ent += prob * ent[_]
-        #exp_ent = probs @ ent                           # (T,U)
-
-        # IG per-target for artifact i
-        information_gain[i] -= exp_ent                  # (T,U)                                 
-    '''
+        #start = time.time()
         
-    
+        base = above.sum(axis=1)[None, ...]          # (1, N, U)
+        relevance_above = np.broadcast_to(base, (above_all.shape[0],) + base.shape[1:]).copy()
+
+        for x in range(above_all.shape[0]):
+            t_idx, u_idx = np.where(diff_mask[x])    # ~Kx positions
+            if t_idx.size == 0:
+                continue
+            contrib = above_all[x, :, t_idx, u_idx].astype(int).T - above[:, t_idx, u_idx].astype(int) # (N, Kx)
+            # Scatter-add each column to its u bucket
+            np.add.at(relevance_above[x], (slice(None), u_idx), contrib)
+            
+        #start = time.time()
+        base = points_eq.sum(axis=1)[None, ...] # (1,N,U)
+        relevance_ties = np.broadcast_to(base, (eq_all.shape[0],) + base.shape[1:]).copy()
+        idk = eq_all * frac_per_tie_all[:, None, ...]
+        for x in range(eq_all.shape[0]):
+            t_idx, u_idx = np.where(diff_mask[x])
+            if t_idx.size == 0:
+                continue
+            contrib = (idk[x, :, t_idx, u_idx]).T - points_eq[:, t_idx, u_idx]
+            np.add.at(relevance_ties[x], (slice(None), u_idx), contrib)
+        relevance_ties[np.isclose(relevance_ties, 0)] = 0
+        #end = time.time()
+        #print('new', end - start)
+        #end = time.time()
+        #print('new', end - start)
+        #a = np.allclose(attempt, relevance_above)
+        
+        #if not a:
+        #    raise ValueError
+        #something = attempt + another
+        
+        #a = np.allclose(something, relevance_above)
+        '''
+        asdf_relevance_above = (
+            np.transpose(above_all, (0, 1, 3, 2))  # (X, N, U, T) contiguous over T
+            .sum(axis=-1, dtype=np.int32)          # avoid bool->float cast during the sum
+            .astype(float)
+        )
+        asdf_relevance_above = above_all.sum(axis=2)
+        if not np.allclose(relevance_above, asdf_relevance_above):
+            raise ValueError
+        '''
+        
+        # eq_all (X,N,T,U)
+        # frac_per_tie_all (X,T,U)
+        # relevance_ties = (eq_all * frac_per_tie_all[:, None, ...]).sum(axis=2)
+        '''
+        '''
+        #target  = np.einsum('xntu, xtu->xnu', eq_all, frac_per_tie_all) # (X,N,U)
+        '''
+        start = time.time()
+        relevance_ties = (eq_all * frac_per_tie_all[:, None, ...]).sum(axis=2)
+        end = time.time()
+        print('old', end - start)
+        a = np.allclose(target, fuck)
+        if not a:
+            raise ValueError
+        '''
+        relevance_all   = relevance_above + relevance_ties                      # (X,N,U)
+        #relevance_all[np.isclose(relevance_all, 0)] = 0
+        entropy_all         = entropy(relevance_all, axis=1)    # (X,U)
+        expected_entropy    = probs @ entropy_all               # (U,)
+        
+        information_gain[i] -= expected_entropy                 # (N,U)
+            
     #information_gain[np.isclose(information_gain, 0)] = 0
     information_gain[information_gain < 0] = 0
     
@@ -431,7 +499,7 @@ def rank_entropy(artifacts, lvls, persist, targets, CHANGE=True, k=2, num_trials
         print(information_gain[changed])
         print()
     
-    return changed
+    return relevance
     
 if __name__ == '__main__':
     '''
@@ -471,3 +539,16 @@ if __name__ == '__main__':
     print(time_avg[-1])
     end = time.time()
     print(end - start)
+
+    '''
+    start = time.time()
+    filename = 'artifacts/genshinData_GOOD_2025_07_31_18_01.json'
+    artifacts, slots, rarities, lvls, sets = load(filename)
+    relevant = rate(artifacts, slots, rarities, lvls, sets, rank_entropy, num=100)
+    
+    count = 0
+    
+    visualize(relevant, artifacts, slots, sets, lvls)
+    end = time.time()
+    print(end - start)
+    '''

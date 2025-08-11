@@ -35,7 +35,7 @@ def calc_relevance(scores, k):
 def my_entropy(array, axis=None):
     return -np.sum(array * np.log(array, where=array != 0), axis=axis)
     
-def rank_value(artifacts, lvls, persist, targets, CHANGE=True, k=2, num_trials=1000, rng=None, seed=None):
+def rank_value(artifacts, lvls, persist, targets, k=2, num_trials=1000, rng=None, seed=None):
     num_artifacts = len(artifacts)
     try:
         _ = iter(lvls)
@@ -61,7 +61,7 @@ def rank_value(artifacts, lvls, persist, targets, CHANGE=True, k=2, num_trials=1
         rng = np.random.default_rng(seed)
     
     if len(persist) == 0:
-        persist['changed'] = -1
+        persist['changed'] = None
 
         maxed = np.zeros((num_artifacts, num_trials, 19), dtype=np.uint8)
         for i in range(num_artifacts):
@@ -78,10 +78,15 @@ def rank_value(artifacts, lvls, persist, targets, CHANGE=True, k=2, num_trials=1
         persist['targets'] = targets
         persist['scores'] = score(persist['maxed'], targets.T)    
         
-    if persist['changed'] != -1:
+    if persist['changed'] is not None:
         changed = persist['changed']
-        persist['maxed'][changed] = sample_upgrade(artifacts[changed], num_trials, lvl=lvls[changed], rng=rng)
-        persist['scores'][changed] = score(persist['maxed'][changed], targets.T)
+        try:
+            _ = iter(changed)
+        except:
+            changed = [changed]
+        for idx in changed:
+            persist['maxed'][idx] = sample_upgrade(artifacts[idx], num_trials, lvl=lvls[idx], rng=rng)
+            persist['scores'][idx] = score(persist['maxed'][idx], targets.T)
         
     scores = persist['scores']
     
@@ -89,8 +94,6 @@ def rank_value(artifacts, lvls, persist, targets, CHANGE=True, k=2, num_trials=1
         relevance = np.full((num_artifacts), num_trials, dtype=float)
         relevance /= np.where(lvls == 20, 1, MAX_REQ_EXP[lvls])
         
-        if CHANGE:
-            persist['changed'] = np.argmax(relevance)
         return relevance
     
     if k == 1:
@@ -120,24 +123,17 @@ def rank_value(artifacts, lvls, persist, targets, CHANGE=True, k=2, num_trials=1
     relevance += eq_contrib.sum(axis=(1, 2))
     # relevance = np.sum(calc_relevance(scores, k), axis=1) # This extra function call and sum adds non-negligible overhead
     relevance /= np.where(lvls == 20, 1, MAX_REQ_EXP[lvls])
-    if CHANGE:
-        relevance[lvls == 20] = 0
-        
-    if CHANGE:
-        persist['changed'] = np.argmax(relevance)
-    #return relevance
-    #print_artifact(artifacts[np.argmax(relevance)])
-    if relevance[persist['changed']] == 0 and CHANGE:
+    if np.max(relevance) == 0:
         print('max was 0')
         for i in range(num_artifacts):
             persist['maxed'][i] = sample_upgrade(artifacts[i], num_trials, lvl=lvls[i], rng=rng)
         persist['targets'] = None
         persist['changed'] = -1
-        return rank_value(artifacts, lvls, persist, targets, CHANGE, k, num_trials, rng)
+        return rank_value(artifacts, lvls, persist, targets, k, num_trials, rng)
         
     return relevance
 
-def rank_entropy(artifacts, lvls, persist, targets, CHANGE=True, k=2, num_trials=200, rng=None, seed=None):
+def rank_entropy(artifacts, lvls, persist, targets, k=2, num_trials=200, rng=None, seed=None):
     num_artifacts = len(artifacts)
     try:
         _ = iter(lvls)
@@ -188,7 +184,7 @@ def rank_entropy(artifacts, lvls, persist, targets, CHANGE=True, k=2, num_trials
             for j, upgrade in enumerate(upgrades):
                 distros_maxed[-1][j] = sample_upgrade(upgrade, num_trials, lvl=next, rng=rng)
                 
-        persist['changed'] = -1
+        persist['changed'] = None
         persist['maxed'] = maxed
         persist['distros'] = distros
         persist['distros_maxed'] = distros_maxed
@@ -209,29 +205,34 @@ def rank_entropy(artifacts, lvls, persist, targets, CHANGE=True, k=2, num_trials
         
         persist['distros_scores'] = distros_scores
                         
-    if persist['changed'] != -1:
+    if persist['changed'] is not None:
         changed = persist['changed']
-        persist['maxed'][changed] = sample_upgrade(artifacts[changed], num_trials, lvl=lvls[changed], rng=rng)
-        persist['scores'][changed]= score(persist['maxed'][changed], targets.T)
-        
-        if lvls[changed] == 20:
-            persist['distros'][changed] = None
-            persist['distros_maxed'][changed] = None
-            persist['distros_scores'][changed] = None
-        else:
-            next = next_lvl(lvls[changed])
+        try:
+            _ = iter(changed)
+        except:
+            changed = [changed]
+        for idx in changed:
+            persist['maxed'][idx] = sample_upgrade(artifacts[idx], num_trials, lvl=lvls[idx], rng=rng)
+            persist['scores'][idx]= score(persist['maxed'][idx], targets.T)
             
-            upgrades, probs = single_distro(artifacts[changed])
-            persist['distros'][changed] = (upgrades, probs)
-            
-            distro_maxed = persist['distros_maxed'][changed]
-            if len(distro_maxed) != len(upgrades):
-                persist['distros_maxed'][changed] = np.zeros((len(upgrades), num_trials, 19), dtype=np.uint8)
-
-            for i, upgrade in enumerate(upgrades):
-                persist['distros_maxed'][changed][i] = sample_upgrade(upgrade, num_trials, lvl=next, rng=rng)
+            if lvls[idx] == 20:
+                persist['distros'][idx] = None
+                persist['distros_maxed'][idx] = None
+                persist['distros_scores'][idx] = None
+            else:
+                next = next_lvl(lvls[idx])
                 
-            persist['distros_scores'][changed] = score(persist['distros_maxed'][changed], targets.T)
+                upgrades, probs = single_distro(artifacts[idx])
+                persist['distros'][idx] = (upgrades, probs)
+                
+                distro_maxed = persist['distros_maxed'][idx]
+                if len(distro_maxed) != len(upgrades):
+                    persist['distros_maxed'][idx] = np.zeros((len(upgrades), num_trials, 19), dtype=np.uint8)
+
+                for i, upgrade in enumerate(upgrades):
+                    persist['distros_maxed'][idx][i] = sample_upgrade(upgrade, num_trials, lvl=next, rng=rng)
+                    
+                persist['distros_scores'][idx] = score(persist['distros_maxed'][idx], targets.T)
             
     scores, distros, distros_scores = persist['scores'], persist['distros'], persist['distros_scores']
     
@@ -239,8 +240,8 @@ def rank_entropy(artifacts, lvls, persist, targets, CHANGE=True, k=2, num_trials
         relevance = np.full((num_artifacts), num_trials, dtype=float)
         relevance /= np.where(lvls == 20, 1, MAX_REQ_EXP[lvls])
         
-        if CHANGE:
-            persist['changed'] = np.argmax(relevance)
+        #if CHANGE:
+        #    persist['changed'] = np.argmax(relevance)
         return relevance
     
     if k == 1:
@@ -264,8 +265,6 @@ def rank_entropy(artifacts, lvls, persist, targets, CHANGE=True, k=2, num_trials
         flat_idx = base_relevance.argmax()
         row_idx = flat_idx // base_relevance.shape[1]
         if lvls[row_idx] != 20:
-            if CHANGE:
-                persist['changed'] = row_idx
             print()
             print('early stop', flat_idx % base_relevance.shape[1])
             print(row_idx)
@@ -367,7 +366,7 @@ def rank_entropy(artifacts, lvls, persist, targets, CHANGE=True, k=2, num_trials
     if np.isclose(np.max(information_gain), 0):
         print('damn')
         persist = {}
-        asdf =  rank_entropy(artifacts, lvls, persist, targets, CHANGE, k, num_trials * 2, rng)
+        asdf =  rank_entropy(artifacts, lvls, persist, targets, k, num_trials * 2, rng)
         persist = {}
         return asdf
     
@@ -375,23 +374,15 @@ def rank_entropy(artifacts, lvls, persist, targets, CHANGE=True, k=2, num_trials
     
     #relevance /= np.where(lvls == 20, 1, UPGRADE_REQ_EXP[lvls])
     
-    if np.sum(information_gain) == 0:
-        print('fuck')
-    
-    if CHANGE:
-        relevance[lvls == 20] = 0
-        changed = np.argmax(relevance)
-        persist['changed'] = changed
-        print()
-        print(changed)
-        print_artifact(artifacts[changed])
-        print(information_gain[changed])
-        print()
+    print()
+    print(changed)
+    print_artifact(artifacts[changed])
+    print(information_gain[changed])
+    print()
     
     return relevance
     
 if __name__ == '__main__':
-    '''
     '''
     start = time.time()
     num = 1
@@ -417,7 +408,7 @@ if __name__ == '__main__':
 
     for i in range(num):
         artifacts = generate('flower', size=50, seed=i)
-        totals[i] = (simulate_exp(artifacts, np.zeros(50, dtype=int), targets, rank_entropy))
+        totals[i] = (simulate_exp(artifacts, np.zeros(50, dtype=int), targets, rank_value))
         print(i, totals[i])
         print()
 
@@ -428,16 +419,17 @@ if __name__ == '__main__':
     print(time_avg[-1])
     end = time.time()
     print(end - start)
+    '''
 
+    '''
     '''
     start = time.time()
     filename = 'artifacts/genshinData_GOOD_2025_07_31_18_01.json'
     artifacts, slots, rarities, lvls, sets = load(filename)
-    relevant = rate(artifacts, slots, rarities, lvls, sets, rank_entropy, num=100)
+    relevant = rate(artifacts, slots, rarities, lvls, sets, rank_value, num=100)
     
     count = 0
     
     visualize(relevant, artifacts, slots, sets, lvls)
     end = time.time()
     print(end - start)
-    '''

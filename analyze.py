@@ -359,7 +359,7 @@ def score(artifacts, targets):
         
     return artifacts @ targets
 
-def simulate_exp(artifacts, lvls, targets, fun, mains=None):
+def simulate_exp(artifacts, lvls, targets, fun, num=1, mains=None):
     # TODO: check if anything is maxed. They shouldn't be
     # TODO: add benchmark for how long it takes to acheive top 1%, not
     # just top 1
@@ -385,20 +385,27 @@ def simulate_exp(artifacts, lvls, targets, fun, mains=None):
     exp = 0
     
     while np.any(lvls[goal] != 20):
-        idx = fun(artifacts, lvls, persist, targets)
+        chosen = fun(artifacts, lvls, persist, targets)
         try:
-            _ = iter(idx)
-            idx = np.argmax(idx)
+            _ = iter(chosen)
+            relevance = chosen
+            relevance[lvls == 20] = 0
+            #chosen = np.argmax(relevance)
+            chosen = np.argpartition(relevance, -num)[-num:]
         except:
-            pass
-        if lvls[idx] == 20:
-            raise ValueError
-        #print_artifact(artifacts[idx])
-        smart_upgrade(artifacts[idx])
-        exp += UPGRADE_REQ_EXP[lvls[idx]]
-        lvls[idx] = next_lvl(lvls[idx])
-        #distros[0][idx], distros[1][idx] = distro(artifacts[idx], lvls[idx])
-        print(exp)
+            chosen = [chosen]
+            
+        for idx in chosen:
+            if lvls[idx] == 20:
+                raise ValueError
+            #print_artifact(artifacts[idx])
+            smart_upgrade(artifacts[idx])
+            exp += UPGRADE_REQ_EXP[lvls[idx]]
+            lvls[idx] = next_lvl(lvls[idx])
+            #distros[0][idx], distros[1][idx] = distro(artifacts[idx], lvls[idx])
+            print(exp)
+            
+        persist['changed'] = chosen
             
     return exp
 
@@ -500,7 +507,7 @@ def rate(artifacts, slots, rarities, lvls, sets, ranker, num=None, threshold=Non
         slot_artifacts = artifacts[slot_mask]
         slot_lvls = lvls[slot_mask]
         persist = {}
-        relevance[original_idxs, count] = ranker(slot_artifacts, slot_lvls, persist, ALL_TARGETS[SLOTS[slot]], change=False, num_trials=1000)
+        relevance[original_idxs, count] = ranker(slot_artifacts, slot_lvls, persist, ALL_TARGETS[SLOTS[slot]], num_trials=1000)
         count += 1
         
         for setKey in range(len(SETS)):
@@ -525,7 +532,7 @@ def rate(artifacts, slots, rarities, lvls, sets, ranker, num=None, threshold=Non
                     set_persist[a] = b
                     #set_persist.append(None)
             #set_persist = [asdf[np.where(set_mask)[0]] for asdf in persist]
-            relevance[original_idxs, count] = ranker(set_artifacts, set_lvls, set_persist, SET_TARGETS[SETS[setKey]][SLOTS[slot]], change=False, num_trials=1000)
+            relevance[original_idxs, count] = ranker(set_artifacts, set_lvls, set_persist, SET_TARGETS[SETS[setKey]][SLOTS[slot]], num_trials=1000)
             count += 1
     
     max_relevance = np.max(relevance, axis=1)

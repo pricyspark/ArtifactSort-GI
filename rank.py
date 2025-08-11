@@ -279,7 +279,7 @@ def rank_entropy(artifacts, lvls, persist, targets, CHANGE=True, k=2, num_trials
     if np.max(information_gain) == np.inf:
         raise ValueError
 
-    for i, artifact in enumerate(artifacts):
+    for i in range(len(artifacts)):
         if lvls[i] == 20:
             information_gain[i] = 0
             continue
@@ -316,7 +316,6 @@ def rank_entropy(artifacts, lvls, persist, targets, CHANGE=True, k=2, num_trials
         diff_mask = ~same_mask  # (X,T,U)
         
         x, t, u = np.where(same_mask)
-        
         nx, nt, nu = np.where(diff_mask)
         
         cutoffs_all = cutoffs[:, None, ...]             # (X,1,T,U)
@@ -326,17 +325,6 @@ def rank_entropy(artifacts, lvls, persist, targets, CHANGE=True, k=2, num_trials
         above_all[:, i, ...]    = upgrades_above
         eq_all[:, i, ...]       = upgrades_eq
         
-        '''
-        # This technically works, but is slower. It's faster to do
-        repeat boolean comparisons than to copy over precalculated
-        boolean arrays.
-        
-        matches = above[:, t, u].T  # (N,num matches)
-        above_all[x, :, t, u] = matches
-        above_all[nx, :, nt, nu] = (scores[:, nt, nu] > cutoffs_all[nx, 0, nt, nu]).T
-        above_all[:, i, ...] = upgrades_above
-        '''
-        
         above_count_all = np.zeros((num_upgrades, num_trials, num_targets)) # (X,T,U)
         above_count_all[x, t, u] = above_count[t, u]
         above_count_all[nx, nt, nu] = above_all[nx, :, nt, nu].sum(axis=1)
@@ -345,79 +333,18 @@ def rank_entropy(artifacts, lvls, persist, targets, CHANGE=True, k=2, num_trials
         eq_count_all[x, t, u] = eq_count[t, u]
         eq_count_all[nx, nt, nu] = eq_all[nx, :, nt, nu].sum(axis=1)
         
-        # above_count_all = above_all.sum(axis=1)
         leftover_all        = k - above_count_all           # (X,T,U)
-        #eq_count_all        = eq_all.sum(axis=1)            # (X,T,U)
         frac_per_tie_all    = leftover_all / eq_count_all   # (X,T,U)
-        start = time.time()
-        #relevance_above = above_all.sum(axis=2).astype(float)                   # (X,N,U)
-        '''
-        relevance_above = (
-            np.transpose(above_all, (0, 1, 3, 2))  # (X, N, U, T) contiguous over T
-            .sum(axis=-1, dtype=np.int32)          # avoid bool->float cast during the sum
-            .astype(float)
-        )
-        end = time.time()
-        print('old', end - start)
-        '''
-        
-        # above (N,T,U)
-        # above_all (X,N,T,U)
-        # same_mask (X,T,U)
-        '''
-        counts = same_mask.sum(axis=0) # (T,U)
-        
-        attempt = above * counts[None, ...]
-        temp = above_all.copy()
-        neg_mask = ~diff_mask
-        x, t, u = np.where(neg_mask)
-        temp[x, :, t, u] = 0
-        another = temp.sum(axis=2)
-        another_mask = np.tile(diff_mask[:, None, ...], (1, num_artifacts, 1, 1))
-        butt = above_all.sum(axis=2, where=another_mask) # (X,N,U)
-        a = np.allclose(another, butt)
-        '''
-        
-        # above (N,T,U)
-        # above_all (X,N,T,U)
-        # same_mask (X,T,U)
-        # diff_mask (X,T,U)
-        '''
-        attempt = above.sum(axis=1) # (N,U)
-        attempt = np.tile(attempt, (num_upgrades, 1, 1)) # (X,N,U)
-        idk = np.tile(above[None, ...], (num_upgrades, 1, 1, 1))
-        another_mask = np.tile(diff_mask[:, None, ...], (1, num_artifacts, 1, 1))
-        attempt -= idk.sum(axis=2, where=another_mask)
-        attempt += above_all.sum(axis=2, where=another_mask)
-        '''
-        
-        '''
-        start = time.time()
-        base    = above.sum(axis=1)[None, ...]                                # (1, N, U)
-        middle = time.time()
-        removed = np.einsum('xtu,ntu->xnu', diff_mask.astype(int), above)     # (X, N, U)
-        added   = np.einsum('xntu,xtu->xnu', above_all.astype(int), diff_mask)# (X, N, U)
-        attempt = base - removed + added
-        end = time.time()
-        print('new')
-        print('first', middle - start)
-        print('second', end - middle)
-        '''
-        
-        #start = time.time()
         
         base = above.sum(axis=1)[None, ...]          # (1, N, U)
         relevance_above = np.broadcast_to(base, (above_all.shape[0],) + base.shape[1:]).copy()
-
         for x in range(above_all.shape[0]):
             t_idx, u_idx = np.where(diff_mask[x])    # ~Kx positions
             if t_idx.size == 0:
                 continue
             contrib = above_all[x, :, t_idx, u_idx].astype(int).T - above[:, t_idx, u_idx].astype(int) # (N, Kx)
-            # Scatter-add each column to its u bucket
             np.add.at(relevance_above[x], (slice(None), u_idx), contrib)
             
-        #start = time.time()
         base = points_eq.sum(axis=1)[None, ...] # (1,N,U)
         relevance_ties = np.broadcast_to(base, (eq_all.shape[0],) + base.shape[1:]).copy()
         idk = eq_all * frac_per_tie_all[:, None, ...]
@@ -428,48 +355,10 @@ def rank_entropy(artifacts, lvls, persist, targets, CHANGE=True, k=2, num_trials
             contrib = (idk[x, :, t_idx, u_idx]).T - points_eq[:, t_idx, u_idx]
             np.add.at(relevance_ties[x], (slice(None), u_idx), contrib)
         relevance_ties[np.isclose(relevance_ties, 0)] = 0
-        #end = time.time()
-        #print('new', end - start)
-        #end = time.time()
-        #print('new', end - start)
-        #a = np.allclose(attempt, relevance_above)
         
-        #if not a:
-        #    raise ValueError
-        #something = attempt + another
-        
-        #a = np.allclose(something, relevance_above)
-        '''
-        asdf_relevance_above = (
-            np.transpose(above_all, (0, 1, 3, 2))  # (X, N, U, T) contiguous over T
-            .sum(axis=-1, dtype=np.int32)          # avoid bool->float cast during the sum
-            .astype(float)
-        )
-        asdf_relevance_above = above_all.sum(axis=2)
-        if not np.allclose(relevance_above, asdf_relevance_above):
-            raise ValueError
-        '''
-        
-        # eq_all (X,N,T,U)
-        # frac_per_tie_all (X,T,U)
-        # relevance_ties = (eq_all * frac_per_tie_all[:, None, ...]).sum(axis=2)
-        '''
-        '''
-        #target  = np.einsum('xntu, xtu->xnu', eq_all, frac_per_tie_all) # (X,N,U)
-        '''
-        start = time.time()
-        relevance_ties = (eq_all * frac_per_tie_all[:, None, ...]).sum(axis=2)
-        end = time.time()
-        print('old', end - start)
-        a = np.allclose(target, fuck)
-        if not a:
-            raise ValueError
-        '''
-        relevance_all   = relevance_above + relevance_ties                      # (X,N,U)
-        #relevance_all[np.isclose(relevance_all, 0)] = 0
+        relevance_all   = relevance_above + relevance_ties      # (X,N,U)
         entropy_all         = entropy(relevance_all, axis=1)    # (X,U)
         expected_entropy    = probs @ entropy_all               # (U,)
-        
         information_gain[i] -= expected_entropy                 # (N,U)
             
     #information_gain[np.isclose(information_gain, 0)] = 0

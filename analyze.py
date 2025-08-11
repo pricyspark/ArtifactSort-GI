@@ -4,7 +4,7 @@ from artifact import *
 import math
 import time
 from targets import *
-from scipy.stats import entropy
+#from scipy.stats import entropy
 import functools
 from itertools import product
 #import artifact as Artifact

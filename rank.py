@@ -1,7 +1,7 @@
 import numpy as np
 from analyze import *
 import time
-#from scipy.stats import entropy
+from scipy.stats import entropy
 
 '''
 def calc_relevance(scores, k):
@@ -370,24 +370,13 @@ def rank_entropy(artifacts, lvls, persist, targets, k=2, num_trials=200, rng=Non
         persist = {}
         return asdf
     
-    relevance = np.sum(information_gain, axis=1)
+    #relevance = np.sum(information_gain, axis=1)
+    relevance = np.linalg.norm(information_gain, axis=1)
     
     #relevance /= np.where(lvls == 20, 1, UPGRADE_REQ_EXP[lvls])
-    
-    print()
-    print(changed)
-    print_artifact(artifacts[changed])
-    print(information_gain[changed])
-    print()
-    
     return relevance
     
 if __name__ == '__main__':
-    '''
-    start = time.time()
-    num = 1
-    totals = np.zeros(num)
-    time_avg = np.zeros(num)
     #targets = {'atk_': 6, 'atk': 2, 'crit_': 8}
     targets = (
         {'hp_': 6, 'hp': 2, 'crit_': 8},
@@ -406,22 +395,23 @@ if __name__ == '__main__':
         {'def_': 6, 'def': 2, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7}
     )
 
-    for i in range(num):
-        artifacts = generate('flower', size=50, seed=i)
-        totals[i] = (simulate_exp(artifacts, np.zeros(50, dtype=int), targets, rank_value))
-        print(i, totals[i])
-        print()
-
-    cumsum = np.cumsum(totals)
-    for i in range(len(cumsum)):
-        time_avg[i] = cumsum[i] / (i + 1)
-        
-    print(time_avg[-1])
+    num_seeds = 2
+    num_iterations = 5
+    totals = np.zeros((num_seeds, num_iterations))
+    
+    start = time.time()
+    for i in range(num_seeds):
+        for j in range(num_iterations):
+            artifacts = generate('flower', size=20, seed=i)
+            totals[i, j] = (simulate_exp(artifacts, np.zeros(20, dtype=int), targets, rank_entropy))
     end = time.time()
+            
+    print(np.mean(totals, axis=1))
+    print(np.mean(totals))
     print(end - start)
     '''
-
     '''
+
     '''
     start = time.time()
     filename = 'artifacts/genshinData_GOOD_2025_07_31_18_01.json'
@@ -433,3 +423,4 @@ if __name__ == '__main__':
     visualize(relevant, artifacts, slots, sets, lvls)
     end = time.time()
     print(end - start)
+    '''

@@ -376,8 +376,8 @@ def simulate_exp(artifacts, lvls, targets, fun, num=1, mains=None):
             goal[i] = np.argmax(scores)
     
     print('goal:', goal)
-    print_artifact(artifacts[goal])
-    print()
+    #print_artifact(artifacts[goal])
+    #print()
     artifacts = original_artifacts.copy()
     #distros = distro(artifacts, lvls)
     persist = {}
@@ -397,15 +397,15 @@ def simulate_exp(artifacts, lvls, targets, fun, num=1, mains=None):
             
         for idx in chosen:
             if lvls[idx] == 20:
-                raise ValueError
+                raise ValueError('Attempted to upgrade maxed artifact')
             #print_artifact(artifacts[idx])
             smart_upgrade(artifacts[idx])
             exp += UPGRADE_REQ_EXP[lvls[idx]]
             lvls[idx] = next_lvl(lvls[idx])
             #distros[0][idx], distros[1][idx] = distro(artifacts[idx], lvls[idx])
-            print(exp)
+            #print(exp)
             
-        persist['changed'] = chosen
+        persist['changed'] += list(chosen)
             
     return exp
 

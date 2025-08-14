@@ -35,7 +35,7 @@ def calc_relevance(scores, k):
 def my_entropy(array, axis=None):
     return -np.sum(array * np.log(array, where=array != 0), axis=axis)
     
-def rank_value(artifacts, lvls, persist, targets, k=2, num_trials=1000, rng=None, seed=None):
+def rank_value(artifacts, lvls, persist, targets, k=2, num_trials=1000, rng=None, seed=None, save_entropy=False):
     num_artifacts = len(artifacts)
     try:
         _ = iter(lvls)
@@ -61,7 +61,7 @@ def rank_value(artifacts, lvls, persist, targets, k=2, num_trials=1000, rng=None
         rng = np.random.default_rng(seed)
     
     if len(persist) == 0:
-        persist['changed'] = None
+        persist['changed'] = []
 
         maxed = np.zeros((num_artifacts, num_trials, 19), dtype=np.uint8)
         for i in range(num_artifacts):
@@ -78,7 +78,7 @@ def rank_value(artifacts, lvls, persist, targets, k=2, num_trials=1000, rng=None
         persist['targets'] = targets
         persist['scores'] = score(persist['maxed'], targets.T)    
         
-    if persist['changed'] is not None:
+    if len(persist['changed']) != 0:
         changed = persist['changed']
         try:
             _ = iter(changed)
@@ -87,6 +87,8 @@ def rank_value(artifacts, lvls, persist, targets, k=2, num_trials=1000, rng=None
         for idx in changed:
             persist['maxed'][idx] = sample_upgrade(artifacts[idx], num_trials, lvl=lvls[idx], rng=rng)
             persist['scores'][idx] = score(persist['maxed'][idx], targets.T)
+            
+        persist['changed'] = []
         
     scores = persist['scores']
     
@@ -119,21 +121,29 @@ def rank_value(artifacts, lvls, persist, targets, k=2, num_trials=1000, rng=None
     # 5) Sum up:
     #    - 1 point for every “above”
     #    - 1/tie_count for every “tie”
-    relevance = above.sum(axis=(1, 2)).astype(float)
-    relevance += eq_contrib.sum(axis=(1, 2))
+    relevance = above + eq_contrib  # (N,T,U)
+    if save_entropy:
+        relevance = relevance.sum(axis=1)   # (N,U)
+        persist['entropy'] = np.linalg.norm(entropy(relevance, axis=0))
+        relevance = relevance.sum(axis=1)   # (N,)
+    else:
+        relevance = relevance.sum(axis=(1, 2))  # (N,)
+        
+    relevance /= num_trials
+    #relevance = np.linalg.norm(relevance, axis=1)
     # relevance = np.sum(calc_relevance(scores, k), axis=1) # This extra function call and sum adds non-negligible overhead
     relevance /= np.where(lvls == 20, 1, MAX_REQ_EXP[lvls])
-    if np.max(relevance) == 0:
+    if np.max(relevance[lvls != 20]) == 0:
         print('max was 0')
         for i in range(num_artifacts):
             persist['maxed'][i] = sample_upgrade(artifacts[i], num_trials, lvl=lvls[i], rng=rng)
         persist['targets'] = None
-        persist['changed'] = -1
+        persist['changed'] = []
         return rank_value(artifacts, lvls, persist, targets, k, num_trials, rng)
         
     return relevance
 
-def rank_entropy(artifacts, lvls, persist, targets, k=2, num_trials=200, rng=None, seed=None):
+def rank_entropy(artifacts, lvls, persist, targets, k=2, num_trials=200, rng=None, seed=None, value_threshold=0):
     num_artifacts = len(artifacts)
     try:
         _ = iter(lvls)
@@ -184,7 +194,7 @@ def rank_entropy(artifacts, lvls, persist, targets, k=2, num_trials=200, rng=Non
             for j, upgrade in enumerate(upgrades):
                 distros_maxed[-1][j] = sample_upgrade(upgrade, num_trials, lvl=next, rng=rng)
                 
-        persist['changed'] = None
+        persist['changed'] = []
         persist['maxed'] = maxed
         persist['distros'] = distros
         persist['distros_maxed'] = distros_maxed
@@ -205,7 +215,7 @@ def rank_entropy(artifacts, lvls, persist, targets, k=2, num_trials=200, rng=Non
         
         persist['distros_scores'] = distros_scores
                         
-    if persist['changed'] is not None:
+    if len(persist['changed']) != 0:
         changed = persist['changed']
         try:
             _ = iter(changed)
@@ -233,6 +243,8 @@ def rank_entropy(artifacts, lvls, persist, targets, k=2, num_trials=200, rng=Non
                     persist['distros_maxed'][idx][i] = sample_upgrade(upgrade, num_trials, lvl=next, rng=rng)
                     
                 persist['distros_scores'][idx] = score(persist['distros_maxed'][idx], targets.T)
+                
+        persist['changed'] = []
             
     scores, distros, distros_scores = persist['scores'], persist['distros'], persist['distros_scores']
     
@@ -245,7 +257,7 @@ def rank_entropy(artifacts, lvls, persist, targets, k=2, num_trials=200, rng=Non
         return relevance
     
     if k == 1:
-        pass
+        k_plus_cutoff, k_cutoff = np.partition(scores, -2, axis=0)[-2:]
     elif k == 2:
         k_plus_cutoff, k_cutoff, k_minus_cutoff = np.partition(scores, (-k - 1, -k, -k + 1), axis=0)[-k - 1:] # (T,U)
     else:
@@ -261,7 +273,9 @@ def rank_entropy(artifacts, lvls, persist, targets, k=2, num_trials=200, rng=Non
     points = above.astype(float) + points_eq # (N,T,U)
 
     base_relevance = points.sum(axis=1) # (N,U)
-    if np.max(base_relevance) > k / 2:
+    
+    '''
+    if np.max(base_relevance) > num_trials / 2:
         flat_idx = base_relevance.argmax()
         row_idx = flat_idx // base_relevance.shape[1]
         if lvls[row_idx] != 20:
@@ -271,6 +285,7 @@ def rank_entropy(artifacts, lvls, persist, targets, k=2, num_trials=200, rng=Non
             print_artifact(artifacts[row_idx])
             print()
             return row_idx
+    '''
         
     base_entropy = entropy(base_relevance, axis=0) # (U,)
     information_gain = np.tile(base_entropy, (num_artifacts, 1)) # (N,U)
@@ -278,8 +293,19 @@ def rank_entropy(artifacts, lvls, persist, targets, k=2, num_trials=200, rng=Non
     if np.max(information_gain) == np.inf:
         raise ValueError
 
+    #print(value_threshold)
+    #value_threshold = 1e-08
+    value_relevance = base_relevance.sum(axis=1)
+    value_relevance /= num_trials
+    value_relevance /= np.where(lvls == 20, 1, MAX_REQ_EXP[lvls])
+    relevant_mask = value_relevance > value_threshold
+
     for i in range(len(artifacts)):
         if lvls[i] == 20:
+            information_gain[i] = 0
+            continue
+        
+        if not relevant_mask[i]:
             information_gain[i] = 0
             continue
         
@@ -294,7 +320,8 @@ def rank_entropy(artifacts, lvls, persist, targets, k=2, num_trials=200, rng=Non
         original = scores[i]            # (T,U)
 
         if k == 1:
-            pass
+            new_k_cutoff        = np.where(original < k_cutoff, k_cutoff, k_plus_cutoff)        # (T,U)
+            cutoffs             = np.maximum(upgrades, new_k_cutoff[None, ...])                # (X,T,U)
         else:
             new_k_cutoff        = np.where(original < k_cutoff, k_cutoff, k_plus_cutoff)        # (T,U)
             new_k_minus_cutoff  = np.where(original < k_minus_cutoff, k_minus_cutoff, k_cutoff) # (T,U)
@@ -372,9 +399,109 @@ def rank_entropy(artifacts, lvls, persist, targets, k=2, num_trials=200, rng=Non
     
     #relevance = np.sum(information_gain, axis=1)
     relevance = np.linalg.norm(information_gain, axis=1)
+    #print('                                                ', np.max(relevance / np.linalg.norm(base_entropy)))
     
-    #relevance /= np.where(lvls == 20, 1, UPGRADE_REQ_EXP[lvls])
+    relevance /= np.where(lvls == 20, 1, UPGRADE_REQ_EXP[lvls])
+    
+    '''
+    value_relevance = base_relevance.sum(axis=1)
+    value_relevance /= num_trials
+    value_relevance /= np.where(lvls == 20, 1, MAX_REQ_EXP[lvls])
+    
+    value_relevance[lvls == 20] = 0
+    most = np.argmax(relevance)
+    print('                                    ', value_relevance[most], ',', )
+    '''
+    
     return relevance
+
+def rank_combine(artifacts, lvls, persist, targets, k=2, num_trials=100, rng=None, seed=None):
+    num_artifacts = len(artifacts)
+    
+    match targets: # This is only here in case num_targets is needed
+        case dict():
+            targets = vectorize(targets).reshape((1, -1))
+        case np.ndarray():
+            if targets.ndim == 1:
+                targets = targets.reshape((1, -1))    
+        case _:
+            temp = np.zeros((len(targets), 19), dtype=np.uint32)
+            for i, target in enumerate(targets):
+                temp[i] = vectorize(target)
+            targets = temp
+    
+    num_targets = len(targets)
+    
+    if rng is None:
+        rng = np.random.default_rng(seed)
+        
+    if len(persist) == 0:
+        value_persist = {}
+        entropy_persist = {}
+        
+        persist['value'] = value_persist
+        persist['entropy'] = entropy_persist
+        persist['changed'] = []
+        persist['value_changed'] = []
+        persist['entropy_changed'] = []
+        
+    if len(persist['changed']) != 0:
+        changed = persist['changed']
+        try:
+            persist['value']['changed'] += changed
+        except:
+            pass
+        try:
+            persist['entropy']['changed'] += changed
+        except:
+            pass
+        
+        
+    value_persist, entropy_persist = persist['value'], persist['entropy']
+        
+    beta = 0.05
+    value_relevance = rank_value(artifacts, lvls, value_persist, targets, k, 1000, rng, save_entropy=True)
+    if k == 1:
+        a, b = np.partition(value_relevance[lvls != 20], (-2, -1))[-2:]
+    else:
+        a, b = np.partition(value_relevance[lvls != 20], (-k-1, -k))[-k-1:-k+1]
+    max_entropy = value_persist['entropy']
+    #what = 
+    max_entropy_relevance = beta * max_entropy / UPGRADE_REQ_EXP[0] * 0.5
+    #if b - a > -beta * np.log(1/num_artifacts):
+    diff = b - a
+    if diff > max_entropy_relevance:
+        #print('       skipped')
+        return value_relevance
+    
+    '''
+    print('       not skipped')
+    print(diff)
+    print(max_entropy_relevance)
+    '''
+    #print(-np.log(1/num_artifacts) * beta * np.sqrt(num_targets) / UPGRADE_REQ_EXP[0])
+    value_threshold = b - max_entropy_relevance
+    entropy_relevance = rank_entropy(artifacts, lvls, entropy_persist, targets, k, num_trials, rng, value_threshold=value_threshold)
+    
+    '''
+    (x + y)^2 = xy
+    x^2 + 2xy + y^2 = xy
+    
+    print()
+    value_relevance[lvls == 20] = 0
+    try:
+        entropy_relevance[lvls == 20] = 0
+    except:
+        pass
+    print(value_relevance)
+    print(entropy_relevance)
+    print('value', np.max(value_relevance))
+    print('entropy', np.max(entropy_relevance))
+    print()
+    '''
+    
+    
+    return value_relevance + beta * entropy_relevance
     
 if __name__ == '__main__':
     #targets = {'atk_': 6, 'atk': 2, 'crit_': 8}
@@ -395,17 +522,18 @@ if __name__ == '__main__':
         {'def_': 6, 'def': 2, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7}
     )
 
-    num_seeds = 2
-    num_iterations = 5
+    num_seeds = 5
+    num_iterations = 10
     totals = np.zeros((num_seeds, num_iterations))
     
     start = time.time()
     for i in range(num_seeds):
         for j in range(num_iterations):
-            artifacts = generate('flower', size=20, seed=i)
-            totals[i, j] = (simulate_exp(artifacts, np.zeros(20, dtype=int), targets, rank_entropy))
+            artifacts = generate('flower', size=50, seed=i)
+            totals[i, j] = (simulate_exp(artifacts, np.zeros(50, dtype=int), targets, rank_combine))
     end = time.time()
             
+    print(totals)
     print(np.mean(totals, axis=1))
     print(np.mean(totals))
     print(end - start)

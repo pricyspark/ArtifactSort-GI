@@ -372,7 +372,6 @@ def rank_entropy(artifacts, slvls, persist, targets, k=1, num_trials=1000, rng=N
     
     if k == 1:
         k_cutoff = np.max(scores, axis=0)
-        #k_plus_cutoff, k_cutoff = np.partition(scores, -2, axis=0)[-2:]
     else:
         k_cutoff = np.partition(scores, -k, axis=0)[-k] # (T,U)
     
@@ -392,8 +391,18 @@ def rank_entropy(artifacts, slvls, persist, targets, k=1, num_trials=1000, rng=N
     
     #original_estimate_exp = estimate_exp(base_relevance,
     #MAX_REQ_EXP[lvls]
+    
+    '''
+    a, b = np.argpartition(scores, -2, axis=0)[-2:] # (T,U)
+    second = scores[a, *np.indices(a.shape)] # (T,U)
+    first = scores[b, *np.indices(b.shape)] # (T,U)
+    '''
+    
     for i in range(len(artifacts)):
         if slvls[i] == 20:
+            continue
+        
+        if value_relevance[i] == 0:
             continue
         
         tape = tapes[i]                                 # (T,X)
@@ -407,8 +416,6 @@ def rank_entropy(artifacts, slvls, persist, targets, k=1, num_trials=1000, rng=N
         for upgrade, mask in zip(tape_values[i], masks):
             sub = upgrade // 4
             increment = upgrade % 4 + 7
-            if np.count_nonzero(artifacts[i]) == 4:
-                increment += 40
             delta[mask] = increment * targets[:, sub]
             
         greater = delta > m # (T,U)
@@ -438,6 +445,13 @@ def rank_entropy(artifacts, slvls, persist, targets, k=1, num_trials=1000, rng=N
             #potential_exp = new_estimate_exp(a, b, MAX_REQ_EXP[temp_lvls], rng)
             information_gain[i] -= prob * potential_entropy
             estimate_exps[i] += prob * potential_exp
+        '''
+        if value_relevance[i] != 0:
+            if np.any(ig_ub < information_gain[i]):
+                print(ig_ub)
+                print(information_gain[i])
+                print()
+        '''
         #maskmask = base_relevance[i] > 0.005
         #if not np.all(ig_ub >= information_gain[i]):
         #    raise ValueError
@@ -450,8 +464,11 @@ def rank_entropy(artifacts, slvls, persist, targets, k=1, num_trials=1000, rng=N
     information_gain = np.linalg.norm(information_gain, axis=1) # (N,)
     information_gain /= np.maximum(1, MAX_REQ_EXP[slvls])
     information_gain[slvls == 20] = -999999
+    information_gain[value_relevance == 0] = -999999
     IG_choice = np.argmax(information_gain)
-    print('IG choice', IG_choice)
+    if value_relevance[IG_choice] == 0:
+        print('DAMMIT', end='')
+    #print('IG choice', IG_choice)
     if estimate_exps[IG_choice] < estimate_exps[value_choice]:
         print('entropy', estimate_exps[IG_choice], estimate_exps[value_choice])
         return information_gain
@@ -805,15 +822,15 @@ def rank_evsi_prob(artifacts, lvls, persist, targets, k=2, num_trials=500, rng=N
     return np.sum(prob_diff, axis=1)
     #return prob_diff
     
-def rank_estimate(artifacts, lvls, persist, targets, k=1, num_trials=1000, rng=None, seed=None):
+def rank_estimate(artifacts, slvls, persist, targets, k=1, num_trials=1000, rng=None, seed=None):
     num_artifacts = len(artifacts)
     try:
-        _ = iter(lvls)
-        lvls = np.array(lvls)
+        _ = iter(slvls)
+        slvls = np.array(slvls)
     except:
-        if lvls is None:
-            lvls = 0
-        lvls = np.full(num_artifacts, lvls)
+        if slvls is None:
+            slvls = 0
+        slvls = np.full(num_artifacts, slvls)
     
     match targets:
         case dict():
@@ -838,14 +855,9 @@ def rank_estimate(artifacts, lvls, persist, targets, k=1, num_trials=1000, rng=N
         tapes = []
         #tapes = np.zeros((num_artifacts, num_trials, 5), dtype=np.uint8)
         for i in range(num_artifacts):
-            maxed[i], tape = sample_upgrade(artifacts[i], num_trials, lvl=lvls[i], rng=rng)
+            maxed[i], tape = sample_upgrade(artifacts[i], num_trials, slvl=slvls[i], rng=rng)
             tapes.append(tape)
-        
-            if np.count_nonzero(artifacts[i]) == 4:
-                possible_substats = np.where(artifacts[i, :10] == 0)[0]
-                tape_values.append((possible_substats[:, None] * 4 + np.arange(4)).flatten())
-            else:
-                tape_values.append((find_sub(artifacts[i])[:, None] * 4 + np.arange(4)).flatten())
+            tape_values.append((find_sub(artifacts[i])[:, None] * 4 + np.arange(4)).flatten())
                 
         persist['changed'] = []
         persist['maxed'] = maxed
@@ -864,13 +876,11 @@ def rank_estimate(artifacts, lvls, persist, targets, k=1, num_trials=1000, rng=N
         except:
             changed = [changed]
         for idx in changed:
-            persist['maxed'][idx], persist['tapes'][idx] = sample_upgrade(artifacts[idx], num_trials, lvl=lvls[idx], rng=rng)
+            persist['maxed'][idx], persist['tapes'][idx] = sample_upgrade(artifacts[idx], num_trials, slvl=slvls[idx], rng=rng)
             persist['scores'][idx]= score(persist['maxed'][idx], targets.T)
             
-            if lvls[idx] == 20:
+            if slvls[idx] == 20:
                 persist['tape_values'][idx] = None
-            elif lvls[idx] == 4:
-                persist['tape_values'][idx] = (find_sub(artifacts[idx])[:, None] * 4 + np.arange(4)).flatten()
                 
         persist['changed'] = []
             
@@ -886,36 +896,31 @@ def rank_estimate(artifacts, lvls, persist, targets, k=1, num_trials=1000, rng=N
     else:
         k_cutoff = np.partition(scores, -k, axis=0)[-k] # (T,U)
     
-    potential_estimate_exps = UPGRADE_REQ_EXP[lvls]
+    above, eq = new_winner_prob(scores, k_cutoff, k)    # (N,T,U)
+    winners = above + eq
+    estimate_exps = UPGRADE_REQ_EXP[slvls]
     
     for i in range(len(artifacts)):
-        if lvls[i] == 20:
+        if slvls[i] == 20:
             continue
-        
-        potential_lvls = lvls.copy()
-        potential_lvls[i] += 4
         
         tape = tapes[i]
         masks = tape_values[i][:, None] == tape[:, 0]
+        
+        temp_slvls = slvls.copy()
+        temp_slvls[i] = next_lvl(temp_slvls[i])
         
         for mask in masks:
             prob = np.mean(mask)
             if prob == 0:
                 continue
             
-            masked_scores = scores[:, mask, :]
-            masked_cutoff = k_cutoff[mask, :]
-            
-            a, b = new_winner_prob(masked_scores, masked_cutoff, k)
-            #potential_relevance = winner_prob(masked_scores, masked_cutoff, k)  # (N,T,U)
-            
-            #potential_points = np.mean(potential_relevance, axis=1)   # (N,U)
-            #potential_estimate_exp = estimate_exp(potential_points, MAX_REQ_EXP[potential_lvls])
-            potential_estimate_exp = new_estimate_exp(a, b, MAX_REQ_EXP[potential_lvls], rng)
-            potential_estimate_exps[i] += prob * potential_estimate_exp
+            potential_points = np.mean(winners[:, mask, :], axis=1)   # (N,U)
+            potential_exp = estimate_exp(potential_points, MAX_REQ_EXP[temp_slvls])
+            estimate_exps[i] += prob * potential_exp
     #print()
     #print('min estimate exp:', np.min(potential_estimate_exps[lvls != 20]))
-    return -potential_estimate_exps
+    return -estimate_exps
     
 def rank_temp(artifacts, lvls, persist, targets, k=1, num_trials=1000, rng=None, seed=None):
     num_artifacts = len(artifacts)
@@ -1641,6 +1646,7 @@ def rank_pairwise(artifacts, lvls, persist, targets, k=2, num_trials=1000, rng=N
     return relevance
     
 if __name__ == '__main__':
+    '''
     #targets = {'atk_': 6, 'atk': 2, 'crit_': 8}
     targets = (
         {'hp_': 6, 'hp': 2, 'crit_': 8},
@@ -1658,18 +1664,16 @@ if __name__ == '__main__':
         {'def_': 6, 'def': 2, 'crit_': 8, 'eleMas': 7},
         {'def_': 6, 'def': 2, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7}
     )
-    '''
-    '''
 
     num_seeds = 10
-    num_iterations = 10
+    num_iterations = 1
     totals = np.zeros((num_seeds, num_iterations))
     
     start = time.time()
     for i in range(num_seeds):
         for j in range(num_iterations):
-            artifacts, slvls = generate('flower', size=200, seed=i)
-            totals[i, j] = (simulate_exp(artifacts, slvls, targets, rank_entropy))
+            artifacts, slvls = generate('flower', size=50, seed=i)
+            totals[i, j] = (simulate_exp(artifacts, slvls, targets, rank_value))
     end = time.time()
             
     np.save('data/entropy_0.125_2000_200.npy', totals)
@@ -1685,6 +1689,7 @@ if __name__ == '__main__':
     print('std', np.linalg.norm(row_std / np.sqrt(num_iterations)) / num_seeds)
     print('ratio', np.linalg.norm(row_std / np.sqrt(num_iterations)) / num_seeds / np.mean(totals))
     print(end - start)
+    '''
     '''
     
     totals = np.zeros((num_seeds, num_iterations))
@@ -1730,9 +1735,8 @@ if __name__ == '__main__':
     print(end - start)
     '''
 
-    '''
     start = time.time()
-    filename = 'artifacts/genshinData_GOOD_2025_09_01_01_03.json'
+    filename = 'artifacts/genshinData_GOOD_2025_09_09_03_31.json'
     artifacts, slots, rarities, lvls, sets = load(filename)
     relevant = rate(artifacts, slots, rarities, lvls, sets, rank_value, num=100)
     
@@ -1741,4 +1745,5 @@ if __name__ == '__main__':
     visualize(relevant, artifacts, slots, sets, lvls)
     end = time.time()
     print(end - start)
+    '''
     '''

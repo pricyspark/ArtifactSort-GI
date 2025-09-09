@@ -110,20 +110,26 @@ SUB_COEFS = np.array((7, 8, 9, 10), dtype=np.uint8)
 
 ARTIFACT_REQ_EXP = np.array(
     (
-        0, 3000, 6725, 11150, 
-        16300, 22200, 28875, 36375, 
-        44725, 53950, 64075, 75125, 
-        87150, 100175, 115325, 132925, 
+        0,      3000,   6725,   11150, 
+        16300,  22200,  28875,  36375, 
+        44725,  53950,  64075,  75125, 
+        87150,  100175, 115325, 132925, 
         153300, 176800, 203850, 234900, 
-        270475
+        270475, 
+        0,      3000,   6725,   11150
     ), 
     dtype=int
 )
 
 UPGRADE_REQ_EXP = np.array(
     (
-        16300, 13300, 9575, 5150, 28425, 22525, 15850, 8350, 42425, 33200, 
-        23075, 12025, 66150, 53125, 37975, 20375, 117175, 93675, 66625, 35575, 0
+        16300,  13300,  9575,   5150, 
+        28425,  22525,  15850,  8350, 
+        42425,  33200,  23075,  12025, 
+        66150,  53125,  37975,  20375, 
+        117175, 93675,  66625,  35575, 
+        0,
+        44725,  41725,  38000,  33575
     ), 
     dtype=int
 ) # TODO: check this
@@ -134,8 +140,9 @@ MAX_REQ_EXP = np.array(
         254175, 248275, 241600, 234100,
         225750, 216525, 206400, 195350,
         183325, 170300, 155150, 137550,
-        117175, 93675, 66625, 35575,
-        0
+        117175, 93675,  66625,  35575,
+        0,
+        270475, 267475, 263750, 259325
     ), 
     dtype=int
 )
@@ -161,14 +168,14 @@ def find_sub(artifact, main=None): # TODO: i'm skeptical of performance
 def generate(slot, main=None, lvls=None, source='domain', size=None, rng=None, seed=None):
     try:
         _ = iter(lvls)
-        lvls = np.array(lvls)
+        slvls = np.array(lvls)
         size = len(lvls)
     except:
         if size is None:
             size = 1
         if lvls is None:
             lvls = 0
-        lvls = np.full(size, lvls)
+        slvls = np.full(size, lvls)
         
     if rng is None:
         rng = np.random.default_rng(seed)
@@ -190,15 +197,17 @@ def generate(slot, main=None, lvls=None, source='domain', size=None, rng=None, s
         
     output = np.zeros((size, 19), dtype=np.uint8)
     
-    for idx, lvl in enumerate(lvls):
+    for idx, slvl in enumerate(slvls):
         # Figure out num_upgrades and num_substats for each artifact
-        num_upgrades = lvl // 4
-        num_substats = 4
+        num_upgrades = slvl // 4
         if rng.random() > prob:
+            num_upgrades -= 1
+            '''
             if num_upgrades == 0:
                 num_substats -= 1
             else:
                 num_upgrades -= 1
+            '''
                 
         # Figure out main stat
         main = rng.choice(19, p=MAIN_PROBS[slot])
@@ -211,20 +220,24 @@ def generate(slot, main=None, lvls=None, source='domain', size=None, rng=None, s
         sub_probs = SUB_PROBS.copy()
         sub_probs[main] = 0
         sub_probs /= np.sum(sub_probs)
-        substats = rng.choice(19, size=num_substats, replace=False, p=sub_probs)
+        substats = rng.choice(19, size=4, replace=False, p=sub_probs)
         for substat in substats:
             output[idx, substat] += rng.choice(SUB_COEFS)
             
-        # Upgrade substats
-        upgrades = rng.choice(4, size=num_upgrades, replace=True)
-        for upgrade in upgrades:
-            output[idx, substats[upgrade]] += rng.choice(SUB_COEFS)
+        if num_upgrades == -1:
+            slvls[idx] -= 4
+        else:
+            # Upgrade substats
+            upgrades = rng.choice(4, size=num_upgrades, replace=True)
+            for upgrade in upgrades:
+                output[idx, substats[upgrade]] += rng.choice(SUB_COEFS)
             
-    return output
+    return output, slvls
 
 def artifact_to_dict(artifacts):
     pass
 
+# TODO: update for new GOOD formatting
 def dict_to_artifact(dicts):
     if type(dicts) == dict:
         artifact = np.zeros(19, dtype=np.uint8)
@@ -311,13 +324,7 @@ def print_artifact(artifacts, human_readable=True) -> None:
             print()
 
 def _upgrade_helper(artifact, rng, main=None):
-    if np.count_nonzero(artifact) == 4:
-        sub_probs = SUB_PROBS.copy()
-        sub_probs[np.nonzero(artifact)[0]] = 0
-        sub_probs /= np.sum(sub_probs)
-        artifact[rng.choice(19, p=sub_probs)] = rng.choice(SUB_COEFS)
-    else:
-        artifact[rng.choice(find_sub(artifact, main=main))] += rng.choice(SUB_COEFS)
+    artifact[rng.choice(find_sub(artifact, main=main))] += rng.choice(SUB_COEFS)
 
 def upgrade(artifacts, mains=None, rng=None, seed=None):
     if rng is None:
@@ -349,32 +356,32 @@ def smart_upgrade(artifacts, mains=None):
         for artifact, seed in zip(artifacts, seeds):
             RNG = np.random.default_rng(seed)
             _upgrade_helper(artifact, RNG)
-            
-def smart_upgrade_until_max(artifacts, lvls, mains=None): # TODO: this is code duplication
-    num_upgrades = 5 - lvls // 4
+
+def smart_upgrade_until_max(artifacts, slvls, mains=None): # TODO: this is code duplication
+    num_upgrades = np.where(slvls < 0, 4, 5 - slvls // 4)    
     
     if artifacts.ndim == 1 or len(artifacts) == 1:
         for _ in range(num_upgrades):
             smart_upgrade(artifacts, mains)
     else:
         if mains is None:
-            mains = [None] * len(lvls)
-        for artifact, lvl, main in zip(artifacts, num_upgrades, mains):
-            for _ in range(lvl):
+            mains = [None] * len(slvls)
+        for artifact, num, main in zip(artifacts, num_upgrades, mains):
+            for _ in range(num):
                 smart_upgrade(artifact, main)
     
-def upgrade_until_max(artifacts, lvls, mains=None, seed=None):
-    num_upgrades = 5 - lvls // 4
+def upgrade_until_max(artifacts, slvls, mains=None, seed=None):
+    num_upgrades = np.where(slvls < 0, 4, 5 - slvls // 4)    
     
     if artifacts.ndim == 1 or len(artifacts) == 1:
         for _ in range(num_upgrades):
             upgrade(artifacts, mains, seed)
     else:
         if mains is None:
-            mains = [None] * len(lvls)
-        for artifact, lvl, main in zip(artifacts, num_upgrades, mains):
-            for _ in range(lvl):
-                upgrade(artifact, main, seed) # TODO seed generator, otherwise they all get the same seed
+            mains = [None] * len(slvls)
+        for artifact, num, main in zip(artifacts, num_upgrades, mains):
+            for _ in range(num):
+                upgrade(artifact, main) # TODO seed generator, otherwise they all get the same seed
 
 def estimate_lvl(artifacts):
     # TODO: maybe make this more advanced, considering the number of

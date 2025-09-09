@@ -38,6 +38,7 @@ def my_entropy(array, axis=None):
     # solve if needed
     #mask = array > 0
     #return -np.sum(array[mask] * np.log(array[mask]), axis=axis)
+    #return -np.sum(array * np.log(array, where=array != 0, out=np.zeros_like(array)), axis=axis)
     return -np.sum(array * np.log(array, where=array != 0), axis=axis)
     #return -np.sum(np.where(array > 0, array * np.log(array), 0.0), axis=axis)
 
@@ -203,15 +204,15 @@ def estimate_exp(probs, exp):
     '''
     return total
 
-def rank_value(artifacts, lvls, persist, targets, k=1, num_trials=2000, rng=None, seed=None, save_entropy=False):
+def rank_value(artifacts, slvls, persist, targets, k=1, num_trials=2000, rng=None, seed=None, save_entropy=False):
     num_artifacts = len(artifacts)
     try:
-        _ = iter(lvls)
-        lvls = np.array(lvls)
+        _ = iter(slvls)
+        slvls = np.array(slvls)
     except:
-        if lvls is None:
-            lvls = 0
-        lvls = np.full(num_artifacts, lvls)
+        if slvls is None:
+            slvls = 0
+        slvls = np.full(num_artifacts, slvls)
     
     match targets:
         case dict():
@@ -233,7 +234,7 @@ def rank_value(artifacts, lvls, persist, targets, k=1, num_trials=2000, rng=None
 
         maxed = np.zeros((num_artifacts, num_trials, 19), dtype=np.uint8)
         for i in range(num_artifacts):
-            maxed[i], tape = sample_upgrade(artifacts[i], num_trials, lvl=lvls[i], rng=rng)
+            maxed[i], tape = sample_upgrade(artifacts[i], num_trials, slvl=slvls[i], rng=rng)
         persist['maxed'] = maxed
         persist['targets'] = None
     
@@ -253,7 +254,7 @@ def rank_value(artifacts, lvls, persist, targets, k=1, num_trials=2000, rng=None
         except:
             changed = [changed]
         for idx in changed:
-            persist['maxed'][idx], tape = sample_upgrade(artifacts[idx], num_trials, lvl=lvls[idx], rng=rng)
+            persist['maxed'][idx], tape = sample_upgrade(artifacts[idx], num_trials, slvl=slvls[idx], rng=rng)
             persist['scores'][idx] = score(persist['maxed'][idx], targets.T)
             
         persist['changed'] = []
@@ -262,7 +263,7 @@ def rank_value(artifacts, lvls, persist, targets, k=1, num_trials=2000, rng=None
     
     if num_artifacts <= k:
         relevance = np.full((num_artifacts), num_trials, dtype=float)
-        relevance /= np.where(lvls == 20, 1, MAX_REQ_EXP[lvls])
+        relevance /= np.where(slvls == 20, 1, MAX_REQ_EXP[slvls])
         
         return relevance
     
@@ -287,7 +288,7 @@ def rank_value(artifacts, lvls, persist, targets, k=1, num_trials=2000, rng=None
         
     #relevance = np.linalg.norm(relevance, axis=1)
     # relevance = np.sum(calc_relevance(scores, k), axis=1) # This extra function call and sum adds non-negligible overhead
-    relevance /= np.where(lvls == 20, 1, MAX_REQ_EXP[lvls])
+    relevance /= np.where(slvls == 20, 1, MAX_REQ_EXP[slvls])
     '''
     if np.max(relevance[lvls != 20]) == 0:
         print('max was 0')
@@ -300,15 +301,15 @@ def rank_value(artifacts, lvls, persist, targets, k=1, num_trials=2000, rng=None
         
     return relevance
 
-def rank_entropy(artifacts, lvls, persist, targets, k=1, num_trials=1000, rng=None, seed=None, value_threshold=0):
+def rank_entropy(artifacts, slvls, persist, targets, k=1, num_trials=1000, rng=None, seed=None, value_threshold=0):
     num_artifacts = len(artifacts)
     try:
-        _ = iter(lvls)
-        lvls = np.array(lvls)
+        _ = iter(slvls)
+        slvls = np.array(slvls)
     except:
-        if lvls is None:
-            lvls = 0
-        lvls = np.full(num_artifacts, lvls)
+        if slvls is None:
+            slvls = 0
+        slvls = np.full(num_artifacts, slvls)
     
     match targets:
         case dict():
@@ -333,14 +334,9 @@ def rank_entropy(artifacts, lvls, persist, targets, k=1, num_trials=1000, rng=No
         tapes = []
         #tapes = np.zeros((num_artifacts, num_trials, 5), dtype=np.uint8)
         for i in range(num_artifacts):
-            maxed[i], tape = sample_upgrade(artifacts[i], num_trials, lvl=lvls[i], rng=rng)
+            maxed[i], tape = sample_upgrade(artifacts[i], num_trials, slvl=slvls[i], rng=rng)
             tapes.append(tape)
-        
-            if np.count_nonzero(artifacts[i]) == 4:
-                possible_substats = np.where(artifacts[i, :10] == 0)[0]
-                tape_values.append((possible_substats[:, None] * 4 + np.arange(4)).flatten())
-            else:
-                tape_values.append((find_sub(artifacts[i])[:, None] * 4 + np.arange(4)).flatten())
+            tape_values.append((find_sub(artifacts[i])[:, None] * 4 + np.arange(4)).flatten())
                 
         persist['changed'] = []
         persist['maxed'] = maxed
@@ -359,13 +355,11 @@ def rank_entropy(artifacts, lvls, persist, targets, k=1, num_trials=1000, rng=No
         except:
             changed = [changed]
         for idx in changed:
-            persist['maxed'][idx], persist['tapes'][idx] = sample_upgrade(artifacts[idx], num_trials, lvl=lvls[idx], rng=rng)
+            persist['maxed'][idx], persist['tapes'][idx] = sample_upgrade(artifacts[idx], num_trials, slvl=slvls[idx], rng=rng)
             persist['scores'][idx]= score(persist['maxed'][idx], targets.T)
             
-            if lvls[idx] == 20:
+            if slvls[idx] == 20:
                 persist['tape_values'][idx] = None
-            elif lvls[idx] == 4:
-                persist['tape_values'][idx] = (find_sub(artifacts[idx])[:, None] * 4 + np.arange(4)).flatten()
                 
         persist['changed'] = []
             
@@ -386,33 +380,25 @@ def rank_entropy(artifacts, lvls, persist, targets, k=1, num_trials=1000, rng=No
     winners = above + eq
     base_relevance = np.mean(winners, axis=1)   # (N,U)
     value_relevance = np.sum(base_relevance, axis=1)
-    value_relevance /= np.maximum(1, MAX_REQ_EXP[lvls])
-    value_relevance[lvls == 20] = -99999999
+    value_relevance /= np.maximum(1, MAX_REQ_EXP[slvls])
+    value_relevance[slvls == 20] = -99999999
     value_choice = np.argmax(value_relevance)
-    #base_entropy = my_entropy(base_relevance, axis=0)  # (U,)
-    base_entropy = entropy(base_relevance, axis=0)  # (U,)
-    
-    a, b = np.argpartition(scores, -2, axis=0)[-2:] # (T,U)
-    second = scores[a, *np.indices(a.shape)]    # (T,U) 
-    first = scores[b, *np.indices(b.shape)]     # (T,U)
+    base_entropy = my_entropy(base_relevance, axis=0)  # (U,)
+    #base_entropy = entropy(base_relevance, axis=0)  # (U,)
     
     information_gain = np.tile(base_entropy[None, :], (num_artifacts, 1))
     #prob_diff = np.zeros((num_artifacts, num_targets), dtype=float)
-    estimate_exps = UPGRADE_REQ_EXP[lvls]
-    
-    order = np.argsort(np.sum(base_relevance, axis=1))
-    max_ig = np.zeros(num_targets, dtype=float)
+    estimate_exps = UPGRADE_REQ_EXP[slvls]
     
     #original_estimate_exp = estimate_exp(base_relevance,
     #MAX_REQ_EXP[lvls]
-    for i in order:
-        if lvls[i] == 20:
+    for i in range(len(artifacts)):
+        if slvls[i] == 20:
             continue
         
         tape = tapes[i]                                 # (T,X)
         masks = tape_values[i][:, None] == tape[:, 0]   # (T,)
-        
-        
+        '''
         s_star = np.where(b == i, second, first)
         m = np.subtract(s_star, scores[i], dtype=int)
         #m = np.maximum(m, 0)
@@ -430,13 +416,9 @@ def rank_entropy(artifacts, lvls, persist, targets, k=1, num_trials=1000, rng=No
         p_flip_comp = 1 - p_flip
         
         ig_ub = -(p_flip * np.log(p_flip, where=p_flip != 0) + p_flip_comp * np.log(p_flip_comp, where=p_flip_comp != 0))
-        if np.all(ig_ub < max_ig):
-            print('skip')
-            continue
-        
-        print('nope')
-        temp_lvls = lvls.copy()
-        temp_lvls[i] += 4
+        '''
+        temp_slvls = slvls.copy()
+        temp_slvls[i] = next_lvl(temp_slvls[i])
         
         for mask in masks:
             prob = np.mean(mask)
@@ -445,28 +427,20 @@ def rank_entropy(artifacts, lvls, persist, targets, k=1, num_trials=1000, rng=No
             
             potential_points = np.mean(winners[:, mask, :], axis=1)   # (N,U)
             #print(np.sum(potential_points, axis=0))
-            #potential_entropy = my_entropy(potential_points, axis=0)
-            potential_entropy = entropy(potential_points, axis=0)
-            potential_exp = estimate_exp(potential_points, MAX_REQ_EXP[temp_lvls])
+            potential_entropy = my_entropy(potential_points, axis=0)
+            #potential_entropy = entropy(potential_points, axis=0)
+            #asdf = my_entropy(potential_points, axis=0)
+            #if not np.allclose(potential_entropy, asdf):
+            #    raise ValueError
+            #if np.isnan(np.sum(asdf)):
+            #    raise ValueError
+            potential_exp = estimate_exp(potential_points, MAX_REQ_EXP[temp_slvls])
             #potential_exp = new_estimate_exp(a, b, MAX_REQ_EXP[temp_lvls], rng)
             information_gain[i] -= prob * potential_entropy
             estimate_exps[i] += prob * potential_exp
-            
-        max_ig = np.maximum(max_ig, information_gain[i])
         #maskmask = base_relevance[i] > 0.005
-        maskmask = base_relevance[i] != 0
-        asdf = ig_ub[maskmask] >= information_gain[i][maskmask]
         #if not np.all(ig_ub >= information_gain[i]):
         #    raise ValueError
-        print(i, asdf)
-        try:
-            print(i, ig_ub[maskmask] / information_gain[i][maskmask])
-        except:
-            pass
-        #print(i, information_gain[i])
-        
-        if not np.all(asdf):
-            print()
     
     '''
     if np.max(evsi[lvls != 20]) < 0.03:
@@ -474,11 +448,11 @@ def rank_entropy(artifacts, lvls, persist, targets, k=1, num_trials=1000, rng=No
     '''
     #print('median', np.median(information_gain))
     information_gain = np.linalg.norm(information_gain, axis=1) # (N,)
-    information_gain /= np.maximum(1, MAX_REQ_EXP[lvls])
-    information_gain[lvls == 20] = -999999
+    information_gain /= np.maximum(1, MAX_REQ_EXP[slvls])
+    information_gain[slvls == 20] = -999999
     IG_choice = np.argmax(information_gain)
     print('IG choice', IG_choice)
-    if estimate_exps[IG_choice] * 1.1 < estimate_exps[value_choice]:
+    if estimate_exps[IG_choice] < estimate_exps[value_choice]:
         print('entropy', estimate_exps[IG_choice], estimate_exps[value_choice])
         return information_gain
     print('value', estimate_exps[IG_choice], estimate_exps[value_choice])
@@ -1687,18 +1661,18 @@ if __name__ == '__main__':
     '''
     '''
 
-    num_seeds = 1
-    num_iterations = 1
+    num_seeds = 10
+    num_iterations = 10
     totals = np.zeros((num_seeds, num_iterations))
     
     start = time.time()
     for i in range(num_seeds):
         for j in range(num_iterations):
-            artifacts = generate('flower', size=50, seed=i)
-            totals[i, j] = (simulate_exp(artifacts, np.zeros(50, dtype=int), targets, rank_entropy))
+            artifacts, slvls = generate('flower', size=200, seed=i)
+            totals[i, j] = (simulate_exp(artifacts, slvls, targets, rank_entropy))
     end = time.time()
             
-    np.save('data/entropy_0.1_200.npy', totals)
+    np.save('data/entropy_0.125_2000_200.npy', totals)
             
     print('done')
     print(totals)

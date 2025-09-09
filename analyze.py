@@ -34,7 +34,10 @@ def _distribution(N, M):
     return tuple(dist)
 
 def next_lvl(lvl):
-    return 4 * ((lvl // 4) + 1)
+    if lvl < 0:
+        return 8
+    else:
+        return 4 * ((lvl // 4) + 1)
     
 @functools.lru_cache(maxsize=10)
 def _temp(N):
@@ -192,12 +195,12 @@ def single_distro(artifacts):
             
     return dist, probs
 
-def sample_upgrade(artifact, samples, num_upgrades=None, lvl=None, rng=None, seed=None):
+def sample_upgrade(artifact, samples, num_upgrades=None, slvl=None, rng=None, seed=None):
     if rng is None:
         rng = np.random.default_rng(seed)
 
     if num_upgrades is None:
-        num_upgrades = 5 - (lvl // 4)
+        num_upgrades = np.where(slvl < 0, 4, 5 - slvl // 4)
     
     output = np.tile(artifact, (samples, 1))
     if num_upgrades == 0:
@@ -364,7 +367,7 @@ def score(artifacts, targets):
         
     return artifacts @ targets
 
-def simulate_exp(artifacts, lvls, targets, fun, num=1, mains=None):
+def simulate_exp(artifacts, slvls, targets, fun, num=1, mains=None):
     # TODO: check if anything is maxed. They shouldn't be
     # TODO: add benchmark for how long it takes to acheive top 1%, not
     # just top 1
@@ -381,7 +384,7 @@ def simulate_exp(artifacts, lvls, targets, fun, num=1, mains=None):
             targets = temp
     
     original_artifacts = artifacts.copy()
-    smart_upgrade_until_max(artifacts, lvls)
+    smart_upgrade_until_max(artifacts, slvls)
     
     if type(targets) == dict or (type(targets) == np.ndarray and targets.ndim == 1):
         scores = score(artifacts, targets)
@@ -412,24 +415,27 @@ def simulate_exp(artifacts, lvls, targets, fun, num=1, mains=None):
     
     #while np.any(lvls[goal] != 20):
     while np.any(target_maxes < goal_scores):
-        chosen = fun(artifacts, lvls, persist, targets)
+        chosen = fun(artifacts, slvls, persist, targets)
         try:
             _ = iter(chosen)
             relevance = chosen
-            relevance[lvls == 20] = -9999999999
+            relevance[slvls == 20] = -9999999999
             #chosen = np.argmax(relevance)
             chosen = np.argpartition(relevance, -num)[-num:]
         except:
             chosen = np.array([chosen])
             
         for idx in chosen:
-            if lvls[idx] == 20:
+            if slvls[idx] == 20:
                 raise ValueError('Attempted to upgrade maxed artifact')
             #print_artifact(artifacts[idx])
+            
+            # Upgrade
             smart_upgrade(artifacts[idx])
-            exp += UPGRADE_REQ_EXP[lvls[idx]]
-            lvls[idx] = next_lvl(lvls[idx])
+            exp += UPGRADE_REQ_EXP[slvls[idx]]
+            slvls[idx] = next_lvl(slvls[idx])
             #distros[0][idx], distros[1][idx] = distro(artifacts[idx], lvls[idx])
+            
             print(exp)
             
         new_scores = score(artifacts[chosen], targets.T) # (n,U)
@@ -439,7 +445,7 @@ def simulate_exp(artifacts, lvls, targets, fun, num=1, mains=None):
         persist['changed'] += list(chosen)
         print((target_maxes - start_maxes) / score_ranges)
         
-        reshuffle = np.random.choice(np.arange(len(artifacts))[lvls != 20], size=num, replace=False)
+        reshuffle = np.random.choice(np.arange(len(artifacts))[slvls != 20], size=num, replace=False)
         persist['changed'] += list(reshuffle)
             
     return exp

@@ -1683,6 +1683,9 @@ SET_TARGETS = {
 
     # DPS set
     'MarechausseeHunter': DPS_TARGETS,
+    
+    # DPS set TODO make sure EM isn't required
+    'NightOfTheSkysUnveiling': DPS_TARGETS,
 
     # ER set
     'NoblesseOblige': {
@@ -2006,6 +2009,9 @@ SET_TARGETS = {
     # Universal set. 4p is so good that even DMG oriented characters may
     # use it.
     'ScrollOfTheHeroOfCinderCity': ALL_TARGETS,
+    
+    # Universal set. TODO check this
+    'SilkenMoonsSerenade': ALL_TARGETS,
 
     # DPS set
     'ShimenawasReminiscence': DPS_TARGETS,

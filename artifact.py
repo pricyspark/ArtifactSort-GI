@@ -26,6 +26,7 @@ SETS = (
     'LongNightsOath',
     'MaidenBeloved',
     'MarechausseeHunter',
+    'NightOfTheSkysUnveiling',
     'NoblesseOblige',
     'NymphsDream',
     'ObsidianCodex',
@@ -33,6 +34,7 @@ SETS = (
     'PaleFlame',
     'RetracingBolide',
     'ScrollOfTheHeroOfCinderCity',
+    'SilkenMoonsSerenade',
     'ShimenawasReminiscence',
     'SongOfDaysPast',
     'TenacityOfTheMillelith',
@@ -147,6 +149,18 @@ MAX_REQ_EXP = np.array(
     dtype=int
 )
 
+LEARN_REQ_EXP = np.array(
+    (
+        140404, 137404, 133679, 129254, # 0 1/6 1/6 1/6 1/6 2/6
+        148925, 143025, 136350, 128850, # 4 1/5 1/5 1/5 2/5
+        150625, 141400, 131275, 120225, # 8 1/4 1/4 2/4
+        144267, 131242, 116092, 98492, # 12 1/3 2/3
+        117175, 93675,  66625,  35575, 
+        0,
+        165225, 159325, 152650, 145150
+    )
+)
+
 def find_main(artifact):
     mask = artifact == 160
     if np.any(mask):
@@ -244,7 +258,7 @@ def dict_to_artifact(dicts):
         
         slot: int = SLOT_2_NUM[dicts['slotKey']]
         rarity: int = dicts['rarity']
-        lvl: int = int(dicts['level'])
+        slvl: int = int(dicts['level'])
         setKey: int = SET_2_NUM[dicts['setKey']]
         main: int = STAT_2_NUM[dicts['mainStatKey']]
         if main < 3:
@@ -257,16 +271,21 @@ def dict_to_artifact(dicts):
             value = substat['value']
             coef = round(value / SUB_VALUES[stat] * 10)
             artifact[stat] = coef
-        if setKey == 1 and slot == 0 and artifact[8] != 0 and artifact[9] != 0:
-            pass
-
-        return artifact, slot, rarity, lvl, setKey
+        
+        for substat in dicts['unactivatedSubstats']:
+            stat = STAT_2_NUM[substat['key']]
+            value = substat['value']
+            coef = round(value / SUB_VALUES[stat] * 10)
+            artifact[stat] = coef
+            slvl -= 4
+        
+        return artifact, slot, rarity, slvl, setKey
         
     else:
         temp_artifacts = []
         temp_slots = []
         temp_rarities = []
-        temp_lvls = []
+        temp_slvls = []
         temp_sets = []
         
         #artifacts = np.zeros((len(dicts), 19), dtype=np.uint8)
@@ -274,41 +293,38 @@ def dict_to_artifact(dicts):
         #lvls = np.zeros(len(dicts), dtype=np.uint8)
         #sets = np.zeros(len(dicts), dtype=int)
         for dictionary in dicts:
-            artifact, slot, rarity, lvl, setKey = dict_to_artifact(dictionary)
+            artifact, slot, rarity, slvl, setKey = dict_to_artifact(dictionary)
             temp_artifacts.append(artifact)
             temp_slots.append(slot)
             temp_rarities.append(rarity)
-            temp_lvls.append(lvl)
+            temp_slvls.append(slvl)
             temp_sets.append(setKey)
         artifacts = np.zeros((len(temp_artifacts), 19), dtype=np.uint8)
         slots = np.zeros(len(temp_slots), dtype=np.uint8)
         rarities = np.zeros(len(temp_rarities), dtype=np.uint8)
-        lvls = np.zeros(len(temp_lvls), dtype=np.uint8)
+        slvls = np.zeros(len(temp_slvls), dtype=np.int8)
         sets = np.zeros(len(temp_sets), dtype=int)
         for i in range(len(temp_artifacts)):
             artifacts[i] = temp_artifacts[i]
             slots[i] = temp_slots[i]
             rarities[i] = temp_rarities[i]
-            lvls[i] = temp_lvls[i]
+            slvls[i] = temp_slvls[i]
             sets[i] = temp_sets[i]
         '''
         for i, dictionary in enumerate(dicts):
             if dictionary['rarity'] == 5:
                 artifacts[i], slots[i], lvls[i], sets[i] = dict_to_artifact(dictionary)
         '''
-        return artifacts, slots, rarities, lvls, sets
+        return artifacts, slots, rarities, slvls, sets
     
 def load(filename):
     with open(filename) as f:
         data = json.load(f)
     
-    if data['format'] != 'GOOD':
-        raise ValueError
+    if data['format'] != 'GOOD' or data['version'] != 3:
+        raise ValueError('Only GOODv3 is supported.')
     
-    def cmp(artifact):
-        return artifact['id']
-    
-    return dict_to_artifact(sorted(data['artifacts'], key=cmp))
+    return dict_to_artifact(data['artifacts'])
 
 def print_artifact(artifacts, human_readable=True) -> None:
     if artifacts.ndim == 1:
@@ -406,3 +422,18 @@ if __name__ == '__main__':
     print(artifacts)
     upgrade_until_max(artifacts, np.array([0, 0]))
     print(artifacts)
+    
+    
+    
+158, 4, 10, 6,  12
+189, 1, 1,  1,  1
+144, 5, 16, 11, 15
+189, 1, 0,  1,  2
+190, 1, 1,  1,  0
+178, 3, 6,  3,  5
+174, 3, 3,  2,  10
+165, 3, 8,  7,  10
+181, 1, 2,  0,  7
+127, 3, 13, 16, 33
+
+169.5,  2.5,    6,  4.8,    9.6

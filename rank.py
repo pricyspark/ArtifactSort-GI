@@ -133,7 +133,7 @@ def estimate_exp(probs, exp):
     '''
     return total
 
-def rank_value(artifacts, slvls, persist, targets, k=1, base_trials=5000, rng=None, seed=None):
+def rank_value(artifacts, slvls, persist, targets, k=1, base_trials=2000, rng=None, seed=None):
     # Format inputs
     num_artifacts = len(artifacts)
     try:
@@ -1707,6 +1707,7 @@ def rank_pairwise(artifacts, lvls, persist, targets, k=2, num_trials=1000, rng=N
     return relevance
     
 if __name__ == '__main__':
+    '''
     #targets = {'atk_': 6, 'atk': 2, 'crit_': 8}
     targets = (
         {'hp_': 6, 'hp': 2, 'crit_': 8},
@@ -1754,7 +1755,6 @@ if __name__ == '__main__':
     print(end - start)
     '''
     '''
-    '''
     
     totals = np.zeros((num_seeds, num_iterations))
     
@@ -1799,9 +1799,8 @@ if __name__ == '__main__':
     print(end - start)
     '''
 
-    '''
     start = time.time()
-    filename = 'artifacts/genshinData_GOOD_2025_09_09_03_31.json'
+    filename = 'artifacts/9-15-2025.json'
     artifacts, slots, rarities, lvls, sets = load(filename)
     relevant = rate(artifacts, slots, rarities, lvls, sets, rank_value, k=2, num=100)
     
@@ -1810,4 +1809,5 @@ if __name__ == '__main__':
     visualize(relevant, artifacts, slots, sets, lvls)
     end = time.time()
     print(end - start)
+    '''
     '''

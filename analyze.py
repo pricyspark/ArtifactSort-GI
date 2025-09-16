@@ -402,6 +402,8 @@ def simulate_exp(artifacts, slvls, targets, fun, num=1, mains=None):
     print('score:', goal_scores)
     print_artifact(artifacts[goal])
     print()
+    '''
+    '''
     artifacts = original_artifacts.copy()
     #distros = distro(artifacts, lvls)
     persist = {}
@@ -448,6 +450,7 @@ def simulate_exp(artifacts, slvls, targets, fun, num=1, mains=None):
         reshuffle = np.random.choice(np.arange(len(artifacts))[slvls != 20], size=num, replace=False)
         persist['changed'] += list(reshuffle)
             
+    #print(np.histogram(slvls, bins=7)[0])
     return exp
 
 def upper_bound(artifacts, lvls, targets):
@@ -536,7 +539,7 @@ def choose_samples(x, y, qid):
             
     return x[idxs], y[idxs], qid[idxs]
 
-def rate(artifacts, slots, rarities, lvls, sets, ranker, num=None, threshold=None):
+def rate(artifacts, slots, rarities, lvls, sets, ranker, k=1, num=None, threshold=None):
     # TODO: change persist to persist_artifact and persist_meta, for
     # more intuitive control over things like set masking
     relevance = np.zeros((len(artifacts), 5 * (1 + len(SETS))), dtype=float)
@@ -548,7 +551,7 @@ def rate(artifacts, slots, rarities, lvls, sets, ranker, num=None, threshold=Non
         slot_artifacts = artifacts[slot_mask]
         slot_lvls = lvls[slot_mask]
         persist = {}
-        relevance[original_idxs, count] = ranker(slot_artifacts, slot_lvls, persist, ALL_TARGETS[SLOTS[slot]], num_trials=1000)
+        relevance[original_idxs, count] = ranker(slot_artifacts, slot_lvls, persist, ALL_TARGETS[SLOTS[slot]], k=k)
         count += 1
         
         for setKey in range(len(SETS)):
@@ -573,7 +576,7 @@ def rate(artifacts, slots, rarities, lvls, sets, ranker, num=None, threshold=Non
                     set_persist[a] = b
                     #set_persist.append(None)
             #set_persist = [asdf[np.where(set_mask)[0]] for asdf in persist]
-            relevance[original_idxs, count] = ranker(set_artifacts, set_lvls, set_persist, SET_TARGETS[SETS[setKey]][SLOTS[slot]], num_trials=1000)
+            relevance[original_idxs, count] = ranker(set_artifacts, set_lvls, set_persist, SET_TARGETS[SETS[setKey]][SLOTS[slot]], k=k)
             count += 1
     
     max_relevance = np.max(relevance, axis=1)

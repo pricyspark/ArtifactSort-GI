@@ -43,6 +43,7 @@ def my_entropy(array, axis=None):
     #return -np.sum(np.where(array > 0, array * np.log(array), 0.0), axis=axis)
 
 def winner_prob(scores, cutoff, k):
+    # TODO: instead of dividing ties, tiebreak using highest lvl
     eq = scores == cutoff                       # (N,T,U)
     eq_count = eq.sum(axis=0)                   # (T,U)
     
@@ -133,7 +134,11 @@ def estimate_exp(probs, exp):
     '''
     return total
 
-def rank_value(artifacts, slvls, persist, targets, k=1, base_trials=2000, rng=None, seed=None):
+def rank_value(artifacts, slvls, persist, targets, k=1, base_trials=500, rng=None, seed=None):
+    '''Estimate probability artifact is in top k for given targets, and
+    sort based on p/(cost to max). If artifacts upgraded straight to
+    max, this would be optimal. 
+    '''
     # Format inputs
     num_artifacts = len(artifacts)
     try:
@@ -217,22 +222,55 @@ def rank_value(artifacts, slvls, persist, targets, k=1, base_trials=2000, rng=No
     p = np.mean(winners, axis=1)   # (N,U)
 
     # Check if we need more trials using Hoeffding bound
+    chosen = rival = None
     if k == 1:
-        rival, kth = np.partition(p, -2, axis=0)[-2:]           # (2,U)
+        #temp = np.argpartition(p, (-3, -2, -1), axis=0)    # (N,U)
+        asdf, rival, chosen = np.argpartition(p, (-3, -2, -1), axis=0)[-3:]           # (2,U)
+        if np.all(slvls[chosen] == 20):
+            print('max')
+            chosen = p[rival]
+            rival = p[asdf]       
+        else:
+            chosen = p[chosen]
+            rival = p[rival]         
     else:
-        rival, kth = np.partition(p, -k-1, axis=0)[-k-1: -k+1]    # (2,U)
-        
-    if np.all(kth - rival < epsilon):
+        temp = np.partition(p, (-k-1, -k), axis=0)           # (2,U)
+        rival = temp[-k-1]
+        chosen = temp[-k]
+    if np.all(chosen - rival < epsilon):
         # TODO: add memory limit in case of infinite recursion
         persist.clear() # Inefficiently deletes current artifacts instead of appending new trials
         print('doubling trials to', num_trials * 2)
         return rank_value(artifacts, slvls, persist, targets, k, num_trials * 2, rng)
+    '''
+    '''
+    '''
+    
+    if np.all(slvls[chosen] == 20):
+        print('All chosen are maxed')
+        print('chosen:', p[chosen[0]])
+        print('rival:', p[rival])
+    
+    if np.all(p[chosen[0]] - p[rival] < epsilon):
+        # TODO: add memory limit in case of infinite recursion
+        persist.clear() # Inefficiently deletes current artifacts instead of appending new trials
+        print('doubling trials to', num_trials * 2)
+        return rank_value(artifacts, slvls, persist, targets, k, num_trials * 2, rng)
+    '''
     
     # Enough trials, continue
-    total_p = p.sum(axis=1)   # (N,)
+    #total_p = p.sum(axis=1)   # (N,)
+    total_p = 1 - np.prod(1 - p, axis=1) # (N,)
     
     # Dollarize probabilities
     value = total_p / np.maximum(1, MAX_REQ_EXP[slvls])
+    
+    '''
+    value[slvls == 20] = -99999999
+    choose = np.argmax(value)
+    print('choose', choose)
+    print(p[choose])
+    '''
     
     return value
 
@@ -1707,6 +1745,8 @@ def rank_pairwise(artifacts, lvls, persist, targets, k=2, num_trials=1000, rng=N
     return relevance
     
 if __name__ == '__main__':
+    target = vectorize({'atk_': 6, 'atk': 2, 'crit_': 8})
+    percentile('circlet', target, 0)
     '''
     #targets = {'atk_': 6, 'atk': 2, 'crit_': 8}
     targets = (
@@ -1728,7 +1768,7 @@ if __name__ == '__main__':
 
     #seeds = [13, 19, 23, 26, 57, 64, 66]
     num_seeds = 30
-    num_iterations = 20
+    num_iterations = 1
     totals = np.zeros((num_seeds, num_iterations))
     
     start = time.time()
@@ -1799,6 +1839,7 @@ if __name__ == '__main__':
     print(end - start)
     '''
 
+    '''
     start = time.time()
     filename = 'artifacts/9-15-2025.json'
     artifacts, slots, rarities, lvls, sets = load(filename)
@@ -1810,4 +1851,6 @@ if __name__ == '__main__':
     end = time.time()
     print(end - start)
     '''
-    '''
+    
+    # TODO: check seed 22 and see just how unlucky it is, because
+    # sometimes it does so terrible

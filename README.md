@@ -61,3 +61,8 @@ conda
 conda deactivate
 conda env remove -n artifact_sort
 ```
+## Roadmap
+- [ ] GUI
+- [ ] Analysis for defining
+- [ ] Analysis for reshaping
+- [ ] Automatic locking/unlocking

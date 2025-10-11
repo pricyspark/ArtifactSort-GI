@@ -4,8 +4,9 @@ from artifact import *
 import math
 import time
 from targets import *
-from scipy.stats import entropy
+#from scipy.stats import entropy
 import functools
+from itertools import product
 #import artifact as Artifact
 #from artifact import STATS, STAT_2_NUM, MAIN_PROBS, SUB_PROBS, MAIN_VALUES, SUB_VALUES, SUB_COEFS, ARTIFACT_REQ_EXP, UPGRADE_REQ_EXP
 
@@ -33,7 +34,10 @@ def _distribution(N, M):
     return tuple(dist)
 
 def next_lvl(lvl):
-    return 4 * ((lvl // 4) + 1)
+    if lvl < 0:
+        return 8
+    else:
+        return 4 * ((lvl // 4) + 1)
     
 @functools.lru_cache(maxsize=10)
 def _temp(N):
@@ -102,18 +106,7 @@ def distro(artifacts, lvls=None, num_upgrades=None):
         for artifact, prob in seed:
             for upgrade, upgrade_prob in upgrades:
                 substats = find_sub(artifact, main)
-                # TODO: make this not disgusting
-                '''
-                for first, first_prob in _temp(upgrade[0]).items():
-                    # Do something
-                    for second, second_prob in _temp(upgrade[1]).items():
-                        # Do something
-                        for third, third_prob in _temp(upgrade[2]).items():
-                            # Do something
-                            for fourth, fourth_prob in _temp(upgrade[3]).items():
-                                # Do something
-                '''
-                
+                # TODO: make this not disgusting                
                 for first, first_prob in _temp(upgrade[0]).items():
                     first_temp = artifact.copy()
                     first_temp[substats[0]] += first
@@ -131,9 +124,6 @@ def distro(artifacts, lvls=None, num_upgrades=None):
                                 
         dist = np.array(dist, dtype=np.uint8)
         probs = np.array(probs)
-        # TODO: get rid of this bug check
-        if not np.isclose(sum(probs), 1):
-            raise ValueError
     else:
         try:
             _ = iter(lvls)
@@ -146,6 +136,126 @@ def distro(artifacts, lvls=None, num_upgrades=None):
             probs.append(temp_probs)
 
     return dist, probs
+
+def single_distro(artifacts):
+    if artifacts.ndim == 1:
+        # Rename to "artifact" to make things less confusing
+        artifact = artifacts
+        # TODO: clean this shit up
+        if np.count_nonzero(artifact) == 4:
+            sub_probs = SUB_PROBS.copy()
+            sub_probs[np.nonzero(artifact)[0]] = 0
+            sub_probs /= np.sum(sub_probs)
+            
+            num_possibilities = np.count_nonzero(sub_probs) * 4
+            dist = np.tile(artifact, (num_possibilities + 1, 1))
+            probs = np.zeros((num_possibilities + 1), dtype=float)
+            
+            dist = np.tile(artifact, (num_possibilities + 1, 1))
+            
+            nz_mask = sub_probs != 0
+            nz_idx  = np.nonzero(nz_mask)[0]           # shape (M,)
+            M       = nz_idx.size
+
+            # 2. build row and column indices for dist update
+            #    rows: for each i in [0..M-1], rows = 1 + 4*i + [0,1,2,3]
+            i = np.arange(M)
+            j = np.arange(4, dtype=np.uint8)
+            rows = 1 + 4*i[:, None] + j               # shape (M,4)
+            cols = nz_idx[:, None]                    # shape (M,1)
+
+            # 3. add j+7 to dist at those positions in one shot
+            dist[rows, cols] += (j + 7)               # broadcasts to (M,4)
+            probs[1:] = np.repeat(sub_probs[sub_probs != 0], 4) / 4
+            
+        else:
+            dist = np.tile(artifact, (17, 1))
+            probs = np.full(17, 1/16, dtype=float)
+            probs[0] = 0
+            
+            nz_idx  = find_sub(artifact)           # shape (M,)
+            M       = nz_idx.size
+
+            # 2. build row and column indices for dist update
+            #    rows: for each i in [0..M-1], rows = 1 + 4*i + [0,1,2,3]
+            i = np.arange(M)
+            j = np.arange(4, dtype=np.uint8)
+            rows = 1 + 4*i[:, None] + j               # shape (M,4)
+            cols = nz_idx[:, None]                    # shape (M,1)
+
+            # 3. add j+7 to dist at those positions in one shot
+            dist[rows, cols] += (j + 7)               # broadcasts to (M,4)
+    else:
+        dist = []
+        probs = []
+        for artifact in artifacts:
+            temp_dist, temp_probs = single_distro(artifact)
+            dist.append(temp_dist)
+            probs.append(temp_probs)
+            
+    return dist, probs
+
+def sample_upgrade(artifact, samples, num_upgrades=None, slvl=None, rng=None, seed=None):
+    if rng is None:
+        rng = np.random.default_rng(seed)
+
+    if num_upgrades is None:
+        num_upgrades = np.where(slvl < 0, 4, 5 - slvl // 4)
+    
+    output = np.tile(artifact, (samples, 1))
+    if num_upgrades == 0:
+        return output, None
+    
+    tape = np.zeros((samples, num_upgrades), dtype=np.uint8)
+    
+    if np.count_nonzero(artifact) == 4:
+        #print(artifact)
+        # Calculate new substat probabilities
+        sub_probs = SUB_PROBS.copy()
+        sub_probs[np.nonzero(artifact)[0]] = 0
+        sub_probs /= np.sum(sub_probs)
+
+        current_subs = find_sub(artifact)
+        new_subs = rng.choice(19, p=sub_probs, size=samples)
+        #subs = np.hstack((np.tile(current_subs, (samples, 1)), new_subs.reshape((-1, 1))))
+        # TODO: see if combining current and new subs together and
+        # choosing from each row is faster. Pro: No weird overriding.
+        # Con: Creates a 2D array of choices instead of 2 1D arrays.
+
+        # Add the new substats
+        rows = np.arange(samples)
+        increments = rng.choice(SUB_COEFS, size=samples)
+        output[rows, new_subs] += increments
+        tape[:, 0] = 4 * new_subs + increments - 7
+        
+        # Upgrade
+        for _ in range(num_upgrades - 1):
+            # Assume one of the original 3 substats upgrades
+            cols = rng.choice(current_subs, size=samples)
+            # Replace the upgraded substat with the new one with 25% chance
+            cols = np.where(rng.random(size=samples) < 0.75, cols, new_subs)
+            increments = rng.choice(SUB_COEFS, size=samples)
+            output[rows, cols] += increments
+            tape[:, _ + 1] = 4 * cols + increments - 7
+        return output, tape
+    else:
+        subs = find_sub(artifact)
+        rows = np.arange(samples)
+        for _ in range(num_upgrades):
+            cols = rng.choice(subs, size=samples)
+            increments = rng.choice(SUB_COEFS, size=samples)
+            output[rows, cols] += increments
+            tape[:, _] = 4 * cols + increments - 7
+        return output, tape
+    '''
+    else:
+        output = np.tile(artifact, (samples, 1))
+        for _ in range(num_upgrades):
+            upgrade(output, rng=rng)
+
+        return output
+    '''
+
     
 def avg(distribution, probs, targets, scores=None) -> float:
     """Find distribution's score average.
@@ -257,47 +367,90 @@ def score(artifacts, targets):
         
     return artifacts @ targets
 
-def simulate_exp(artifacts, lvls, targets, fun, mains=None):
+def simulate_exp(artifacts, slvls, targets, fun, num=1, mains=None):
     # TODO: check if anything is maxed. They shouldn't be
     # TODO: add benchmark for how long it takes to acheive top 1%, not
     # just top 1
+    match targets:
+        case dict():
+            targets = vectorize(targets).reshape((1, -1))
+        case np.ndarray():
+            if targets.ndim == 1:
+                targets = targets.reshape((1, -1))    
+        case _:
+            temp = np.zeros((len(targets), 19), dtype=np.uint32)
+            for i, target in enumerate(targets):
+                temp[i] = vectorize(target)
+            targets = temp
+    
     original_artifacts = artifacts.copy()
-    smart_upgrade_until_max(artifacts, lvls)
+    smart_upgrade_until_max(artifacts, slvls)
     
     if type(targets) == dict or (type(targets) == np.ndarray and targets.ndim == 1):
         scores = score(artifacts, targets)
         goal = np.argmax(scores)
+        goal_scores = scores[goal]
     else:
         goal = np.zeros(len(targets), dtype=int)
+        goal_scores = np.zeros(len(targets), dtype=float)
         for i, target in enumerate(targets):
             scores = score(artifacts, target)
             goal[i] = np.argmax(scores)
+            goal_scores[i] = scores[goal[i]]
     
     print('goal:', goal)
+    print('score:', goal_scores)
     print_artifact(artifacts[goal])
     print()
+    '''
+    '''
     artifacts = original_artifacts.copy()
     #distros = distro(artifacts, lvls)
-    persist = []
+    persist = {}
     
     exp = 0
     
-    while np.any(lvls[goal] != 20):
-        idx = fun(artifacts, lvls, persist, targets)
+    target_scores = score(artifacts, targets.T) # (N,U)
+    start_maxes = np.max(target_scores, axis=0) # (U,)
+    target_maxes = start_maxes.copy()           # (U,)
+    score_ranges = goal_scores - start_maxes
+    
+    #while np.any(lvls[goal] != 20):
+    while np.any(target_maxes < goal_scores):
+        chosen = fun(artifacts, slvls, persist, targets)
         try:
-            _ = iter(idx)
-            idx = np.argmax(idx)
+            _ = iter(chosen)
+            relevance = chosen
+            relevance[slvls == 20] = -9999999999
+            #chosen = np.argmax(relevance)
+            chosen = np.argpartition(relevance, -num)[-num:]
         except:
-            pass
-        if lvls[idx] == 20:
-            raise ValueError
-        #print_artifact(artifacts[idx])
-        smart_upgrade(artifacts[idx])
-        exp += UPGRADE_REQ_EXP[lvls[idx]]
-        lvls[idx] = next_lvl(lvls[idx])
-        #distros[0][idx], distros[1][idx] = distro(artifacts[idx], lvls[idx])
-        print(exp)
+            chosen = np.array([chosen])
             
+        for idx in chosen:
+            if slvls[idx] == 20:
+                raise ValueError('Attempted to upgrade maxed artifact')
+            #print_artifact(artifacts[idx])
+            
+            # Upgrade
+            smart_upgrade(artifacts[idx])
+            exp += UPGRADE_REQ_EXP[slvls[idx]]
+            slvls[idx] = next_lvl(slvls[idx])
+            #distros[0][idx], distros[1][idx] = distro(artifacts[idx], lvls[idx])
+            
+            print(exp)
+            
+        new_scores = score(artifacts[chosen], targets.T) # (n,U)
+        new_maxes = np.max(new_scores, axis=0)  # (U,)
+        target_maxes = np.maximum(target_maxes, new_maxes)
+            
+        persist['changed'] += list(chosen)
+        print((target_maxes - start_maxes) / score_ranges)
+        
+        reshuffle = np.random.choice(np.arange(len(artifacts))[slvls != 20], size=num, replace=False)
+        persist['changed'] += list(reshuffle)
+            
+    #print(np.histogram(slvls, bins=7)[0])
     return exp
 
 def upper_bound(artifacts, lvls, targets):
@@ -386,7 +539,9 @@ def choose_samples(x, y, qid):
             
     return x[idxs], y[idxs], qid[idxs]
 
-def rate(artifacts, slots, rarities, lvls, sets, ranker, num=None, threshold=None):
+def rate(artifacts, slots, rarities, lvls, sets, ranker, k=1, num=None, threshold=None):
+    # TODO: change persist to persist_artifact and persist_meta, for
+    # more intuitive control over things like set masking
     relevance = np.zeros((len(artifacts), 5 * (1 + len(SETS))), dtype=float)
     count = 0
     for slot in range(5):
@@ -395,33 +550,33 @@ def rate(artifacts, slots, rarities, lvls, sets, ranker, num=None, threshold=Non
         original_idxs = np.where(slot_mask)[0]
         slot_artifacts = artifacts[slot_mask]
         slot_lvls = lvls[slot_mask]
-        persist = []
-        relevance[original_idxs, count] = ranker(slot_artifacts, slot_lvls, persist, ALL_TARGETS[SLOTS[slot]], change=False, num_trials=1000)
+        persist = {}
+        relevance[original_idxs, count] = ranker(slot_artifacts, slot_lvls, persist, ALL_TARGETS[SLOTS[slot]], k=k)
         count += 1
         
         for setKey in range(len(SETS)):
             set_mask = sets[slot_mask] == setKey
+            if np.all(set_mask == 0):
+                continue
             #new_mask = np.logical_and(mask, sets == setKey)
             original_idxs = np.where(slot_mask)[0][set_mask]
             set_artifacts = slot_artifacts[set_mask]
             set_lvls = slot_lvls[set_mask]
-            if len(set_artifacts) == 0:
-                continue
-            set_persist = []
-            for asdf in persist:
+            set_persist = {}
+            for a, b in persist.items():
                 try:
-                    poij = len(asdf)
-                    qwer = np.where(set_mask)[0]
                     #temp = asdf[set_mask]
-                    if type(asdf) == np.ndarray:
-                        temp = asdf[set_mask]
+                    if type(b) == np.ndarray:
+                        temp = b[set_mask]
                     else:
-                        temp = [val for val, m in zip(asdf, set_mask) if m]
-                    set_persist.append(temp)
+                        temp = [val for val, m in zip(b, set_mask) if m]
+                    set_persist[a] = temp
+                    #set_persist.append(temp)
                 except Exception as e:
-                    set_persist.append(None)
+                    set_persist[a] = b
+                    #set_persist.append(None)
             #set_persist = [asdf[np.where(set_mask)[0]] for asdf in persist]
-            relevance[original_idxs, count] = ranker(set_artifacts, set_lvls, set_persist, SET_TARGETS[SETS[setKey]][SLOTS[slot]], change=False, num_trials=1000)
+            relevance[original_idxs, count] = ranker(set_artifacts, set_lvls, set_persist, SET_TARGETS[SETS[setKey]][SLOTS[slot]], k=k)
             count += 1
     
     max_relevance = np.max(relevance, axis=1)

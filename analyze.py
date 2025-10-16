@@ -453,92 +453,6 @@ def simulate_exp(artifacts, slvls, targets, fun, num=1, mains=None):
     #print(np.histogram(slvls, bins=7)[0])
     return exp
 
-def upper_bound(artifacts, lvls, targets):
-    scores = score(artifacts, targets)
-    scores[lvls == 20] = 0
-    return np.argmax(scores)
-        
-def create_dataset(num_queries, slot, lvls, targets, source='domain', size=None, num_trials=1000, seed=None):
-    try:
-        _ = iter(lvls)
-        lvls = np.array(lvls)
-        size = len(lvls)
-    except:
-        if size is None:
-            size = 1
-        if lvls is None:
-            lvls = 0
-        lvls = np.full(size, lvls)
-    
-    num_artifacts = len(lvls)
-    avgs = np.zeros(num_queries * num_artifacts, dtype=float)
-    second_moments = np.zeros(num_queries * num_artifacts, dtype=float)
-    variances = np.zeros(num_queries * num_artifacts, dtype=float)
-    relevance = np.zeros(num_queries * num_artifacts, dtype=float)
-    # TODO: this is temp. other_relevance is a counter. Increment if
-    # it's the max for a trial.
-    other_relevance = np.zeros(num_queries * num_artifacts, dtype=float)
-    artifacts = np.zeros((num_queries * num_artifacts, 19), dtype=np.uint8)
-    RNG = np.random.default_rng(seed)
-    for query in range(num_queries):
-        this_slice = slice(query * num_artifacts, (query + 1) * num_artifacts)
-        artifacts[this_slice] = generate(slot, lvls=lvls, source=source, rng=RNG)
-        distributions, probs = distro(artifacts[this_slice], lvls=lvls)
-        
-        for i, (distribution, prob) in enumerate(zip(distributions, probs)):
-            scores = score(distribution, targets)
-            #avgs[this_slice][i] = scores @ prob
-            mean = avg(None, prob, None, scores)
-            second_m = second_moment(None, prob, None, scores)
-            var = variance(None, prob, None, scores, mean)
-            
-            avgs[this_slice][i] = mean
-            second_moments[this_slice][i] = second_m
-            variances[this_slice][i] = var
-        
-        for _ in range(num_trials):
-            maxed = np.zeros((num_artifacts, 19), dtype=np.uint8)
-            for i in range(num_artifacts):
-                maxed[i] = RNG.choice(distributions[i], p=probs[i])
-            final_scores = score(maxed, targets)
-            order = np.argsort(np.argsort(final_scores))
-            relevance[this_slice] += order / num_trials
-            best = np.argmax(final_scores)
-            other_relevance[this_slice][best] += 1
-        #scores = relevance[this_slice]
-        #order = np.argsort(np.argsort(scores))
-        #relevance[this_slice] = order - len(order) + 32
-    
-    lvls = np.tile(lvls, num_queries).reshape((-1, 1))
-    avgs = avgs.reshape((-1, 1))
-    second_moments = second_moments.reshape((-1, 1))
-    variances = variances.reshape((-1, 1))
-    
-    metadata = np.column_stack((lvls, avgs, second_moments, variances))
-    x = np.append(artifacts, metadata, axis=1)
-    #x = np.append(x, avgs, axis=1)
-    #x = np.append(x, second_moments, axis=1)
-    #x = np.append(x, variances, axis=1)
-    
-    relevance = np.append(relevance.reshape((-1, 1)), other_relevance.reshape((-1, 1)), axis=1)
-    
-    #relevance[relevance < 0] = 0
-    qid = np.repeat(np.arange(num_queries), size)
-    
-    return x, relevance, qid
-
-def choose_samples(x, y, qid):
-    current = -1
-    idxs = []
-    for idx, (artifact, relevance, query) in enumerate(zip(x, y, qid)):
-        if current != query and relevance == 0:
-            current = query
-            idxs.append(idx)
-        if relevance != 0:
-            idxs.append(idx)
-            
-    return x[idxs], y[idxs], qid[idxs]
-
 def rate(artifacts, slots, rarities, lvls, sets, ranker, k=1, num=None, threshold=None):
     # TODO: change persist to persist_artifact and persist_meta, for
     # more intuitive control over things like set masking
@@ -551,7 +465,7 @@ def rate(artifacts, slots, rarities, lvls, sets, ranker, k=1, num=None, threshol
         slot_artifacts = artifacts[slot_mask]
         slot_lvls = lvls[slot_mask]
         persist = {}
-        relevance[original_idxs, count] = ranker(slot_artifacts, slot_lvls, persist, ALL_TARGETS[SLOTS[slot]], k=k)
+        relevance[original_idxs, count] = ranker(slot_artifacts, slot_lvls, persist, ALL_TARGETS[SLOTS[slot]], k=2 * k)
         count += 1
         
         for setKey in range(len(SETS)):
@@ -585,17 +499,36 @@ def rate(artifacts, slots, rarities, lvls, sets, ranker, k=1, num=None, threshol
     if threshold is None:
         relevances = np.sort(max_relevance)
         threshold = relevances[num - 1]
-        print(threshold)
+        print(threshold * 270275 * 100)
     #relevant = np.logical_or(lvls == 20, max_relevance > threshold)
     relevant = max_relevance > threshold
     return relevant
 
-def visualize(mask, artifacts, slots, sets, lvls):
-    rows = [(mask[i:i+8], artifacts[i:i+8], slots[i:i+8], sets[i:i+8], lvls[i:i+8]) for i in range(0, len(mask), 8)]
+def visualize(mask, artifact_dicts, sort=False):
+    unactivated = []
+    lvls = []
+    slots = []
+    sets = []
+    for artifact in artifact_dicts:
+        unactivated.append(bool(artifact['unactivatedSubstats']))
+        lvls.append(artifact['level'])
+        slots.append(SLOT_2_NUM[artifact['slotKey']])
+        sets.append(SET_2_NUM[artifact['setKey']])
+        
+    if sort:
+        sorted_idx = sorted(range(len(artifact_dicts)), key=lambda i: (-lvls[i], -sets[i], slots[i], unactivated[i]))
+        mask = mask[sorted_idx]
+        artifact_dicts = [artifact_dicts[i] for i in sorted_idx]
+        lvls = [lvls[i] for i in sorted_idx]
+        slots = [slots[i] for i in sorted_idx]
+        sets = [sets[i] for i in sorted_idx]
     
-    # TODO: this only works if there are more than 8 artifacts, so the
-    # first row is filled
-    # Border
+    # Ignore properly locked artifacts
+    for i, artifact in enumerate(artifact_dicts):
+        mask[i] = artifact['lock'] == mask[i]
+            
+    rows = [(mask[i:i+8], artifact_dicts[i:i+8], slots[i:i+8], sets[i:i+8], lvls[i:i+8]) for i in range(0, len(mask), 8)]
+    
     print('+', end='')
     for _ in range(8):
         print('--------+', end='')
@@ -635,7 +568,7 @@ def visualize(mask, artifacts, slots, sets, lvls):
             if row[0][idx]:
                 print('        |', end='')
             else:
-                print(f'{STATS[find_main(row[1][idx])][:8]:<8}|', end='')
+                print(f'{row[1][idx]['mainStatKey'][:8]:<8}|', end='')
         print()
         
         # Space
@@ -651,11 +584,12 @@ def visualize(mask, artifacts, slots, sets, lvls):
                 if row[0][idx]:
                     print('        |', end='')
                 else:
-                    subs = find_sub(row[1][idx])
                     try:
-                        print(f'{STATS[subs[sub_idx]][:8]:<8}|', end='')
-                    except:
-                        print('        |', end='')    
+                        sub = row[1][idx]['substats'][sub_idx]['key']
+                        print(f'{sub[:8]:<8}|', end='')
+                    except IndexError:
+                        sub = row[1][idx]['unactivatedSubstats'][0]['key']
+                        print(f'*{sub[:7]:<7}|', end='')
             print()    
             
         # Border

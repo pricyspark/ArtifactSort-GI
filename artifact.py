@@ -4,48 +4,66 @@ import zlib
 import math
 import json
 
+# TODO: This isn't the order they appear in-game for some reason
 SETS = (
-    'ArchaicPetra',
-    'BlizzardStrayer',
-    'BloodstainedChivalry',
-    'CrimsonWitchOfFlames',
-    'DeepwoodMemories',
-    'DesertPavilionChronicle',
-    'EchoesOfAnOffering',
-    'EmblemOfSeveredFate',
-    'FinaleOfTheDeepGalleries',
-    'FlowerOfParadiseLost',
-    'FragmentOfHarmonicWhimsy',
-    'GildedDreams',
-    'GladiatorsFinale',
-    'GoldenTroupe',
-    'HeartOfDepth',
-    'HuskOfOpulentDreams',
+    'Initiate',
+    'Adventurer',
+    'LuckyDog',
+    'TravelingDoctor',
+    'ResolutionOfSojourner',
+    'TinyMiracle',
+    'Berserker',
     'Instructor',
-    'Lavawalker',
-    'LongNightsOath',
-    'MaidenBeloved',
-    'MarechausseeHunter',
-    'NightOfTheSkysUnveiling',
-    'NoblesseOblige',
-    'NymphsDream',
-    'ObsidianCodex',
-    'OceanHuedClam',
-    'PaleFlame',
-    'RetracingBolide',
-    'ScrollOfTheHeroOfCinderCity',
-    'SilkenMoonsSerenade',
-    'ShimenawasReminiscence',
-    'SongOfDaysPast',
-    'TenacityOfTheMillelith',
     'TheExile',
-    'ThunderingFury',
-    'Thundersoother',
-    'UnfinishedReverie',
-    'VermillionHereafter',
+    'DefendersWill',
+    'BraveHeart',
+    'MartialArtist',
+    'Gambler',
+    'Scholar',
+    'PrayersForWisdom',
+    'PrayersForDestiny',
+    'PrayersForIllumination',
+    'PrayersToSpringtime',
+    'GladiatorsFinale',
+    'WanderersTroupe',
+    'NoblesseOblige',
+    'BloodstainedChivalry',
+    'MaidenBeloved',
     'ViridescentVenerer',
+    'ArchaicPetra',
+    'RetracingBolide',
+    'Thundersoother',
+    'ThunderingFury',
+    'Lavawalker',
+    'CrimsonWitchOfFlames',
+    'BlizzardStrayer',
+    'HeartOfDepth',
+    'TenacityOfTheMillelith',
+    'PaleFlame',
+    'ShimenawasReminiscence',
+    'EmblemOfSeveredFate',
+    'HuskOfOpulentDreams',
+    'OceanHuedClam',
+    'VermillionHereafter',
+    'EchoesOfAnOffering',
+    'DeepwoodMemories',
+    'GildedDreams',
+    'DesertPavilionChronicle',
+    'FlowerOfParadiseLost',
+    'NymphsDream',
     'VourukashasGlow',
-    'WanderersTroupe'
+    'MarechausseeHunter',
+    'GoldenTroupe',
+    'SongOfDaysPast',
+    'NighttimeWhispersInTheEchoingWoods',
+    'FragmentOfHarmonicWhimsy',
+    'UnfinishedReverie',
+    'ScrollOfTheHeroOfCinderCity',
+    'ObsidianCodex',
+    'FinaleOfTheDeepGalleries',
+    'LongNightsOath',
+    'NightOfTheSkysUnveiling',
+    'SilkenMoonsSerenade'
 )
 
 SET_2_NUM = {artifact_set: index for index, artifact_set in enumerate(SETS)}
@@ -251,7 +269,6 @@ def generate(slot, main=None, lvls=None, source='domain', size=None, rng=None, s
 def artifact_to_dict(artifacts):
     pass
 
-# TODO: update for new GOOD formatting
 def dict_to_artifact(dicts):
     if type(dicts) == dict:
         artifact = np.zeros(19, dtype=np.uint8)
@@ -324,7 +341,8 @@ def load(filename):
     if data['format'] != 'GOOD' or data['version'] != 3:
         raise ValueError('Only GOODv3 is supported.')
     
-    return dict_to_artifact(data['artifacts'])
+    artifact_dict = data['artifacts']
+    return artifact_dict, *dict_to_artifact(artifact_dict)
 
 def print_artifact(artifacts, human_readable=True) -> None:
     if artifacts.ndim == 1:

@@ -1745,8 +1745,8 @@ def rank_pairwise(artifacts, lvls, persist, targets, k=2, num_trials=1000, rng=N
     return relevance
     
 if __name__ == '__main__':
-    target = vectorize({'atk_': 6, 'atk': 2, 'crit_': 8})
-    percentile('circlet', target, 0)
+    #target = vectorize({'atk_': 6, 'atk': 2, 'crit_': 8})
+    #percentile('circlet', target, 0)
     '''
     #targets = {'atk_': 6, 'atk': 2, 'crit_': 8}
     targets = (
@@ -1771,14 +1771,14 @@ if __name__ == '__main__':
     num_iterations = 1
     totals = np.zeros((num_seeds, num_iterations))
     
-    start = time.time()
+    start = time.perf_counter()
     for i in range(num_seeds):
     #for i in seeds:
         for j in range(num_iterations):
             print('seed:', i, 'iteration:', j)
             artifacts, slvls = generate('flower', size=500, seed=i)
             totals[i, j] = (simulate_exp(artifacts, slvls, targets, rank_value))
-    end = time.time()
+    end = time.perf_counter()
             
     #np.save('data/temp1.npy', totals)
             
@@ -1798,12 +1798,12 @@ if __name__ == '__main__':
     
     totals = np.zeros((num_seeds, num_iterations))
     
-    start = time.time()
+    start = time.perf_counter()
     for i in range(num_seeds):
         for j in range(num_iterations):
             artifacts = generate('flower', size=50, seed=i)
             totals[i, j] = (simulate_exp(artifacts, np.zeros(50, dtype=int), targets, rank_temp))
-    end = time.time()
+    end = time.perf_counter()
             
     print('done')
     print(totals)
@@ -1819,12 +1819,12 @@ if __name__ == '__main__':
     
     totals = np.zeros((num_seeds, num_iterations))
     
-    start = time.time()
+    start = time.perf_counter()
     for i in range(num_seeds):
         for j in range(num_iterations):
             artifacts = generate('flower', size=50, seed=i)
             totals[i, j] = (simulate_exp(artifacts, np.zeros(50, dtype=int), targets, rank_value))
-    end = time.time()
+    end = time.perf_counter()
             
     print('done')
     print(totals)
@@ -1839,18 +1839,15 @@ if __name__ == '__main__':
     print(end - start)
     '''
 
-    '''
-    start = time.time()
-    filename = 'artifacts/9-15-2025.json'
-    artifacts, slots, rarities, lvls, sets = load(filename)
-    relevant = rate(artifacts, slots, rarities, lvls, sets, rank_value, k=2, num=100)
+    start = time.perf_counter()
+    filename = 'scans/genshin_export_2025-10-16_04-23.json'
+    artifact_dicts, artifacts, slots, rarities, slvls, sets = load(filename)
+    relevant = rate(artifacts, slots, rarities, slvls, sets, rank_value, k=2, num=100)
     
     count = 0
     
-    visualize(relevant, artifacts, slots, sets, lvls)
-    end = time.time()
+    visualize(relevant, artifact_dicts, sort=True)
+    end = time.perf_counter()
     print(end - start)
     '''
-    
-    # TODO: check seed 22 and see just how unlucky it is, because
-    # sometimes it does so terrible
+    '''

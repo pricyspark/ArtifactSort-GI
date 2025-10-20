@@ -1,6 +1,4 @@
 __pycache__
 .vscode
-artifacts
-data
-seeded
 *.ipynb
+scans/

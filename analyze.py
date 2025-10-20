@@ -6,7 +6,7 @@ import time
 from targets import *
 #from scipy.stats import entropy
 import functools
-from itertools import product
+from itertools import combinations, permutations
 #import artifact as Artifact
 #from artifact import STATS, STAT_2_NUM, MAIN_PROBS, SUB_PROBS, MAIN_VALUES, SUB_VALUES, SUB_COEFS, ARTIFACT_REQ_EXP, UPGRADE_REQ_EXP
 
@@ -237,7 +237,6 @@ def sample_upgrade(artifact, samples, num_upgrades=None, slvl=None, rng=None, se
             increments = rng.choice(SUB_COEFS, size=samples)
             output[rows, cols] += increments
             tape[:, _ + 1] = 4 * cols + increments - 7
-        return output, tape
     else:
         subs = find_sub(artifact)
         rows = np.arange(samples)
@@ -246,7 +245,8 @@ def sample_upgrade(artifact, samples, num_upgrades=None, slvl=None, rng=None, se
             increments = rng.choice(SUB_COEFS, size=samples)
             output[rows, cols] += increments
             tape[:, _] = 4 * cols + increments - 7
-        return output, tape
+    
+    return output, tape
     '''
     else:
         output = np.tile(artifact, (samples, 1))
@@ -255,6 +255,110 @@ def sample_upgrade(artifact, samples, num_upgrades=None, slvl=None, rng=None, se
 
         return output
     '''
+    
+def base_artifact_probs(slot):
+    main_probs = MAIN_PROBS[slot]
+    M = main_probs.size
+
+    # Precompute the 24 permutations of positions [0,1,2,3]
+    perms = np.array(list(permutations(range(4))), dtype=int)  # (24,4)
+
+    all_mains = []
+    all_subs  = []
+    all_probs = []
+
+    zero_subs = None
+    zero_probs = None
+
+    for main in range(M):
+        main_p = main_probs[main]
+        
+        if main_p <= 0:
+            continue
+
+        # Substats are the same for all main stats >= 10
+        if main >= 10:
+            # Check cache
+            if zero_subs is None:
+                # Miss
+                cand = np.arange(10)
+            else:
+                # Hit
+                all_mains.append(np.full(C, main, dtype=int))
+                all_subs.append(zero_subs)
+                all_probs.append(zero_probs)
+                continue
+        else:
+            cand = np.delete(np.arange(10), main)
+            
+        w = SUB_PROBS[cand].astype(float)
+        total = w.sum()
+
+        # All 4-combinations of candidate indices (indices into cand)
+        comb_idx = np.array(list(combinations(np.arange(cand.size), 4)), dtype=int)  # (C,4)
+        C = comb_idx.shape[0]
+
+        # Weights for each combination, shape (C,4)
+        w_sel = w[comb_idx]  # (C,4)
+
+        # Reorder the 4 chosen weights along the 24 permutations: (C,24,4)
+        w_perm = w_sel[:, perms]  # advanced indexing -> (C,24,4)
+
+        # Denominators per step: total - exclusive cumsum of chosen weights
+        # exclusive cumsum: cs_excl[..., k] = sum of previous weights (k terms)
+        cs = np.cumsum(w_perm, axis=-1)                # (C,24,4)
+        cs_excl = cs - w_perm                           # exclusive
+        denoms = total - cs_excl                        # (C,24,4)
+
+        # Order probability for each perm: prod_k w_perm[...,k] / denoms[...,k]
+        with np.errstate(divide='ignore', invalid='ignore'):
+            ratios = np.where(denoms > 0, w_perm / denoms, 0.0)
+            p_order = np.prod(ratios, axis=-1)         # (C,24)
+
+        # Unordered subset prob = sum over the 24 orders
+        p_subset = p_order.sum(axis=1)                 # (C,)
+
+        # Map back to original stat indices for the subset
+        subs = cand[comb_idx]                          # (C,4)
+        subs.sort(axis=1)                              # keep canonical order
+
+        # Multiply by main probability
+        probs = main_p * p_subset
+
+        all_mains.append(np.full(C, main, dtype=int))
+        all_subs.append(subs)
+        all_probs.append(probs)
+        if main >= 10:
+            zero_subs = subs
+            zero_probs = probs
+
+    mains = np.concatenate(all_mains, axis=0)
+    subs  = np.vstack(all_subs)
+    probs = np.concatenate(all_probs, axis=0)
+    
+    return mains, subs, probs
+
+def base_artifact_useful_probs(slot, targets):
+    useless_idx = np.where(targets == 0)[0]
+    mains, subs, probs = base_artifact_probs(slot)
+    
+    if not useless_idx:
+        return mains, subs, probs
+    
+    combine = np.concatenate([mains[:, None], subs], axis=1)
+
+    # Mark useless substats as -1
+    if useless_idx.size:
+        mask = np.isin(combine, useless_idx)
+        combine[mask] = -1
+        
+    uniq, inv = np.unique(combine, axis=0, return_inverse=True)
+    probs_out = np.bincount(inv, weights=probs)
+
+    mains_out = uniq[:, 0].astype(int)
+    subs_out  = uniq[:, 1:].astype(int)
+
+    return mains_out, subs_out, probs_out
 
     
 def avg(distribution, probs, targets, scores=None) -> float:

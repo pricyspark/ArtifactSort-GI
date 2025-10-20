@@ -10,6 +10,8 @@ from itertools import product, combinations, permutations
 #import artifact as Artifact
 #from artifact import STATS, STAT_2_NUM, MAIN_PROBS, SUB_PROBS, MAIN_VALUES, SUB_VALUES, SUB_COEFS, ARTIFACT_REQ_EXP, UPGRADE_REQ_EXP
 
+CACHE_SIZE = 1000 # TODO: tune for percentile, especially more complex targets
+
 def _all_compositions(N, M):
     """Yield all length-N tuples of non-neg ints summing to M."""
     if N == 1:
@@ -38,8 +40,8 @@ def next_lvl(lvl):
         return 8
     else:
         return 4 * ((lvl // 4) + 1)
-    
-@functools.lru_cache(maxsize=10)
+
+@functools.lru_cache(maxsize=CACHE_SIZE)
 def _temp(N):
     # start with “zero” sum
     dist = {0: 1.0}
@@ -360,8 +362,10 @@ def base_artifact_useful_probs(slot, targets):
 
     return mains_out, subs_out, probs_out
 
-
 def artifact_percentile(slot, targets, score, lvl):
+    # Nest function so arrays are enclosing variables instead of
+    # parameters, this allows easier caching
+    @functools.lru_cache(maxsize=CACHE_SIZE)
     def _percentile_helper(diff, num_upgrades):
         if diff < 0:
             return 0.2 if num_upgrades == 0 else 1
@@ -402,8 +406,10 @@ def artifact_percentile(slot, targets, score, lvl):
                 
             output += p * _percentile_helper(temp_diff, num_upgrades) / 4 ** num_useful
 
+        _percentile_helper.cache_clear()
+
     return output
-    
+
 def avg(distribution, probs, targets, scores=None) -> float:
     """Find distribution's score average.
 

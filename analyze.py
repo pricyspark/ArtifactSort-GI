@@ -6,7 +6,7 @@ import time
 from targets import *
 #from scipy.stats import entropy
 import functools
-from itertools import combinations, permutations
+from itertools import product, combinations, permutations
 #import artifact as Artifact
 #from artifact import STATS, STAT_2_NUM, MAIN_PROBS, SUB_PROBS, MAIN_VALUES, SUB_VALUES, SUB_COEFS, ARTIFACT_REQ_EXP, UPGRADE_REQ_EXP
 
@@ -342,15 +342,15 @@ def base_artifact_useful_probs(slot, targets):
     useless_idx = np.where(targets == 0)[0]
     mains, subs, probs = base_artifact_probs(slot)
     
-    if not useless_idx:
+    if len(useless_idx) == 0:
         return mains, subs, probs
-    
-    combine = np.concatenate([mains[:, None], subs], axis=1)
 
     # Mark useless substats as -1
-    if useless_idx.size:
-        mask = np.isin(combine, useless_idx)
-        combine[mask] = -1
+    combine = np.column_stack((mains, subs))
+    np.putmask(combine, np.isin(combine, useless_idx), -1)
+        
+    v = combine[:, 1:]
+    v.sort(axis=1)
         
     uniq, inv = np.unique(combine, axis=0, return_inverse=True)
     probs_out = np.bincount(inv, weights=probs)
@@ -360,6 +360,49 @@ def base_artifact_useful_probs(slot, targets):
 
     return mains_out, subs_out, probs_out
 
+
+def artifact_percentile(slot, targets, score, lvl):
+    def _percentile_helper(diff, num_upgrades):
+        if diff < 0:
+            return 0.2 if num_upgrades == 0 else 1
+        
+        if num_upgrades == 0:
+            return 0
+        
+        upper_bound = np.max(new_targets[s]) * 10 * num_upgrades
+        if diff >= upper_bound:
+            return 0
+            
+        output = 0
+        for sub in s:
+            for coef in (7, 8, 9, 10):
+                temp_diff = diff - coef * new_targets[sub]
+                output += _percentile_helper(temp_diff, num_upgrades - 1)
+
+        return output / 16
+    
+    if lvl < 0:
+        raise ValueError('Invalid artifact level')
+    
+    mains, subs, probs = base_artifact_useful_probs(slot, targets)
+
+    num_upgrades = lvl // 4
+    new_targets = np.append(targets, 0)
+    
+    output = 0
+    for m, s, p in zip(mains, subs, probs):
+        diff = score - new_targets[m] * (160 if m < 3 else 80)
+        num_useful = np.count_nonzero(s != -1)
+        num_useless = 4 - num_useful
+        for coefs in product((7, 8, 9, 10), repeat=num_useful):
+            coefs = [0] * num_useless + list(coefs)
+            temp_diff = diff
+            for sub, coef in zip(s, coefs):
+                temp_diff -= coef * new_targets[sub]
+                
+            output += p * _percentile_helper(temp_diff, num_upgrades) / 4 ** num_useful
+
+    return output
     
 def avg(distribution, probs, targets, scores=None) -> float:
     """Find distribution's score average.

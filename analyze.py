@@ -362,7 +362,7 @@ def base_artifact_useful_probs(slot, targets):
 
     return mains_out, subs_out, probs_out
 
-def artifact_percentile(slot, targets, score, lvl):
+def artifact_percentile(slot, targets, threshold, lvl):
     # Nest function so arrays are enclosing variables instead of
     # parameters, this allows easier caching
     @functools.lru_cache(maxsize=CACHE_SIZE)
@@ -370,18 +370,21 @@ def artifact_percentile(slot, targets, score, lvl):
         if diff < 0:
             return 0.2 if num_upgrades == 0 else 1
         
-        if num_upgrades == 0:
+        if num_upgrades == 0: # This isn't necessary, but might speed things up
             return 0
-        
-        upper_bound = np.max(new_targets[s]) * 10 * num_upgrades
+
+        upper_bound = max_weight * 10 * num_upgrades
         if diff >= upper_bound:
             return 0
             
         output = 0
         for sub in s:
-            for coef in (7, 8, 9, 10):
+            for coef in (10, 9, 8, 7):
                 temp_diff = diff - coef * new_targets[sub]
-                output += _percentile_helper(temp_diff, num_upgrades - 1)
+                temp_prob = _percentile_helper(temp_diff, num_upgrades - 1)
+                if temp_prob == 0:
+                    break
+                output += temp_prob
 
         return output / 16
     
@@ -395,9 +398,10 @@ def artifact_percentile(slot, targets, score, lvl):
     
     output = 0
     for m, s, p in zip(mains, subs, probs):
-        diff = score - new_targets[m] * (160 if m < 3 else 80)
+        diff = threshold - new_targets[m] * (160 if m < 3 else 80)
         num_useful = np.count_nonzero(s != -1)
         num_useless = 4 - num_useful
+        max_weight = np.max(new_targets[s])
         for coefs in product((7, 8, 9, 10), repeat=num_useful):
             coefs = [0] * num_useless + list(coefs)
             temp_diff = diff
@@ -519,6 +523,50 @@ def score(artifacts, targets):
         targets = vectorize(targets)
         
     return artifacts @ targets
+
+def reshape(artifact, base, target, unactivated, threshold=None, minimum=2):
+    @functools.lru_cache(maxsize=CACHE_SIZE)
+    def _reshape_helper(current_score, num_good, num_upgrades):
+        if num_good + num_upgrades < minimum:
+            return None
+        
+        if num_upgrades == 0:
+            return max(current_score, target_score)
+        
+        upper_bound = max_weight * 10 * num_upgrades
+        if current_score + upper_bound < target_score:
+            return target_score
+        
+        scores = []
+        for sub in subs:
+            temp_num_good = num_good + 1 if sub in best_subs else num_good
+            for coef in (10, 9, 8, 7):
+                temp_score = current_score + coef * target[sub]
+                temp_output = _reshape_helper(temp_score, temp_num_good, num_upgrades - 1)
+                if temp_output is None:
+                    break
+                
+                scores.append(temp_output)
+
+        return np.mean(scores)
+
+    target_score = score(artifact, target) if threshold is None else threshold    
+    base_score = score(base, target)
+    
+    main = find_main(artifact)
+    subs = find_sub(artifact, main)
+    
+    best_subs = np.argpartition(target[subs], -2)
+    best_subs = subs[best_subs[-2:]]
+    max_weight = np.max(target[subs])
+    
+    num_upgrades = 4 if unactivated else 5
+    
+    # TODO: mean(percentile(x)) != percentile(mean(x)) REMEMBER THIS
+    
+    output = _reshape_helper(base_score, 0, num_upgrades)
+    _reshape_helper.cache_clear()
+    return output
 
 def simulate_exp(artifacts, slvls, targets, fun, num=1, mains=None):
     # TODO: check if anything is maxed. They shouldn't be

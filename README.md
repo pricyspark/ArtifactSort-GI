@@ -4,6 +4,8 @@ Sort Genshin Impact artifacts by considering a suite of configurable
 optimization targets, sets, and rankers. Are any of these problems
 relevant to you?
 
+- How long is it going to take to improve my current artifacts? Is it
+  even worth farming for this set anymore?
 - I need to get rid of some artifacts, but have no idea with is my
   "worst", especially considering multiple possible builds and targets
   at once.
@@ -13,8 +15,8 @@ relevant to you?
   which artifacts to upgrade my greedily replacing single artifacts, but
   that is too fine-grained. I want something that generalizes "good"
   artifacts.
-- I don't have a full/good build for Genshin Optimizer to accurately
-  recommend good artifacts to upgrade.
+- I don't have a full/good build for Genshin Optimizer to base its
+  upgrade recommendations on.
 
 If so, then Artifact Sort can help you!
 

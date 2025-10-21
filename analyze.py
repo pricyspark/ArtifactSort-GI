@@ -558,7 +558,7 @@ def reshape(slot, artifact, base, target, unactivated, threshold=None, minimum=2
 
         return np.mean(scores), np.mean(rarities)
 
-    target_score = score(artifact, target) if threshold is None else threshold    
+    target_score = score(artifact, target) if threshold is None else threshold
     base_score = score(base, target)
     
     main = find_main(artifact)
@@ -570,9 +570,8 @@ def reshape(slot, artifact, base, target, unactivated, threshold=None, minimum=2
     
     num_upgrades = 4 if unactivated else 5
     
-    # TODO: mean(percentile(x)) != percentile(mean(x)) REMEMBER THIS
-    
     output = _reshape_helper(base_score, 0, num_upgrades)
+    _percentile_wrapper.cache_clear()
     _reshape_helper.cache_clear()
     return output
 
@@ -662,7 +661,7 @@ def simulate_exp(artifacts, slvls, targets, fun, num=1, mains=None):
     #print(np.histogram(slvls, bins=7)[0])
     return exp
 
-def rate(artifacts, slots, rarities, lvls, sets, ranker, k=1, num=None, threshold=None):
+def rate(artifacts, slots, rarities, slvls, sets, ranker, k=1, num=None, threshold=None):
     # TODO: change persist to persist_artifact and persist_meta, for
     # more intuitive control over things like set masking
     relevance = np.zeros((len(artifacts), 5 * (1 + len(SETS))), dtype=float)
@@ -672,7 +671,7 @@ def rate(artifacts, slots, rarities, lvls, sets, ranker, k=1, num=None, threshol
         slot_mask = np.logical_and(rarities == 5, slots == slot)
         original_idxs = np.where(slot_mask)[0]
         slot_artifacts = artifacts[slot_mask]
-        slot_lvls = lvls[slot_mask]
+        slot_lvls = slvls[slot_mask]
         persist = {}
         relevance[original_idxs, count] = ranker(slot_artifacts, slot_lvls, persist, ALL_TARGETS[SLOTS[slot]], k=2 * k)
         count += 1
@@ -712,6 +711,23 @@ def rate(artifacts, slots, rarities, lvls, sets, ranker, k=1, num=None, threshol
     #relevant = np.logical_or(lvls == 20, max_relevance > threshold)
     relevant = max_relevance > threshold
     return relevant
+
+def estimate_resin(artifacts, slots, rarities, slvls, sets, set_key, target):
+    slot_estimates = []
+    
+    for slot in range(5):
+        slot_mask = np.logical_and(rarities == 5, slots == slot)
+        slot_mask = np.logical_and(slot_mask, slvls == 20)
+        slot_mask = np.logical_and(slot_mask, sets == set_key)
+        scores = score(artifacts[slot_mask], target)
+        percentile = artifact_percentile(SLOTS[slot], target, np.max(scores), 20)
+        slot_estimates.append(math.ceil(1.065 / percentile) * 20)
+        
+    return slot_estimates
+
+def recommend_define(artifacts, slots, rarities, slvls, sets):
+    # TODO: implement
+    pass
 
 def visualize(mask, artifact_dicts, sort=False):
     unactivated = []

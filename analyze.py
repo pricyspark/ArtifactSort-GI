@@ -524,19 +524,26 @@ def score(artifacts, targets):
         
     return artifacts @ targets
 
-def reshape(artifact, base, target, unactivated, threshold=None, minimum=2):
+def reshape(slot, artifact, base, target, unactivated, threshold=None, minimum=2):
+    @functools.lru_cache(maxsize=CACHE_SIZE)
+    def _percentile_wrapper(threshold):
+        return artifact_percentile(slot, target, threshold, 20)
+    
     @functools.lru_cache(maxsize=CACHE_SIZE)
     def _reshape_helper(current_score, num_good, num_upgrades):
         if num_good + num_upgrades < minimum:
             return None
         
         if num_upgrades == 0:
-            return max(current_score, target_score)
+            winning_score = max(current_score, target_score)
+            winning_rarity = max(1 / _percentile_wrapper(current_score), 1 / _percentile_wrapper(target_score))
+            return winning_score, winning_rarity
         
         upper_bound = max_weight * 10 * num_upgrades
         if current_score + upper_bound < target_score:
-            return target_score
+            return target_score, 1 / _percentile_wrapper(target_score)
         
+        rarities = []
         scores = []
         for sub in subs:
             temp_num_good = num_good + 1 if sub in best_subs else num_good
@@ -546,9 +553,10 @@ def reshape(artifact, base, target, unactivated, threshold=None, minimum=2):
                 if temp_output is None:
                     break
                 
-                scores.append(temp_output)
+                scores.append(temp_output[0])
+                rarities.append(temp_output[1])
 
-        return np.mean(scores)
+        return np.mean(scores), np.mean(rarities)
 
     target_score = score(artifact, target) if threshold is None else threshold    
     base_score = score(base, target)

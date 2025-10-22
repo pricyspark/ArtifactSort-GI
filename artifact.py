@@ -270,8 +270,10 @@ def artifact_to_dict(artifacts):
     pass
 
 def dict_to_artifact(dicts):
+    # TODO: add error checking for scans that don't store base
     if type(dicts) == dict:
         artifact = np.zeros(19, dtype=np.uint8)
+        base_artifact = np.zeros(19, dtype=np.uint8)
         
         slot: int = SLOT_2_NUM[dicts['slotKey']]
         rarity: int = dicts['rarity']
@@ -280,29 +282,44 @@ def dict_to_artifact(dicts):
         main: int = STAT_2_NUM[dicts['mainStatKey']]
         if main < 3:
             artifact[main] = 160
+            base_artifact[main] = 160
         else:
             artifact[main] = 80
+            base_artifact[main] = 80
             
         for substat in dicts['substats']:
             stat = STAT_2_NUM[substat['key']]
             value = substat['value']
             coef = round(value / SUB_VALUES[stat] * 10)
             artifact[stat] = coef
+            
+            init_value = substat['initialValue']
+            init_coef = round(init_value / SUB_VALUES[stat] * 10)
+            base_artifact[stat] = init_coef
         
         for substat in dicts['unactivatedSubstats']:
             stat = STAT_2_NUM[substat['key']]
             value = substat['value']
             coef = round(value / SUB_VALUES[stat] * 10)
             artifact[stat] = coef
+            
+            init_value = substat['initialValue']
+            init_coef = round(init_value / SUB_VALUES[stat] * 10)
+            base_artifact[stat] = init_coef
+            
             slvl -= 4
         
-        return artifact, slot, rarity, slvl, setKey
+        unactivated = dicts['totalRolls'] == 8
+        
+        return artifact, base_artifact, slot, rarity, slvl, unactivated, setKey
         
     else:
         temp_artifacts = []
+        temp_base_artifacts = []
         temp_slots = []
         temp_rarities = []
         temp_slvls = []
+        temp_unactivated = []
         temp_sets = []
         
         #artifacts = np.zeros((len(dicts), 19), dtype=np.uint8)
@@ -310,29 +327,24 @@ def dict_to_artifact(dicts):
         #lvls = np.zeros(len(dicts), dtype=np.uint8)
         #sets = np.zeros(len(dicts), dtype=int)
         for dictionary in dicts:
-            artifact, slot, rarity, slvl, setKey = dict_to_artifact(dictionary)
+            artifact, base_artifact, slot, rarity, slvl, unactivated, setKey = dict_to_artifact(dictionary)
             temp_artifacts.append(artifact)
+            temp_base_artifacts.append(base_artifact)
             temp_slots.append(slot)
             temp_rarities.append(rarity)
             temp_slvls.append(slvl)
+            temp_unactivated.append(unactivated)
             temp_sets.append(setKey)
-        artifacts = np.zeros((len(temp_artifacts), 19), dtype=np.uint8)
-        slots = np.zeros(len(temp_slots), dtype=np.uint8)
-        rarities = np.zeros(len(temp_rarities), dtype=np.uint8)
-        slvls = np.zeros(len(temp_slvls), dtype=np.int8)
-        sets = np.zeros(len(temp_sets), dtype=int)
-        for i in range(len(temp_artifacts)):
-            artifacts[i] = temp_artifacts[i]
-            slots[i] = temp_slots[i]
-            rarities[i] = temp_rarities[i]
-            slvls[i] = temp_slvls[i]
-            sets[i] = temp_sets[i]
-        '''
-        for i, dictionary in enumerate(dicts):
-            if dictionary['rarity'] == 5:
-                artifacts[i], slots[i], lvls[i], sets[i] = dict_to_artifact(dictionary)
-        '''
-        return artifacts, slots, rarities, slvls, sets
+            
+        artifacts = np.array(temp_artifacts, dtype=np.uint8)
+        base_artifacts = np.array(temp_base_artifacts, dtype=np.uint8)
+        slots = np.array(temp_slots, dtype=np.uint8)
+        rarities = np.array(temp_rarities, dtype=np.uint8)
+        slvls = np.array(temp_slvls, dtype=np.int8)
+        unactivated = np.array(temp_unactivated, dtype=bool)
+        sets = np.array(temp_sets, dtype=np.uint8)
+        
+        return artifacts, base_artifacts, slots, rarities, slvls, unactivated, sets
     
 def load(filename):
     with open(filename) as f:

@@ -6,6 +6,10 @@ relevant to you?
 
 - How long is it going to take to improve my current artifacts? Is it
   even worth farming for this set anymore?
+- What artifact should I define with the Artifact Transmuter? If I do,
+  how much resin am I saving on average?
+- Is this artifact worth reshaping its substats? Which artifact is most
+  resin efficient to choose?
 - I need to get rid of some artifacts, but have no idea with is my
   "worst", especially considering multiple possible builds and targets
   at once.

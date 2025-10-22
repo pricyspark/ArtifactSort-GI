@@ -69,6 +69,6 @@ conda env remove -n artifact_sort
 ```
 ## Roadmap
 - [ ] GUI
-- [ ] Analysis for defining
-- [ ] Analysis for reshaping
+- [X] Analysis for defining
+- [X] Analysis for reshaping
 - [ ] Automatic locking/unlocking

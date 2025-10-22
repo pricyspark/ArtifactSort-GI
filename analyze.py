@@ -582,7 +582,8 @@ def reshape_percentile(base, target, threshold, unactivated, minimum=2):
 
 def reshape_resin(slot, base, target, threshold, unactivated, minimum=2):
     reshape_prob = reshape_percentile(base, target, threshold, unactivated, minimum)
-    resin = estimate_resin(slot, target, threshold)
+    percentile = artifact_percentile(slot, target, threshold, 20)
+    resin = estimate_resin(percentile)
     
     return reshape_prob * resin
 
@@ -693,7 +694,8 @@ def define_percentile(slot, target, threshold):
 
 def define_resin(slot, target, threshold):
     define_prob = define_percentile(slot, target, threshold)
-    resin = estimate_resin(slot, target, threshold)
+    percentile = artifact_percentile(slot, target, threshold, 20)
+    resin = estimate_resin(percentile)
     
     return define_prob * resin
 
@@ -834,25 +836,62 @@ def rate(artifacts, slots, rarities, slvls, sets, ranker, k=1, num=None, thresho
     relevant = max_relevance > threshold
     return relevant
 
-def estimate_resin(slot, target, threshold):
-    percentile = artifact_percentile(slot, target, threshold, 20)
+def estimate_resin(percentile):
     return math.ceil(1.065 / percentile) * 40
 
-def set_resin(artifacts, slots, rarities, slvls, sets, set_key, target):
+def set_resin(artifacts, slots, rarities, lvls, sets, set_key, target, improvement=0.0):
     slot_estimates = []
     
     for slot in range(5):
         slot_mask = np.logical_and(rarities == 5, slots == slot)
-        slot_mask = np.logical_and(slot_mask, slvls == 20)
+        slot_mask = np.logical_and(slot_mask, lvls == 20)
         slot_mask = np.logical_and(slot_mask, sets == set_key)
         scores = score(artifacts[slot_mask], target)
-        slot_estimates.append(estimate_resin(SLOTS[slot], target, np.max(scores), 20))
+        threshold = np.max(scores) * (1 + improvement)
+        percentile = artifact_percentile(SLOTS[slot], target, threshold, 20)
+        slot_estimates.append(estimate_resin(percentile))
         
     return slot_estimates
 
-def recommend_define(artifacts, slots, rarities, slvls, sets):
-    # TODO: implement
-    pass
+def set_reshape_resin(artifacts, base_artifacts, slots, rarities, lvls, unactivated, sets, set_key, target, minimum=2, improvement=0.0):
+    slot_estimates = []
+    
+    for slot in range(5):
+        slot_mask = np.logical_and(rarities == 5, slots == slot)
+        slot_mask = np.logical_and(slot_mask, lvls == 20)
+        slot_mask = np.logical_and(slot_mask, sets == set_key)
+        scores = score(artifacts[slot_mask], target)
+        threshold = np.max(scores) * (1 + improvement)
+        best = 0
+        for i in range(len(artifacts)):
+            if not slot_mask[i]:
+                continue
+            best = max(best, reshape_percentile(base_artifacts[i], target, threshold, unactivated[i], minimum))
+        percentile = artifact_percentile(SLOTS[slot], target, threshold, 20)
+        print('percentile', best)
+        resin = estimate_resin(percentile)
+        print('resin', resin)
+        slot_estimates.append(round(best * resin))
+        
+    return slot_estimates
+
+def set_define_resin(artifacts, slots, rarities, lvls, sets, set_key, target, improvement=0.0):
+    slot_estimates = []
+    
+    for slot in range(5):
+        slot_mask = np.logical_and(rarities == 5, slots == slot)
+        slot_mask = np.logical_and(slot_mask, lvls == 20)
+        slot_mask = np.logical_and(slot_mask, sets == set_key)
+        scores = score(artifacts[slot_mask], target)
+        threshold = np.max(scores) * (1 + improvement)
+        define_prob = define_percentile(SLOTS[slot], target, threshold)
+        percentile = artifact_percentile(SLOTS[slot], target, threshold, 20)
+        print('percentile', define_prob)
+        resin = estimate_resin(percentile)
+        print('resin', resin)
+        slot_estimates.append(round(define_prob * resin))
+        
+    return slot_estimates
 
 def visualize(mask, artifact_dicts, sort=False):
     unactivated = []

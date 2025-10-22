@@ -1,14 +1,10 @@
 import numpy as np
 from artifact import *
-#from rank import *
 import math
 import time
 from targets import *
-#from scipy.stats import entropy
 import functools
 from itertools import product, combinations, permutations
-#import artifact as Artifact
-#from artifact import STATS, STAT_2_NUM, MAIN_PROBS, SUB_PROBS, MAIN_VALUES, SUB_VALUES, SUB_COEFS, ARTIFACT_REQ_EXP, UPGRADE_REQ_EXP
 
 CACHE_SIZE = 1000 # TODO: tune for percentile, especially more complex targets
 
@@ -293,7 +289,7 @@ def base_artifact_probs(slot):
         else:
             cand = np.delete(np.arange(10), main)
             
-        w = SUB_PROBS[cand].astype(float)
+        w = SUB_PROBS[cand]
         total = w.sum()
 
         # All 4-combinations of candidate indices (indices into cand)
@@ -340,9 +336,8 @@ def base_artifact_probs(slot):
     
     return mains, subs, probs
 
-def base_artifact_useful_probs(slot, targets):
-    useless_idx = np.where(targets == 0)[0]
-    mains, subs, probs = base_artifact_probs(slot)
+def base_artifact_useful_probs(mains, subs, probs, target):
+    useless_idx = np.where(target == 0)[0]
     
     if len(useless_idx) == 0:
         return mains, subs, probs
@@ -362,7 +357,7 @@ def base_artifact_useful_probs(slot, targets):
 
     return mains_out, subs_out, probs_out
 
-def artifact_percentile(slot, targets, threshold, lvl):
+def artifact_percentile(slot, target, threshold, lvl):
     # Nest function so arrays are enclosing variables instead of
     # parameters, this allows easier caching
     @functools.lru_cache(maxsize=CACHE_SIZE)
@@ -380,7 +375,7 @@ def artifact_percentile(slot, targets, threshold, lvl):
         output = 0
         for sub in s:
             for coef in (10, 9, 8, 7):
-                temp_diff = diff - coef * new_targets[sub]
+                temp_diff = diff - coef * new_target[sub]
                 temp_prob = _percentile_helper(temp_diff, num_upgrades - 1)
                 if temp_prob == 0:
                     break
@@ -391,22 +386,23 @@ def artifact_percentile(slot, targets, threshold, lvl):
     if lvl < 0:
         raise ValueError('Invalid artifact level')
     
-    mains, subs, probs = base_artifact_useful_probs(slot, targets)
+    mains, subs, probs = base_artifact_probs(slot)
+    mains, subs, probs = base_artifact_useful_probs(mains, subs, probs, target)
 
     num_upgrades = lvl // 4
-    new_targets = np.append(targets, 0)
+    new_target = np.append(target, 0)
     
     output = 0
     for m, s, p in zip(mains, subs, probs):
-        diff = threshold - new_targets[m] * (160 if m < 3 else 80)
+        diff = threshold - new_target[m] * (160 if m < 3 else 80)
         num_useful = np.count_nonzero(s != -1)
         num_useless = 4 - num_useful
-        max_weight = np.max(new_targets[s])
+        max_weight = np.max(new_target[s])
         for coefs in product((7, 8, 9, 10), repeat=num_useful):
             coefs = [0] * num_useless + list(coefs)
             temp_diff = diff
             for sub, coef in zip(s, coefs):
-                temp_diff -= coef * new_targets[sub]
+                temp_diff -= coef * new_target[sub]
                 
             output += p * _percentile_helper(temp_diff, num_upgrades) / 4 ** num_useful
 
@@ -524,56 +520,182 @@ def score(artifacts, targets):
         
     return artifacts @ targets
 
-def reshape(slot, artifact, base, target, unactivated, threshold=None, minimum=2):
+def reshape_percentile(base, target, threshold, unactivated, minimum=2):
+    # TODO: This is copy-pasted from define. Find a more elegant solution
     @functools.lru_cache(maxsize=CACHE_SIZE)
-    def _percentile_wrapper(threshold):
-        return artifact_percentile(slot, target, threshold, 20)
-    
-    @functools.lru_cache(maxsize=CACHE_SIZE)
-    def _reshape_helper(current_score, num_good, num_upgrades):
+    def _reshape_helper(diff, num_good, num_upgrades):
         if num_good + num_upgrades < minimum:
             return None
         
+        if diff < 0 and num_good >= minimum:
+            return 1
+        
         if num_upgrades == 0:
-            winning_score = max(current_score, target_score)
-            winning_rarity = max(1 / _percentile_wrapper(current_score), 1 / _percentile_wrapper(target_score))
-            return winning_score, winning_rarity
+            return 0
         
         upper_bound = max_weight * 10 * num_upgrades
-        if current_score + upper_bound < target_score:
-            return target_score, 1 / _percentile_wrapper(target_score)
+        if diff >= upper_bound:
+            return 0
         
-        rarities = []
-        scores = []
+        output = 0
         for sub in subs:
             temp_num_good = num_good + 1 if sub in best_subs else num_good
             for coef in (10, 9, 8, 7):
-                temp_score = current_score + coef * target[sub]
-                temp_output = _reshape_helper(temp_score, temp_num_good, num_upgrades - 1)
-                if temp_output is None:
+                temp_diff = diff - coef * target[sub]
+                temp_prob = _reshape_helper(temp_diff, temp_num_good, num_upgrades - 1)
+                if temp_prob is None:
                     break
                 
-                scores.append(temp_output[0])
-                rarities.append(temp_output[1])
-
-        return np.mean(scores), np.mean(rarities)
-
-    target_score = score(artifact, target) if threshold is None else threshold
+                output += temp_prob
+                
+        return output / 16
+    
+    prob_valid = 0
+    if unactivated:
+        # Probability 3-stat has minimum good rolls
+        temp = 0
+        for i in range(5 - minimum):
+            temp += math.comb(4, i)
+        prob_valid += temp / 2 ** 4
+    else:
+        # Probability 4-stat has minimum good rolls
+        temp = 0
+        for i in range(6 - minimum):
+            temp += math.comb(5, i)
+        prob_valid += temp / 2 ** 5
+    
     base_score = score(base, target)
     
-    main = find_main(artifact)
-    subs = find_sub(artifact, main)
+    main = find_main(base)
+    subs = find_sub(base, main)
     
     best_subs = np.argpartition(target[subs], -2)
     best_subs = subs[best_subs[-2:]]
     max_weight = np.max(target[subs])
     
     num_upgrades = 4 if unactivated else 5
+    diff = (threshold - base_score).astype(int)
     
-    output = _reshape_helper(base_score, 0, num_upgrades)
-    _percentile_wrapper.cache_clear()
+    output = _reshape_helper(diff, 0, num_upgrades)
     _reshape_helper.cache_clear()
-    return output
+    return output / prob_valid
+
+def reshape_resin(slot, base, target, threshold, unactivated, minimum=2):
+    reshape_prob = reshape_percentile(base, target, threshold, unactivated, minimum)
+    resin = estimate_resin(slot, target, threshold)
+    
+    return reshape_prob * resin
+
+def base_define_probs(slot, target):
+    main = np.argmax(np.where(MAIN_PROBS[slot] == 0, 0, target))
+    best_subs = np.argpartition(np.where(np.arange(19) == main, 0, target), -2)[-2:]
+    
+    # TODO: simplify this. This is adapted from base_artifact_probs and overkill
+    perms = np.array(list(permutations(range(2))), dtype=int)
+    
+    if main < 10:
+        cand = np.delete(np.arange(10), [main, *best_subs])
+    else:
+        cand = np.delete(np.arange(10), best_subs)
+        
+    w = SUB_PROBS[cand]
+    total = w.sum()
+    
+    comb_idx = np.array(list(combinations(np.arange(cand.size), 2)), dtype=int)  # (C,4)
+    C = comb_idx.shape[0]
+    
+    w_sel = w[comb_idx]
+    w_perm = w_sel[:, perms]
+    
+    cs = np.cumsum(w_perm, axis=-1)
+    cs_excl = cs - w_perm
+    denoms = total - cs_excl
+    
+    with np.errstate(divide='ignore', invalid='ignore'):
+        ratios = np.where(denoms > 0, w_perm / denoms, 0.0)
+        p_order = np.prod(ratios, axis=-1)
+        
+    probs = p_order.sum(axis=1)
+    
+    subs = cand[comb_idx]
+    subs = np.concatenate([subs, np.broadcast_to(best_subs, (len(subs), best_subs.shape[0]))], axis=1)
+    subs.sort(axis=1)
+    
+    return np.full(C, main, dtype=int), subs, probs
+
+def define_percentile(slot, target, threshold):
+    @functools.lru_cache(maxsize=CACHE_SIZE)
+    def _define_helper(diff, num_good, num_upgrades):
+        if num_good + num_upgrades < MINIMUM:
+            return None
+        
+        if diff < 0 and num_good >= MINIMUM:
+            return 0.2 if num_upgrades == 0 else 1 # TODO: fine out if this should be 1/3
+        
+        if num_upgrades == 0:
+            return 0
+        
+        upper_bound = max_weight * 10 * num_upgrades
+        if diff >= upper_bound:
+            return 0
+        
+        output = 0
+        for sub in s:
+            temp_num_good = num_good + 1 if sub in best_subs else num_good
+            for coef in (10, 9, 8, 7):
+                temp_diff = diff - coef * new_target[sub]
+                temp_prob = _define_helper(temp_diff, temp_num_good, num_upgrades - 1)
+                if temp_prob is None:
+                    break
+                
+                output += temp_prob
+                
+        return output / 16
+    
+    MINIMUM = 2
+    
+    prob_valid = 0
+    # Probability 3-stat has minimum good rolls
+    temp = 0
+    for i in range(5 - MINIMUM):
+        temp += math.comb(4, i)
+    prob_valid += 0.8 * temp / 2 ** 4
+    # Probability 4-stat has minimum good rolls
+    temp = 0
+    for i in range(6 - MINIMUM):
+        temp += math.comb(5, i)
+    prob_valid += 0.2 * temp / 2 ** 5
+    
+    mains, subs, probs = base_define_probs(slot, target)
+    mains, subs, probs = base_artifact_useful_probs(mains, subs, probs, target)
+    
+    new_target = np.append(target, 0)
+    
+    best_subs = subs[0, [np.argpartition(new_target[subs[0]], -2)[-2:]]]
+    
+    output = 0
+    for m, s, p in zip(mains, subs, probs):
+        diff = threshold - new_target[m] * (160 if m < 3 else 80)
+        num_useful = np.count_nonzero(s != -1)
+        num_useless = 4 - num_useful
+        max_weight = np.max(new_target[s])
+        for coefs in product((7, 8, 9, 10), repeat=num_useful):
+            coefs = [0] * num_useless + list(coefs)
+            temp_diff = diff
+            for sub, coef in zip(s, coefs):
+                temp_diff -= coef * new_target[sub]
+
+            output += p * _define_helper(temp_diff, 0, 5) / 4 ** num_useful
+            
+        _define_helper.cache_clear()
+        
+    return output / prob_valid
+
+def define_resin(slot, target, threshold):
+    define_prob = define_percentile(slot, target, threshold)
+    resin = estimate_resin(slot, target, threshold)
+    
+    return define_prob * resin
 
 def simulate_exp(artifacts, slvls, targets, fun, num=1, mains=None):
     # TODO: check if anything is maxed. They shouldn't be
@@ -712,7 +834,11 @@ def rate(artifacts, slots, rarities, slvls, sets, ranker, k=1, num=None, thresho
     relevant = max_relevance > threshold
     return relevant
 
-def estimate_resin(artifacts, slots, rarities, slvls, sets, set_key, target):
+def estimate_resin(slot, target, threshold):
+    percentile = artifact_percentile(slot, target, threshold, 20)
+    return math.ceil(1.065 / percentile) * 40
+
+def set_resin(artifacts, slots, rarities, slvls, sets, set_key, target):
     slot_estimates = []
     
     for slot in range(5):
@@ -720,8 +846,7 @@ def estimate_resin(artifacts, slots, rarities, slvls, sets, set_key, target):
         slot_mask = np.logical_and(slot_mask, slvls == 20)
         slot_mask = np.logical_and(slot_mask, sets == set_key)
         scores = score(artifacts[slot_mask], target)
-        percentile = artifact_percentile(SLOTS[slot], target, np.max(scores), 20)
-        slot_estimates.append(math.ceil(1.065 / percentile) * 20)
+        slot_estimates.append(estimate_resin(SLOTS[slot], target, np.max(scores), 20))
         
     return slot_estimates
 

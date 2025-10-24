@@ -49,13 +49,46 @@ If so, then Artifact Sort can help you!
    conda activate artifact_sort
    ```
 ## Usage
-1. Export in-game artifacts to GOODv3 with your preferred scanner
-   (AdeptiScanner, Irminsul, Artiscan, Inventory Kamera, etc.).
+1. Export in-game artifacts to GOODv3 using Irminsul. Currently only
+   works with Irminsul because it's the only scanner that reports
+   initialValue for substats, which is used during reshaping analysis.
+   Support for other OCR-based scanners is in progress.
 2. Place the scan within the project directory.
-3. Run
+3. <p>Run:<br>
+   Locking guide only</p>
+
    ```sh
-   python rank.py ARTIFACTS_GOODv3.json
+   python rank.py <input json> > output.txt
    ```
+
+   Locking guide and resin guide
+   ```sh
+   python rank.py <input json> <artifact set> <optimization target> > output.txt
+   ```
+   The artifact set and optimization target must use GOOD formatted
+   strings, for example
+   ```sh
+   python rank.py <input json> GoldenTroupe "{'atk_': 6, 'atk': 2, 'crit_': 8}" > output.txt
+   ```
+   Optimization is a dictionary with a weighted sum of the considered
+   stats. The current input formatting isn't user friendly, and will be
+   fixed at a later date, likely with a GUI. For more examples of
+   properly formatted optimization targets, look in targets.py (Warning:
+   it's a mess in there).
+
+   You can also specify a power increase threshold of x%. If not
+   specified, it defaults to ANY%, or 0%. For example, a
+   5% increase would be
+   ```sh
+   python rank.py <input json> GoldenTroupe "{'atk_': 6, 'atk': 2, 'crit_': 8}" 0.05 > output.txt
+   ```
+4. Inspect results in output.txt. Results are redirected to a seperate
+   file since they may be long. If the locking guide recommends
+   unlocking something you aren't comfortable trashing, feel free to
+   skip it. Properly weighting targets is still a WIP. There is lots of
+   data not currently presented in the output. The GUI is under
+   development and function interfaces will likely be reworked at some
+   point.
 ## Cleanup
 venv + pip
 ```sh
@@ -72,3 +105,4 @@ conda env remove -n artifact_sort
 - [X] Analysis for defining
 - [X] Analysis for reshaping
 - [ ] Automatic locking/unlocking
+- [ ] Packaging to .exe

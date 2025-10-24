@@ -368,6 +368,25 @@ def print_artifact(artifacts, human_readable=True) -> None:
         for artifact in artifacts:
             print_artifact(artifact)
             print()
+            
+def print_artifact_dict(artifacts):
+    if isinstance(artifacts, dict):
+        artifacts = [artifacts]
+        
+    for artifact in artifacts:
+        print(f'+--------------------+')
+        print(f'|{artifact['slotKey']:<20}|')
+        print(f'|LVL: {artifact['level']:<15}|')
+        print(f'|Set: {artifact['setKey'][:15]:<15}|')
+        print(f'|{artifact['mainStatKey']:<20}|')
+        print(f'|                    |')
+        for sub in artifact['substats']:
+            s = f'{sub['key']}: {sub['value']}'
+            print(f'|{s[:20]:<20}|')
+        for sub in artifact['unactivatedSubstats']:
+            s = f'{sub['key']}: {sub['value']}'
+            print(f'|*{s[:19]:<19}|')
+        print(f'+--------------------+')
 
 def _upgrade_helper(artifact, rng, main=None):
     artifact[rng.choice(find_sub(artifact, main=main))] += rng.choice(SUB_COEFS)

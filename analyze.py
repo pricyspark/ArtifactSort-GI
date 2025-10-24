@@ -831,12 +831,14 @@ def rate(artifacts, slots, rarities, slvls, sets, ranker, k=1, num=None, thresho
     if threshold is None:
         relevances = np.sort(max_relevance)
         threshold = relevances[num - 1]
-        print(threshold * 270275 * 100)
+        #print(threshold * 270275 * 100)
     #relevant = np.logical_or(lvls == 20, max_relevance > threshold)
     relevant = max_relevance > threshold
     return relevant
 
 def estimate_resin(percentile):
+    if percentile == 0:
+        return math.inf
     return math.ceil(1.065 / percentile) * 40
 
 def set_resin(artifacts, slots, rarities, lvls, sets, set_key, target, improvement=0.0):
@@ -873,7 +875,8 @@ def set_reshape_resin(artifacts, base_artifacts, slots, rarities, lvls, unactiva
                 best_idx = i
         percentile = artifact_percentile(SLOTS[slot], target, threshold, 20)
         resin = estimate_resin(percentile)
-        slot_estimates.append((round(best * resin), best_idx))
+        saving = math.inf if resin == math.inf else round(best * resin)
+        slot_estimates.append((saving, best_idx))
         
     return slot_estimates
 
@@ -891,11 +894,12 @@ def set_define_resin(artifacts, slots, rarities, lvls, sets, set_key, target, im
         define_prob = define_percentile(SLOTS[slot], target, threshold)
         percentile = artifact_percentile(SLOTS[slot], target, threshold, 20)
         resin = estimate_resin(percentile)
-        slot_estimates.append(round(define_prob * resin / costs[slot]))
+        saving = math.inf if resin == math.inf else round(define_prob * resin / costs[slot])
+        slot_estimates.append(saving)
         
     return slot_estimates
 
-def visualize(mask, artifact_dicts, sort=False):
+def visualize(mask, artifact_dicts):
     unactivated = []
     lvls = []
     slots = []
@@ -906,14 +910,33 @@ def visualize(mask, artifact_dicts, sort=False):
         slots.append(SLOT_2_NUM[artifact['slotKey']])
         sets.append(SET_2_NUM[artifact['setKey']])
         
-    if sort:
-        sorted_idx = sorted(range(len(artifact_dicts)), key=lambda i: (-lvls[i], -sets[i], slots[i], unactivated[i]))
-        mask = mask[sorted_idx]
-        artifact_dicts = [artifact_dicts[i] for i in sorted_idx]
-        lvls = [lvls[i] for i in sorted_idx]
-        slots = [slots[i] for i in sorted_idx]
-        sets = [sets[i] for i in sorted_idx]
+    sorted_idx = sorted(range(len(artifact_dicts)), key=lambda i: (-lvls[i], -sets[i], slots[i], unactivated[i]))
+    mask = mask[sorted_idx]
+    artifact_dicts = [artifact_dicts[i] for i in sorted_idx]
+    lvls = [lvls[i] for i in sorted_idx]
+    slots = [slots[i] for i in sorted_idx]
+    sets = [sets[i] for i in sorted_idx]
     
+    # Ignore properly locked artifacts
+    for i, artifact in enumerate(artifact_dicts):
+        mask[i] = artifact['lock'] == mask[i]
+    
+    for masked, artifact in zip(mask, artifact_dicts):
+        if not masked:
+            print_artifact_dict(artifact)
+            print()
+
+def ordered_visualize(mask, artifact_dicts):
+    unactivated = []
+    lvls = []
+    slots = []
+    sets = []
+    for artifact in artifact_dicts:
+        unactivated.append(bool(artifact['unactivatedSubstats']))
+        lvls.append(artifact['level'])
+        slots.append(SLOT_2_NUM[artifact['slotKey']])
+        sets.append(SET_2_NUM[artifact['setKey']])
+       
     # Ignore properly locked artifacts
     for i, artifact in enumerate(artifact_dicts):
         mask[i] = artifact['lock'] == mask[i]

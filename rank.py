@@ -3,6 +3,8 @@ from analyze import *
 import time
 from scipy.stats import entropy
 import statistics
+import sys
+import ast
 np.seterr(all='raise')
 '''
 def calc_relevance(scores, k):
@@ -1745,109 +1747,47 @@ def rank_pairwise(artifacts, lvls, persist, targets, k=2, num_trials=1000, rng=N
     return relevance
     
 if __name__ == '__main__':
-    #target = vectorize({'atk_': 6, 'atk': 2, 'crit_': 8})
-    #percentile('circlet', target, 0)
-    '''
-    #targets = {'atk_': 6, 'atk': 2, 'crit_': 8}
-    targets = (
-        {'hp_': 6, 'hp': 2, 'crit_': 8},
-        {'hp_': 6, 'hp': 2, 'crit_': 8, 'enerRech_': 10},
-        {'hp_': 6, 'hp': 2, 'crit_': 8, 'eleMas': 7},
-        {'hp_': 6, 'hp': 2, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7},
-
-        {'atk_': 6, 'atk': 2, 'crit_': 8},
-        {'atk_': 6, 'atk': 2, 'crit_': 8, 'enerRech_': 10},
-        {'atk_': 6, 'atk': 2, 'crit_': 8, 'eleMas': 7},
-        {'atk_': 6, 'atk': 2, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7},
-
-        {'def_': 6, 'def': 2, 'crit_': 8},
-        {'def_': 6, 'def': 2, 'crit_': 8, 'enerRech_': 10},
-        {'def_': 6, 'def': 2, 'crit_': 8, 'eleMas': 7},
-        {'def_': 6, 'def': 2, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7}
-    )
-
-    #seeds = [13, 19, 23, 26, 57, 64, 66]
-    num_seeds = 30
-    num_iterations = 1
-    totals = np.zeros((num_seeds, num_iterations))
+    filename = sys.argv[1]
+    artifact_dicts, artifacts, base_artifacts, slots, rarities, slvls, unactivated, sets = load(filename)
     
-    start = time.perf_counter()
-    for i in range(num_seeds):
-    #for i in seeds:
-        for j in range(num_iterations):
-            print('seed:', i, 'iteration:', j)
-            artifacts, slvls = generate('flower', size=500, seed=i)
-            totals[i, j] = (simulate_exp(artifacts, slvls, targets, rank_value))
-    end = time.perf_counter()
-            
-    #np.save('data/temp1.npy', totals)
-            
-    print('done')
-    print(totals)
-    row_mean = np.mean(totals, axis=1)
-    row_std = np.std(totals, axis=1)
-    print(row_mean)
-    print(row_std / np.sqrt(num_iterations))
-    print(row_std / row_mean / np.sqrt(num_iterations))
-    print('mean', np.mean(totals))
-    print('std', np.linalg.norm(row_std / np.sqrt(num_iterations)) / num_seeds)
-    print('ratio', np.linalg.norm(row_std / np.sqrt(num_iterations)) / num_seeds / np.mean(totals))
-    print(end - start)
-    '''
-    '''
+    if len(sys.argv) > 2:
+        set_key = SET_2_NUM[sys.argv[2]]
+        # TODO: literal_eval makes me nervous, think of a more elegant solution
+        target = vectorize(ast.literal_eval(sys.argv[3]))
+        
+        try:
+            improvement = float(sys.argv[4])
+        except:
+            improvement = 0.0
     
-    totals = np.zeros((num_seeds, num_iterations))
+        print('If farming domains:')
+        resin = set_resin(artifacts, slots, rarities, slvls, sets, set_key, target, improvement=improvement)
+        for i, slot_resin in enumerate(resin):
+            if slot_resin == math.inf:
+                print(f'{SLOTS[i]}: ∞ resin, {100 * improvement}% improvement is not possible')
+            else:
+                print(f'{SLOTS[i]}: {slot_resin} resin, {math.ceil(slot_resin / 180)} days')
+        print()
     
-    start = time.perf_counter()
-    for i in range(num_seeds):
-        for j in range(num_iterations):
-            artifacts = generate('flower', size=50, seed=i)
-            totals[i, j] = (simulate_exp(artifacts, np.zeros(50, dtype=int), targets, rank_temp))
-    end = time.perf_counter()
-            
-    print('done')
-    print(totals)
-    row_mean = np.mean(totals, axis=1)
-    row_std = np.std(totals, axis=1)
-    print(row_mean)
-    print(row_std)
-    print(row_std / row_mean / np.sqrt(num_iterations))
-    print('mean', np.mean(totals))
-    print('std', np.linalg.norm(row_std) / num_seeds)
-    print('ratio', np.linalg.norm(row_std) / num_seeds / np.mean(totals))
-    print(end - start)
+        print('If reshaping, on average saves:')
+        resin = set_reshape_resin(artifacts, base_artifacts, slots, rarities, slvls, unactivated, sets, set_key, target, improvement=improvement)
+        for i, (slot_resin, artifact_idx) in enumerate(resin):
+            if slot_resin == math.inf:
+                print(f'{SLOTS[i]}: ∞ resin, {100 * improvement}% improvement is not possible')
+            else:
+                print(f'{SLOTS[i]}: {slot_resin} resin, {math.ceil(slot_resin / 180)} days')
+            print_artifact_dict(artifact_dicts[artifact_idx])
+        print()
+        
+        print('If defining a new artifact, on average saves:')
+        resin = set_define_resin(artifacts, slots, rarities, slvls, sets, set_key, target, improvement=improvement)
+        for i, slot_resin in enumerate(resin):
+            if slot_resin == math.inf:
+                print(f'{SLOTS[i]}: ∞ resin, {100 * improvement}% improvement is not possible')
+            else:
+                print(f'{SLOTS[i]}: {slot_resin} resin, {math.ceil(slot_resin / 180)} days')
+        print()
     
-    totals = np.zeros((num_seeds, num_iterations))
-    
-    start = time.perf_counter()
-    for i in range(num_seeds):
-        for j in range(num_iterations):
-            artifacts = generate('flower', size=50, seed=i)
-            totals[i, j] = (simulate_exp(artifacts, np.zeros(50, dtype=int), targets, rank_value))
-    end = time.perf_counter()
-            
-    print('done')
-    print(totals)
-    row_mean = np.mean(totals, axis=1)
-    row_std = np.std(totals, axis=1)
-    print(row_mean)
-    print(row_std)
-    print(row_std / row_mean / np.sqrt(num_iterations))
-    print('mean', np.mean(totals))
-    print('std', np.linalg.norm(row_std) / num_seeds)
-    print('ratio', np.linalg.norm(row_std) / num_seeds / np.mean(totals))
-    print(end - start)
-    '''
-
-    start = time.perf_counter()
-    filename = 'scans/genshin_export_2025-10-16_04-23.json'
-    artifact_dicts, artifacts, slots, rarities, slvls, sets = load(filename)
     relevant = rate(artifacts, slots, rarities, slvls, sets, rank_value, k=2, num=100)
-    
-    count = 0
-    
-    visualize(relevant, artifact_dicts, sort=True)
-    end = time.perf_counter()
-    print(end - start)
-    '''
-    '''
+    print('Toggle the lock on:')
+    visualize(relevant, artifact_dicts)

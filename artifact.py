@@ -356,6 +356,68 @@ def load(filename):
     artifact_dict = data['artifacts']
     return artifact_dict, *dict_to_artifact(artifact_dict)
 
+def _artifact_eq(a1, a2):
+    if (a1['setKey'] != a2['setKey'] or
+        a1['slotKey'] != a2['slotKey'] or 
+        a1['level'] != a2['level'] or
+        a1['rarity'] != a2['rarity'] or
+        a1['mainStatKey'] != a2['mainStatKey']):
+        return False
+    
+    for s1, s2 in zip(a1['substats'], a2['substats']):
+        if s1['key'] != s2['key'] or s1['value'] != s2['value']:
+            return False
+    for s1, s2 in zip(a1['unactivatedSubstats'], a2['unactivatedSubstats']):
+        if s1['key'] != s2['key'] or s1['value'] != s2['value']:
+            return False
+        
+    return True
+
+def merge_scans(f1, f2, outfile=None):
+    # TODO: maybe *args, **kwargs for arbitrary numbers of scans
+    with open(f1) as f:
+        d1 = json.load(f)    
+    if d1['format'] != 'GOOD' or d1['version'] != 3:
+        raise ValueError('Only GOODv3 is supported.')
+    
+    with open(f2) as f:
+        d2 = json.load(f)
+    if d2['format'] != 'GOOD' or d2['version'] != 3:
+        raise ValueError('Only GOODv3 is supported.')
+    
+    if len(d1['artifacts']) != len(d2['artifacts']):
+        raise ValueError('Scans do not have the same number of artifacts.')
+    
+    # TODO: merge character, weapon, and material data
+    artifact_dict = {
+        'format': 'GOOD',
+        'version': 3,
+        'souce': 'ArtifactSort',
+        'characters': [],
+        'artifacts': [],
+        'weapons': [],
+        'materials': {}
+    }
+    
+    for a1 in d1['artifacts']:
+        for a2 in d2['artifacts']:
+            if _artifact_eq(a1, a2):
+                temp = a1 | a2
+                temp['substats'] = []
+                temp['unactivatedSubstats'] = []
+                
+                for s1, s2 in zip(a1['substats'], a2['substats']):
+                    temp['substats'] = s1 | s2
+                    
+                for s1, s2 in zip(a1['unactivatedSubstats'], a2['unactivatedSubstats']):
+                    temp['unactivatedSubstats'] = s1 | s2
+                    
+                artifact_dict['artifacts'].append(temp)
+          
+    if outfile is not None:     
+        json.dump(artifact_dict, outfile)
+    return artifact_dict, *dict_to_artifact(artifact_dict)
+
 def print_artifact(artifacts, human_readable=True) -> None:
     if artifacts.ndim == 1:
         stats = np.nonzero(artifacts)[0]

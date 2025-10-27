@@ -857,6 +857,7 @@ def set_resin(artifacts, slots, rarities, lvls, sets, set_key, target, improveme
 
 def set_reshape_resin(artifacts, base_artifacts, slots, rarities, lvls, unactivated, sets, set_key, target, minimum=2, improvement=0.0):
     slot_estimates = []
+    costs = [1, 1, 2, 2, 2]
     
     for slot in range(5):
         slot_mask = np.logical_and(rarities == 5, slots == slot)
@@ -875,14 +876,13 @@ def set_reshape_resin(artifacts, base_artifacts, slots, rarities, lvls, unactiva
                 best_idx = i
         percentile = artifact_percentile(SLOTS[slot], target, threshold, 20)
         resin = estimate_resin(percentile)
-        saving = math.inf if resin == math.inf else round(best * resin)
+        saving = math.inf if resin == math.inf else round(best * resin / costs[slot])
         slot_estimates.append((saving, best_idx))
         
     return slot_estimates
 
 def set_define_resin(artifacts, slots, rarities, lvls, sets, set_key, target, improvement=0.0):
     slot_estimates = []
-    
     costs = [1, 1, 2, 4, 3]
     
     for slot in range(5):

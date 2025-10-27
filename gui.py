@@ -92,8 +92,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.statusbar.showMessage('Input a scan first', 10000)
             return
         
-        # TODO: literal_eval makes me nervous, think of a more elegant
-        # solution
         raw_set = self.setCombo.currentText()
         if raw_set == 'Set':
             self.statusbar.showMessage('Choose a set first', 10000)
@@ -105,28 +103,50 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.set_key = self.set_key.replace(' ', '')
         self.set_key = SET_2_NUM[self.set_key]
         
+        # TODO: literal_eval makes me nervous, think of a more elegant
+        # solution
         try:
             self.target = vectorize(ast.literal_eval(self.targetLine.text()))
         except:
             self.statusbar.showMessage('Improperly formatted optimization target', 10000)
             return
         
-        # TODO: add an input for improvement, or show levels by default    
-        improvement = 0.0
-        
-        resin = set_resin(
+        resin_params = (
             self.artifacts,
             self.slots,
             self.rarities,
             self.slvls,
             self.sets,
             self.set_key,
-            self.target,
-            improvement=improvement
+            self.target
         )
         
-        reshape_resin = set_reshape_resin(
-            self.artifacts, 
+        resin_0 = set_resin(*resin_params, improvement=0.0)
+        resin_1 = set_resin(*resin_params, improvement=0.01)
+        resin_5 = set_resin(*resin_params, improvement=0.05)
+        
+        resin_text = [f'If farming domains until an improvement\n']
+        for i, slot_resin in enumerate(resin_0):
+            if slot_resin == math.inf:
+                resin_text.append(f'{SLOTS[i]}: ∞ resin, improvement is not possible')
+            else:
+                resin_text.append(f'{SLOTS[i]}: {slot_resin} resin, {math.ceil(slot_resin / 180)} days')
+        resin_text.append(f'\nIf farming domains until an improvement of at least 1%\n')
+        for i, slot_resin in enumerate(resin_1):
+            if slot_resin == math.inf:
+                resin_text.append(f'{SLOTS[i]}: ∞ resin, 1% improvement is not possible')
+            else:
+                resin_text.append(f'{SLOTS[i]}: {slot_resin} resin, {math.ceil(slot_resin / 180)} days')
+        resin_text.append(f'\nIf farming domains until an improvement of at least 5%\n')
+        for i, slot_resin in enumerate(resin_5):
+            if slot_resin == math.inf:
+                resin_text.append(f'{SLOTS[i]}: ∞ resin, 5% improvement is not possible')
+            else:
+                resin_text.append(f'{SLOTS[i]}: {slot_resin} resin, {math.ceil(slot_resin / 180)} days')
+        self.resinBox.setText('\n'.join(resin_text))
+        
+        reshape_params = (
+            self.artifacts,
             self.base_artifacts,
             self.slots,
             self.rarities,
@@ -134,44 +154,68 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.unactivated,
             self.sets,
             self.set_key,
-            self.target,
-            improvement=improvement
+            self.target
         )
         
-        define_resin = set_define_resin(
+        reshape_resin_0 = set_reshape_resin(*reshape_params, improvement=0.0)
+        reshape_resin_1 = set_reshape_resin(*reshape_params, improvement=0.01)
+        reshape_resin_5 = set_reshape_resin(*reshape_params, improvement=0.05)
+        
+        reshape_text = [f'If reshaping instead of farming until an improvement, each Dust of Enlightenment saves an average of\n']
+        for i, (slot_resin, artifact_idx) in enumerate(reshape_resin_0):
+            if slot_resin == math.inf:
+                reshape_text.append(f'{SLOTS[i]}: ∞ resin, improvement is not possible')
+            else:
+                reshape_text.append(f'{SLOTS[i]}: {slot_resin} resin, {math.ceil(slot_resin / 180)} days')
+            print_artifact_dict(self.artifact_dicts[artifact_idx])
+        reshape_text.append(f'\nIf reshaping instead of farming until an improvement of at least 1%, each Dust of Enlightenment saves an average of\n')
+        for i, (slot_resin, artifact_idx) in enumerate(reshape_resin_1):
+            if slot_resin == math.inf:
+                reshape_text.append(f'{SLOTS[i]}: ∞ resin, 1% improvement is not possible')
+            else:
+                reshape_text.append(f'{SLOTS[i]}: {slot_resin} resin, {math.ceil(slot_resin / 180)} days')
+            print_artifact_dict(self.artifact_dicts[artifact_idx])
+        reshape_text.append(f'\nIf reshaping instead of farming until an improvement of at least 5%, each Dust of Enlightenment saves an average of\n')
+        for i, (slot_resin, artifact_idx) in enumerate(reshape_resin_5):
+            if slot_resin == math.inf:
+                reshape_text.append(f'{SLOTS[i]}: ∞ resin, 5% improvement is not possible')
+            else:
+                reshape_text.append(f'{SLOTS[i]}: {slot_resin} resin, {math.ceil(slot_resin / 180)} days')
+            print_artifact_dict(self.artifact_dicts[artifact_idx])
+        self.reshapeBox.setText('\n'.join(reshape_text))
+        
+        define_params = (
             self.artifacts,
             self.slots,
             self.rarities,
             self.slvls,
             self.sets,
             self.set_key,
-            self.target,
-            improvement=improvement
+            self.target
         )
         
-        resin_text = [f'If farming domains until an improvement of >{improvement * 100}%\n']
-        for i, slot_resin in enumerate(resin):
-            if slot_resin == math.inf:
-                resin_text.append(f'{SLOTS[i]}: ∞ resin, {100 * 0}% improvement is not possible\n')
-            else:
-                resin_text.append(f'{SLOTS[i]}: {slot_resin} resin, {math.ceil(slot_resin / 180)} days\n')       
-        self.resinBox.setText('\n'.join(resin_text))
+        define_resin_0 = set_define_resin(*define_params, improvement=0.0)
+        define_resin_1 = set_define_resin(*define_params, improvement=0.01)
+        define_resin_5 = set_define_resin(*define_params, improvement=0.05)
         
-        reshape_text = [f'If reshaping instead of farming, each Dust of Enlightenment saves an average of\n']
-        for i, (slot_resin, artifact_idx) in enumerate(reshape_resin):
+        define_text = [f'If defining instead of farming until an improvement, each Sanctifying Elixir saves an average of\n']
+        for i, slot_resin in enumerate(define_resin_0):
             if slot_resin == math.inf:
-                reshape_text.append(f'{SLOTS[i]}: ∞ resin, {100 * improvement}% improvement is not possible\n')
+                define_text.append(f'{SLOTS[i]}: ∞ resin, improvement is not possible')
             else:
-                reshape_text.append(f'{SLOTS[i]}: {slot_resin} resin, {math.ceil(slot_resin / 180)} days\n')
-            print_artifact_dict(self.artifact_dicts[artifact_idx])
-        self.reshapeBox.setText('\n'.join(reshape_text))
-        
-        define_text = [f'If defining instead of farming, each Sanctifying Elixir saves an average of\n']
-        for i, slot_resin in enumerate(define_resin):
+                define_text.append(f'{SLOTS[i]}: {slot_resin} resin, {math.ceil(slot_resin / 180)} days')
+        define_text.append(f'\nIf defining instead of farming until an improvement of at least 1%, each Sanctifying Elixir saves an average of\n')
+        for i, slot_resin in enumerate(define_resin_1):
             if slot_resin == math.inf:
-                define_text.append(f'{SLOTS[i]}: ∞ resin, {100 * improvement}% improvement is not possible\n')
+                define_text.append(f'{SLOTS[i]}: ∞ resin, 1% improvement is not possible')
             else:
-                define_text.append(f'{SLOTS[i]}: {slot_resin} resin, {math.ceil(slot_resin / 180)} days\n')
+                define_text.append(f'{SLOTS[i]}: {slot_resin} resin, {math.ceil(slot_resin / 180)} days')
+        define_text.append(f'\nIf defining instead of farming until an improvement of at least 5%, each Sanctifying Elixir saves an average of\n')
+        for i, slot_resin in enumerate(define_resin_5):
+            if slot_resin == math.inf:
+                define_text.append(f'{SLOTS[i]}: ∞ resin, 5% improvement is not possible')
+            else:
+                define_text.append(f'{SLOTS[i]}: {slot_resin} resin, {math.ceil(slot_resin / 180)} days')
         self.defineBox.setText('\n'.join(define_text))
 
 app = QApplication(sys.argv)

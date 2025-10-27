@@ -6,29 +6,38 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>600</width>
-    <height>600</height>
+    <width>900</width>
+    <height>900</height>
    </rect>
   </property>
   <property name="minimumSize">
    <size>
-    <width>600</width>
-    <height>600</height>
+    <width>0</width>
+    <height>0</height>
    </size>
   </property>
   <property name="maximumSize">
    <size>
-    <width>600</width>
-    <height>600</height>
+    <width>16777215</width>
+    <height>16777215</height>
    </size>
   </property>
   <property name="windowTitle">
    <string>MainWindow</string>
   </property>
+  <property name="tabShape">
+   <enum>QTabWidget::TabShape::Rounded</enum>
+  </property>
   <widget class="QWidget" name="centralwidget">
    <layout class="QHBoxLayout" name="horizontalLayout">
     <item>
      <widget class="QTabWidget" name="tabWidget">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+        <horstretch>0</horstretch>
+        <verstretch>0</verstretch>
+       </sizepolicy>
+      </property>
       <property name="currentIndex">
        <number>0</number>
       </property>
@@ -36,97 +45,95 @@
        <attribute name="title">
         <string>Scan</string>
        </attribute>
-       <widget class="QPushButton" name="mainBrowseButton">
-        <property name="geometry">
-         <rect>
-          <x>20</x>
-          <y>40</y>
-          <width>70</width>
-          <height>30</height>
-         </rect>
-        </property>
-        <property name="text">
-         <string>Browse</string>
-        </property>
-       </widget>
-       <widget class="QLineEdit" name="mainFilepathLine">
-        <property name="geometry">
-         <rect>
-          <x>90</x>
-          <y>40</y>
-          <width>470</width>
-          <height>30</height>
-         </rect>
-        </property>
-        <property name="text">
-         <string/>
-        </property>
-       </widget>
-       <widget class="QPushButton" name="calcScanButton">
-        <property name="geometry">
-         <rect>
-          <x>475</x>
-          <y>480</y>
-          <width>85</width>
-          <height>30</height>
-         </rect>
-        </property>
-        <property name="text">
-         <string>Calculate</string>
-        </property>
-       </widget>
-       <widget class="QLabel" name="main">
-        <property name="geometry">
-         <rect>
-          <x>20</x>
-          <y>10</y>
-          <width>100</width>
-          <height>30</height>
-         </rect>
-        </property>
-        <property name="text">
-         <string>Main Scan:</string>
-        </property>
-       </widget>
-       <widget class="QLabel" name="extra">
-        <property name="geometry">
-         <rect>
-          <x>20</x>
-          <y>80</y>
-          <width>100</width>
-          <height>30</height>
-         </rect>
-        </property>
-        <property name="text">
-         <string>Additional Scans:</string>
-        </property>
-       </widget>
-       <widget class="QPushButton" name="extraBrowseButton">
-        <property name="geometry">
-         <rect>
-          <x>20</x>
-          <y>110</y>
-          <width>70</width>
-          <height>30</height>
-         </rect>
-        </property>
-        <property name="text">
-         <string>Browse</string>
-        </property>
-       </widget>
-       <widget class="QLineEdit" name="extraFilepathLine">
-        <property name="geometry">
-         <rect>
-          <x>90</x>
-          <y>110</y>
-          <width>470</width>
-          <height>30</height>
-         </rect>
-        </property>
-        <property name="text">
-         <string/>
-        </property>
-       </widget>
+       <layout class="QVBoxLayout" name="verticalLayout_2">
+        <item>
+         <widget class="QLabel" name="main">
+          <property name="text">
+           <string>Main Scan:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="mainInput" stretch="0,1">
+          <item>
+           <widget class="QPushButton" name="mainBrowseButton">
+            <property name="text">
+             <string>Browse</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLineEdit" name="mainFilepathLine">
+            <property name="text">
+             <string/>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <widget class="QLabel" name="extra">
+          <property name="text">
+           <string>Additional Scans:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="extraInput" stretch="0,0">
+          <item>
+           <widget class="QPushButton" name="extraBrowseButton">
+            <property name="text">
+             <string>Browse</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLineEdit" name="extraFilepathLine">
+            <property name="text">
+             <string/>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <spacer name="verticalSpacer">
+          <property name="orientation">
+           <enum>Qt::Orientation::Vertical</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>20</width>
+            <height>669</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="calcLayout">
+          <item>
+           <spacer name="horizontalSpacer">
+            <property name="orientation">
+             <enum>Qt::Orientation::Horizontal</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>598</width>
+              <height>20</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+          <item>
+           <widget class="QPushButton" name="calcScanButton">
+            <property name="text">
+             <string>Calculate</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+       </layout>
       </widget>
       <widget class="QWidget" name="upgrade_tab">
        <attribute name="title">
@@ -160,382 +167,388 @@ li.checked::marker { content: &quot;\2612&quot;; }
        </layout>
       </widget>
       <widget class="QWidget" name="define_tab">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
        <attribute name="title">
         <string>Define and Reshape</string>
        </attribute>
-       <widget class="QComboBox" name="setCombo">
-        <property name="geometry">
-         <rect>
-          <x>10</x>
-          <y>10</y>
-          <width>180</width>
-          <height>30</height>
-         </rect>
-        </property>
-        <property name="sizePolicy">
-         <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
-          <horstretch>0</horstretch>
-          <verstretch>0</verstretch>
-         </sizepolicy>
-        </property>
-        <property name="currentText">
-         <string>Set</string>
-        </property>
-        <property name="currentIndex">
-         <number>0</number>
-        </property>
+       <layout class="QVBoxLayout" name="verticalLayout" stretch="0,1">
         <item>
-         <property name="text">
-          <string>Set</string>
-         </property>
+         <layout class="QHBoxLayout" name="defineInput" stretch="0,1,0">
+          <item>
+           <widget class="QComboBox" name="setCombo">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="currentText">
+             <string>Set</string>
+            </property>
+            <property name="currentIndex">
+             <number>0</number>
+            </property>
+            <item>
+             <property name="text">
+              <string>Set</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Adventurer</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Archaic Petra</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Berserker</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Blizzard Strayer</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Bloodstained Chivalry</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Brave Heart</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Crimson Witch of Flames</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Deepwood Memories</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Defender's Will</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Desert Pavilion Chronicle</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Echoes of an Offering</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Emblem of Severed Fate</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Finale of the Deep Galleries</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Flower of Paradise Lost</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Fragment of Harmonic Whimsy</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Gambler</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Gilded Dreams</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Gladiator's Finale</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Golden Troupe</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Heart of Depth</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Husk of Opulent Dreams</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Initiate</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Instructor</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Lavawalker</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Long Night's Oath</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Lucky Dog</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Maiden Beloved</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Marechaussee Hunter</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Martial Artist</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Night of the Sky's Unveiling</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Nighttime Whispers in the Echoing Woods</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Noblesse Oblige</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Nymph's Dream</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Obsidian Codex</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Ocean-Hued Clam</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Pale Flame</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Prayers for Destiny</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Prayers for Illumination</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Prayers for Wisdom</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Prayers to Springtime</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Resolution of Sojourner</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Retracing Bolide</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Scholar</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Scroll of the Hero of Cinder City</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Shimenawa's Reminiscence</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Silken Moon's Serenade</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Song of Days Past</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Tenacity of the Millelith</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>The Exile</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Thundering Fury</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Thundersoother</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Tiny Miracle</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Traveling Doctor</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Unfinished Reverie</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Vermillion Hereafter</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Viridescent Venerer</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Vourukasha's Glow</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Wanderer's Troupe</string>
+             </property>
+            </item>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLineEdit" name="targetLine"/>
+          </item>
+          <item>
+           <widget class="QPushButton" name="calcTargetButton">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="text">
+             <string>Calculate</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
         </item>
         <item>
-         <property name="text">
-          <string>Adventurer</string>
-         </property>
+         <layout class="QHBoxLayout" name="defineOutput" stretch="1,1,1">
+          <property name="sizeConstraint">
+           <enum>QLayout::SizeConstraint::SetDefaultConstraint</enum>
+          </property>
+          <item>
+           <widget class="QTextBrowser" name="resinBox">
+            <property name="enabled">
+             <bool>true</bool>
+            </property>
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QTextBrowser" name="reshapeBox">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QTextBrowser" name="defineBox">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+           </widget>
+          </item>
+         </layout>
         </item>
-        <item>
-         <property name="text">
-          <string>Archaic Petra</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Berserker</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Blizzard Strayer</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Bloodstained Chivalry</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Brave Heart</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Crimson Witch of Flames</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Deepwood Memories</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Defender's Will</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Desert Pavilion Chronicle</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Echoes of an Offering</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Emblem of Severed Fate</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Finale of the Deep Galleries</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Flower of Paradise Lost</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Fragment of Harmonic Whimsy</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Gambler</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Gilded Dreams</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Gladiator's Finale</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Golden Troupe</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Heart of Depth</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Husk of Opulent Dreams</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Initiate</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Instructor</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Lavawalker</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Long Night's Oath</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Lucky Dog</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Maiden Beloved</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Marechaussee Hunter</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Martial Artist</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Night of the Sky's Unveiling</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Nighttime Whispers in the Echoing Woods</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Noblesse Oblige</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Nymph's Dream</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Obsidian Codex</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Ocean-Hued Clam</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Pale Flame</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Prayers for Destiny</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Prayers for Illumination</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Prayers for Wisdom</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Prayers to Springtime</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Resolution of Sojourner</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Retracing Bolide</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Scholar</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Scroll of the Hero of Cinder City</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Shimenawa's Reminiscence</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Silken Moon's Serenade</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Song of Days Past</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Tenacity of the Millelith</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>The Exile</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Thundering Fury</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Thundersoother</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Tiny Miracle</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Traveling Doctor</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Unfinished Reverie</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Vermillion Hereafter</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Viridescent Venerer</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Vourukasha's Glow</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Wanderer's Troupe</string>
-         </property>
-        </item>
-       </widget>
-       <widget class="QLineEdit" name="targetLine">
-        <property name="geometry">
-         <rect>
-          <x>200</x>
-          <y>10</y>
-          <width>275</width>
-          <height>30</height>
-         </rect>
-        </property>
-       </widget>
-       <widget class="QTextBrowser" name="resinBox">
-        <property name="enabled">
-         <bool>true</bool>
-        </property>
-        <property name="geometry">
-         <rect>
-          <x>10</x>
-          <y>50</y>
-          <width>180</width>
-          <height>470</height>
-         </rect>
-        </property>
-       </widget>
-       <widget class="QTextBrowser" name="reshapeBox">
-        <property name="geometry">
-         <rect>
-          <x>200</x>
-          <y>50</y>
-          <width>180</width>
-          <height>470</height>
-         </rect>
-        </property>
-       </widget>
-       <widget class="QTextBrowser" name="defineBox">
-        <property name="geometry">
-         <rect>
-          <x>390</x>
-          <y>50</y>
-          <width>180</width>
-          <height>470</height>
-         </rect>
-        </property>
-       </widget>
-       <widget class="QPushButton" name="calcTargetButton">
-        <property name="geometry">
-         <rect>
-          <x>485</x>
-          <y>10</y>
-          <width>85</width>
-          <height>30</height>
-         </rect>
-        </property>
-        <property name="text">
-         <string>Calculate</string>
-        </property>
-       </widget>
+       </layout>
       </widget>
      </widget>
     </item>

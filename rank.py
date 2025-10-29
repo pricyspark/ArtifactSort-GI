@@ -1748,8 +1748,7 @@ def rank_pairwise(artifacts, lvls, persist, targets, k=2, num_trials=1000, rng=N
     return relevance
     
 if __name__ == '__main__':
-    #filename = sys.argv[1]
-    filename = 'scans/genshin_export_2025-10-26_01-24.json'
+    filename = sys.argv[1]
     artifact_dicts, artifacts, base_artifacts, slots, rarities, slvls, unactivated, sets = load(filename)
     
     if len(sys.argv) > 2:

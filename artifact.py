@@ -357,18 +357,18 @@ def load(filename):
     return artifact_dict, *dict_to_artifact(artifact_dict)
 
 def _artifact_eq(a1, a2):
-    if (a1['setKey'] != a2['setKey'] or
-        a1['slotKey'] != a2['slotKey'] or 
-        a1['level'] != a2['level'] or
-        a1['rarity'] != a2['rarity'] or
-        a1['mainStatKey'] != a2['mainStatKey']):
+    if (a1['setKey']        != a2['setKey'] or
+        a1['slotKey']       != a2['slotKey'] or 
+        a1['level']         != a2['level'] or
+        a1['rarity']        != a2['rarity'] or
+        a1['mainStatKey']   != a2['mainStatKey']):
         return False
     
     for s1, s2 in zip(a1['substats'], a2['substats']):
-        if s1['key'] != s2['key'] or s1['value'] != s2['value']:
+        if s1['key'] != s2['key'] or not math.isclose(s1['value'], s2['value'], abs_tol=0.11):
             return False
     for s1, s2 in zip(a1['unactivatedSubstats'], a2['unactivatedSubstats']):
-        if s1['key'] != s2['key'] or s1['value'] != s2['value']:
+        if s1['key'] != s2['key'] or not math.isclose(s1['value'], s2['value'], abs_tol=0.11):
             return False
         
     return True
@@ -400,6 +400,7 @@ def merge_scans(f1, f2, outfile=None):
     }
     
     for a1 in d1['artifacts']:
+        found = False
         for a2 in d2['artifacts']:
             if _artifact_eq(a1, a2):
                 temp = a1 | a2
@@ -407,16 +408,20 @@ def merge_scans(f1, f2, outfile=None):
                 temp['unactivatedSubstats'] = []
                 
                 for s1, s2 in zip(a1['substats'], a2['substats']):
-                    temp['substats'] = s1 | s2
+                    temp['substats'].append(s1 | s2)
                     
                 for s1, s2 in zip(a1['unactivatedSubstats'], a2['unactivatedSubstats']):
-                    temp['unactivatedSubstats'] = s1 | s2
+                    temp['unactivatedSubstats'].append(s1 | s2)
                     
                 artifact_dict['artifacts'].append(temp)
-          
+                found = True
+                a2['setKey'] = None
+                break
+        if not found:
+            raise ValueError
     if outfile is not None:     
         json.dump(artifact_dict, outfile)
-    return artifact_dict, *dict_to_artifact(artifact_dict)
+    return artifact_dict['artifacts'], *dict_to_artifact(artifact_dict['artifacts'])
 
 def print_artifact(artifacts, human_readable=True) -> None:
     if artifacts.ndim == 1:

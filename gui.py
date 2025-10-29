@@ -6,10 +6,15 @@ from artifact import *
 from analyze import *
 from rank import rank_value
 #from rank import *
-from PySide6.QtWidgets import (QMainWindow, QApplication, QFileDialog, QStatusBar)
+from PySide6.QtWidgets import (QMainWindow, QApplication, QFileDialog, QLabel)
+from PySide6.QtGui import (QIcon, QPixmap) # TODO: Pretty sure this is bad practice, and should instead subclass MainWindow
+#from PySide6 import QtCore
+#from PySide6.QtCore import (QSize)
 #from PySide6 import QtWidgets
 
 from MainWindow import Ui_MainWindow
+from square_widget import SquareToolButton, SquareLabel
+import resources
 
 class MainWindow(QMainWindow, Ui_MainWindow):
     def __init__(self):
@@ -40,6 +45,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.sets = None
         self.set_key = None
         self.target = None
+        self.relevant = None
+        
+        self.artifactImage = SquareLabel()
+        self.artifactInfo.insertWidget(0, self.artifactImage)
+        #self.artifactInfo.setStretch()
 
     def getMainFileName(self):
         file_filter = 'GOOD JSON File (*.json)'
@@ -70,6 +80,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     # selected
     
     def scanCalculate(self):
+        if self.mainScan is None:
+            self.statusbar.showMessage('Input a scan first', 10000)
+            return
         # TODO: this mesage doesn't work, likely a thread issue with GIL
         self.statusbar.showMessage('Calculating...')
         (
@@ -83,13 +96,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.sets
         ) = load(self.mainScan) if self.extraScans is None else merge_scans(self.mainScan, self.extraScans)
         
-        relevant = rate(self.artifacts, self.slots, self.rarities, self.slvls, self.sets, rank_value, k=2, num=100)
-        self.statusbar.showMessage('Done')
-        visualize(relevant, self.artifact_dicts)
+        self.relevant = rate(self.artifacts, self.slots, self.rarities, self.slvls, self.sets, rank_value, k=2, num=100)
+        self.statusbar.showMessage('Done', 10000)
+        self.populate_lock()
         
     def resinCalculate(self):
         if self.artifacts is None:
-            self.statusbar.showMessage('Input a scan first', 10000)
+            self.statusbar.showMessage('Process a scan first', 10000)
             return
         
         raw_set = self.setCombo.currentText()
@@ -217,6 +230,50 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             else:
                 define_text.append(f'{SLOTS[i]}: {slot_resin} resin, {math.ceil(slot_resin / 180)} days')
         self.defineBox.setText('\n'.join(define_text))
+        
+    def populate_lock(self):
+        grid = self.lockGrid
+        while grid.count():
+            w = grid.itemAt(0).widget()
+            if w:
+                grid.removeWidget(w)
+                w.deleteLater()
+                
+        if self.artifact_dicts is None:
+            raise ValueError('This should not be possible')
+        
+        NUM_COLS = 8
+        
+        for i, artifact in enumerate(self.artifact_dicts):
+            row, col = divmod(i, NUM_COLS)
+            
+            button = SquareToolButton()
+            if self.relevant[i] == artifact['lock']:
+                # Correctly locked
+                icon_path = f':/{artifact['slotKey']}_icons/default.webp'
+            else:
+                icon_path = f':/{artifact['slotKey']}_icons/{artifact['setKey']}.webp'
+                button.clicked.connect(lambda _, idx=i: self.click_artifact(idx))
+            button.setIcon(QIcon(icon_path))
+            grid.addWidget(button, row, col)
+            
+    def click_artifact(self, idx):
+        artifact = self.artifact_dicts[idx]
+        self.artifactImage.setPixmap(QPixmap(f':/{artifact['slotKey']}_icons/{artifact['setKey']}.webp'))
+        self.artifactMain.setText(artifact['mainStatKey'])
+        self.artifactLvl.setText(f'+{artifact['level']}')
+        substats = artifact['substats']
+        # TODO: make this more dynamic instead of hardcoding 3/4
+        # substats and 0/1 unactivated substats
+        self.artifactSub1.setText(f'{substats[0]['key']}+{substats[0]['value']}')
+        self.artifactSub2.setText(f'{substats[1]['key']}+{substats[1]['value']}')
+        self.artifactSub3.setText(f'{substats[2]['key']}+{substats[2]['value']}')
+        if len(substats) == 4:
+            self.artifactSub4.setText(f'{substats[3]['key']}+{substats[3]['value']}')
+        else:
+            substat = artifact['unactivatedSubstats'][0]
+            self.artifactSub4.setText(f'{substat['key']}+{substat['value']} (unactivated)')
+        self.artifactSet.setText(artifact['setKey'])
 
 app = QApplication(sys.argv)
 

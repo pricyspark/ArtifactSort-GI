@@ -178,6 +178,7 @@ def rank_value(artifacts, slvls, persist, targets, k=1, base_trials=500, rng=Non
         persist['targets'] = None
         
         # Hoeffding bound for 99% confidence
+        #print(num_artifacts)
         persist['epsilon'] = np.sqrt(2 * np.log((num_artifacts - 1) / 0.01) / base_trials)
         
     num_trials = persist['maxed'].shape[1]
@@ -1747,7 +1748,8 @@ def rank_pairwise(artifacts, lvls, persist, targets, k=2, num_trials=1000, rng=N
     return relevance
     
 if __name__ == '__main__':
-    filename = sys.argv[1]
+    #filename = sys.argv[1]
+    filename = 'scans/genshin_export_2025-10-26_01-24.json'
     artifact_dicts, artifacts, base_artifacts, slots, rarities, slvls, unactivated, sets = load(filename)
     
     if len(sys.argv) > 2:

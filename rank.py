@@ -203,7 +203,8 @@ def rank_value(artifacts, slvls, persist, targets, k=1, base_trials=500, rng=Non
 
     # If not enough artifacts, everything wins
     if num_artifacts <= k:
-        value = np.full((num_artifacts), num_trials, dtype=float)
+        #value = np.full((num_artifacts), num_trials, dtype=float)
+        value = np.full((num_artifacts), 1, dtype=float)
         value /= np.where(slvls == 20, 1, MAX_REQ_EXP[slvls])
         
         return value
@@ -1791,4 +1792,4 @@ if __name__ == '__main__':
     
     relevant = rate(artifacts, slots, rarities, slvls, sets, rank_value, k=2, num=100)
     print('Toggle the lock on:')
-    visualize(relevant, artifact_dicts)
+    visualize(relevant, artifact_dicts)        

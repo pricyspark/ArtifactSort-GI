@@ -47,8 +47,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.target = None
         self.relevant = None
         
-        self.artifactImage = SquareLabel()
-        self.artifactInfo.insertWidget(0, self.artifactImage)
+        self.upgradeArtifactImage = SquareLabel()
+        self.upgradeArtifactInfo.insertWidget(0, self.upgradeArtifactImage)
+        
+        self.lockArtifactImage = SquareLabel()
+        self.lockArtifactInfo.insertWidget(0, self.lockArtifactImage)
         #self.artifactInfo.setStretch()
 
     def getMainFileName(self):
@@ -96,8 +99,15 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.sets
         ) = load(self.mainScan) if self.extraScans is None else merge_scans(self.mainScan, self.extraScans)
         
-        self.relevant = rate(self.artifacts, self.slots, self.rarities, self.slvls, self.sets, rank_value, k=2, num=100)
+        self.artifact_mask = np.zeros(len(self.artifact_dicts), dtype=bool)
+        for i, artifact in enumerate(self.artifact_dicts):
+            self.artifact_mask[i] = artifact['rarity'] == 5 and not artifact['astralMark']
+        
+        relevance, counts = rate(self.artifacts, self.slots, self.artifact_mask, self.slvls, self.sets, rank_value, k=2)
+        self.upgrade_mask = upgrade_analyze(relevance, counts, self.artifact_mask, self.slvls, num=20)
+        self.delete_mask = delete_analyze(relevance, self.artifact_mask, num=100)
         self.statusbar.showMessage('Done', 10000)
+        self.populate_upgrade()
         self.populate_lock()
         
     def resinCalculate(self):
@@ -231,6 +241,33 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 define_text.append(f'{SLOTS[i]}: {slot_resin} resin, {math.ceil(slot_resin / 180)} days')
         self.defineBox.setText('\n'.join(define_text))
         
+    def populate_upgrade(self):
+        grid = self.upgradeGrid
+        while grid.count():
+            w = grid.itemAt(0).widget()
+            if w:
+                grid.removeWidget(w)
+                w.deleteLater()
+                
+        if self.artifact_dicts is None:
+            raise ValueError('This should not be possible')
+        
+        NUM_COLS = 8
+        
+        for i, artifact in enumerate(self.artifact_dicts):
+            row, col = divmod(i, NUM_COLS)
+            
+            button = SquareToolButton()
+            if self.upgrade_mask[i]:
+                # Incorrectly locked
+                icon_path = f':/{artifact['slotKey']}_icons/{artifact['setKey']}.webp'
+                button.clicked.connect(lambda _, idx=i: self.click_upgrade_artifact(idx))
+            else:
+                # Correctly locked
+                icon_path = f':/{artifact['slotKey']}_icons/default.webp'
+            button.setIcon(QIcon(icon_path))
+            grid.addWidget(button, row, col)
+    
     def populate_lock(self):
         grid = self.lockGrid
         while grid.count():
@@ -248,32 +285,51 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             row, col = divmod(i, NUM_COLS)
             
             button = SquareToolButton()
-            if self.relevant[i] == artifact['lock']:
-                # Correctly locked
-                icon_path = f':/{artifact['slotKey']}_icons/default.webp'
-            else:
+            if self.delete_mask[i] == artifact['lock']:
+                # Incorrectly locked
                 icon_path = f':/{artifact['slotKey']}_icons/{artifact['setKey']}.webp'
                 button.clicked.connect(lambda _, idx=i: self.click_artifact(idx))
+            else:
+                # Correctly locked
+                icon_path = f':/{artifact['slotKey']}_icons/default.webp'
             button.setIcon(QIcon(icon_path))
             grid.addWidget(button, row, col)
             
-    def click_artifact(self, idx):
+    def click_upgrade_artifact(self, idx):
         artifact = self.artifact_dicts[idx]
-        self.artifactImage.setPixmap(QPixmap(f':/{artifact['slotKey']}_icons/{artifact['setKey']}.webp'))
-        self.artifactMain.setText(artifact['mainStatKey'])
-        self.artifactLvl.setText(f'+{artifact['level']}')
+        self.upgradeArtifactImage.setPixmap(QPixmap(f':/{artifact['slotKey']}_icons/{artifact['setKey']}.webp'))
+        self.upgradeArtifactMain.setText(artifact['mainStatKey'])
+        self.upgradeArtifactLvl.setText(f'+{artifact['level']}')
         substats = artifact['substats']
         # TODO: make this more dynamic instead of hardcoding 3/4
         # substats and 0/1 unactivated substats
-        self.artifactSub1.setText(f'{substats[0]['key']}+{substats[0]['value']}')
-        self.artifactSub2.setText(f'{substats[1]['key']}+{substats[1]['value']}')
-        self.artifactSub3.setText(f'{substats[2]['key']}+{substats[2]['value']}')
+        self.upgradeArtifactSub1.setText(f'{substats[0]['key']}+{substats[0]['value']}')
+        self.upgradeArtifactSub2.setText(f'{substats[1]['key']}+{substats[1]['value']}')
+        self.upgradeArtifactSub3.setText(f'{substats[2]['key']}+{substats[2]['value']}')
         if len(substats) == 4:
-            self.artifactSub4.setText(f'{substats[3]['key']}+{substats[3]['value']}')
+            self.upgradeArtifactSub4.setText(f'{substats[3]['key']}+{substats[3]['value']}')
         else:
             substat = artifact['unactivatedSubstats'][0]
-            self.artifactSub4.setText(f'{substat['key']}+{substat['value']} (unactivated)')
-        self.artifactSet.setText(artifact['setKey'])
+            self.upgradeArtifactSub4.setText(f'{substat['key']}+{substat['value']} (unactivated)')
+        self.upgradeArtifactSet.setText(artifact['setKey'])
+    
+    def click_lock_artifact(self, idx):
+        artifact = self.artifact_dicts[idx]
+        self.lockArtifactImage.setPixmap(QPixmap(f':/{artifact['slotKey']}_icons/{artifact['setKey']}.webp'))
+        self.lockArtifactMain.setText(artifact['mainStatKey'])
+        self.lockArtifactLvl.setText(f'+{artifact['level']}')
+        substats = artifact['substats']
+        # TODO: make this more dynamic instead of hardcoding 3/4
+        # substats and 0/1 unactivated substats
+        self.lockArtifactSub1.setText(f'{substats[0]['key']}+{substats[0]['value']}')
+        self.lockArtifactSub2.setText(f'{substats[1]['key']}+{substats[1]['value']}')
+        self.lockArtifactSub3.setText(f'{substats[2]['key']}+{substats[2]['value']}')
+        if len(substats) == 4:
+            self.lockArtifactSub4.setText(f'{substats[3]['key']}+{substats[3]['value']}')
+        else:
+            substat = artifact['unactivatedSubstats'][0]
+            self.lockArtifactSub4.setText(f'{substat['key']}+{substat['value']} (unactivated)')
+        self.lockArtifactSet.setText(artifact['setKey'])
 
 app = QApplication(sys.argv)
 

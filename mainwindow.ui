@@ -148,9 +148,115 @@
        <attribute name="title">
         <string>Upgrade</string>
        </attribute>
-       <layout class="QHBoxLayout" name="horizontalLayout_2">
+       <layout class="QHBoxLayout" name="horizontalLayout_2" stretch="3,1">
         <item>
-         <widget class="QTextBrowser" name="upgradeBox"/>
+         <widget class="QScrollArea" name="upgradeScrollArea">
+          <property name="widgetResizable">
+           <bool>true</bool>
+          </property>
+          <widget class="QWidget" name="upgradeScrollContents">
+           <property name="geometry">
+            <rect>
+             <x>0</x>
+             <y>0</y>
+             <width>864</width>
+             <height>710</height>
+            </rect>
+           </property>
+           <layout class="QGridLayout" name="gridLayout">
+            <item row="0" column="0">
+             <layout class="QGridLayout" name="upgradeGrid"/>
+            </item>
+           </layout>
+          </widget>
+         </widget>
+        </item>
+        <item>
+         <layout class="QVBoxLayout" name="upgradeArtifactInfo" stretch="0,0,0,0,0,0,0,1">
+          <item>
+           <widget class="QLabel" name="upgradeArtifactMain">
+            <property name="text">
+             <string/>
+            </property>
+            <property name="margin">
+             <number>10</number>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="upgradeArtifactLvl">
+            <property name="text">
+             <string/>
+            </property>
+            <property name="margin">
+             <number>10</number>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="upgradeArtifactSub1">
+            <property name="text">
+             <string/>
+            </property>
+            <property name="margin">
+             <number>10</number>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="upgradeArtifactSub2">
+            <property name="text">
+             <string/>
+            </property>
+            <property name="margin">
+             <number>10</number>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="upgradeArtifactSub3">
+            <property name="text">
+             <string/>
+            </property>
+            <property name="margin">
+             <number>10</number>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="upgradeArtifactSub4">
+            <property name="text">
+             <string/>
+            </property>
+            <property name="margin">
+             <number>10</number>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="upgradeArtifactSet">
+            <property name="text">
+             <string/>
+            </property>
+            <property name="margin">
+             <number>10</number>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <spacer name="verticalSpacer_3">
+            <property name="orientation">
+             <enum>Qt::Orientation::Vertical</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>20</width>
+              <height>40</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+         </layout>
         </item>
        </layout>
       </widget>
@@ -160,11 +266,11 @@
        </attribute>
        <layout class="QHBoxLayout" name="horizontalLayout_3" stretch="3,1">
         <item>
-         <widget class="QScrollArea" name="scrollArea">
+         <widget class="QScrollArea" name="lockScrollArea">
           <property name="widgetResizable">
            <bool>true</bool>
           </property>
-          <widget class="QWidget" name="widget">
+          <widget class="QWidget" name="lockScrollContents">
            <property name="geometry">
             <rect>
              <x>0</x>
@@ -182,9 +288,9 @@
          </widget>
         </item>
         <item>
-         <layout class="QVBoxLayout" name="artifactInfo" stretch="0,0,0,0,0,0,0,1">
+         <layout class="QVBoxLayout" name="lockArtifactInfo" stretch="0,0,0,0,0,0,0,1">
           <item>
-           <widget class="QLabel" name="artifactMain">
+           <widget class="QLabel" name="lockArtifactMain">
             <property name="text">
              <string/>
             </property>
@@ -194,7 +300,7 @@
            </widget>
           </item>
           <item>
-           <widget class="QLabel" name="artifactLvl">
+           <widget class="QLabel" name="lockArtifactLvl">
             <property name="text">
              <string/>
             </property>
@@ -204,7 +310,7 @@
            </widget>
           </item>
           <item>
-           <widget class="QLabel" name="artifactSub1">
+           <widget class="QLabel" name="lockArtifactSub1">
             <property name="text">
              <string/>
             </property>
@@ -214,7 +320,7 @@
            </widget>
           </item>
           <item>
-           <widget class="QLabel" name="artifactSub2">
+           <widget class="QLabel" name="lockArtifactSub2">
             <property name="text">
              <string/>
             </property>
@@ -224,7 +330,7 @@
            </widget>
           </item>
           <item>
-           <widget class="QLabel" name="artifactSub3">
+           <widget class="QLabel" name="lockArtifactSub3">
             <property name="text">
              <string/>
             </property>
@@ -234,7 +340,7 @@
            </widget>
           </item>
           <item>
-           <widget class="QLabel" name="artifactSub4">
+           <widget class="QLabel" name="lockArtifactSub4">
             <property name="text">
              <string/>
             </property>
@@ -244,7 +350,7 @@
            </widget>
           </item>
           <item>
-           <widget class="QLabel" name="artifactSet">
+           <widget class="QLabel" name="lockArtifactSet">
             <property name="layoutDirection">
              <enum>Qt::LayoutDirection::LeftToRight</enum>
             </property>

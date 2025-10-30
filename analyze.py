@@ -785,20 +785,20 @@ def simulate_exp(artifacts, slvls, targets, fun, num=1, mains=None):
     #print(np.histogram(slvls, bins=7)[0])
     return exp
 
-def rate(artifacts, slots, rarities, slvls, sets, ranker, k=1, num=None, threshold=None):
+def rate(artifacts, slots, mask, slvls, sets, ranker, k=1):
     # TODO: change persist to persist_artifact and persist_meta, for
     # more intuitive control over things like set masking
-    relevance = np.zeros((len(artifacts), 5 * (1 + len(SETS))), dtype=float)
-    count = 0
+    relevance = np.zeros((len(artifacts), 2), dtype=float)
+    counts = np.zeros((len(artifacts), 2), dtype=int)
     for slot in range(5):
         # TODO: this won't work if there's 0 artifacts
-        slot_mask = np.logical_and(rarities == 5, slots == slot)
+        slot_mask = np.logical_and(mask, slots == slot)
         original_idxs = np.where(slot_mask)[0]
         slot_artifacts = artifacts[slot_mask]
         slot_lvls = slvls[slot_mask]
         persist = {}
-        relevance[original_idxs, count] = ranker(slot_artifacts, slot_lvls, persist, ALL_TARGETS[SLOTS[slot]], k=2 * k)
-        count += 1
+        relevance[slot_mask, 0] = ranker(slot_artifacts, slot_lvls, persist, ALL_TARGETS[SLOTS[slot]], k=2 * k)
+        counts[slot_mask, 0] = len(slot_artifacts)
         
         for setKey in range(len(SETS)):
             set_mask = sets[slot_mask] == setKey
@@ -822,19 +822,29 @@ def rate(artifacts, slots, rarities, slvls, sets, ranker, k=1, num=None, thresho
                     set_persist[a] = b
                     #set_persist.append(None)
             #set_persist = [asdf[np.where(set_mask)[0]] for asdf in persist]
-            relevance[original_idxs, count] = ranker(set_artifacts, set_lvls, set_persist, SET_TARGETS[SETS[setKey]][SLOTS[slot]], k=k)
-            count += 1
+            relevance[original_idxs, 1] = ranker(set_artifacts, set_lvls, set_persist, SET_TARGETS[SETS[setKey]][SLOTS[slot]], k=k)
+            counts[original_idxs, 1] = len(set_artifacts)
     
-    max_relevance = np.max(relevance, axis=1)
-    #max_relevance[lvls == 20] = 999999
-    max_relevance[rarities != 5] = 999999
+    return relevance, counts
+
+def upgrade_analyze(relevance, counts, mask, slvls, num=None, threshold=None):
+    scaled_relevance = np.sum(relevance * counts, axis=1)
+    scaled_relevance[~mask] = -999999999
+    scaled_relevance[slvls == 20] = -999999999
+    
     if threshold is None:
-        relevances = np.sort(max_relevance)
-        threshold = relevances[num - 1]
-        #print(threshold * 270275 * 100)
-    #relevant = np.logical_or(lvls == 20, max_relevance > threshold)
-    relevant = max_relevance > threshold
-    return relevant
+        threshold = np.partition(scaled_relevance, -num)[-num]
+        
+    return scaled_relevance >= threshold
+
+def delete_analyze(relevance, mask, num=None, threshold=None):
+    relevance = np.max(relevance, axis=1)
+    relevance[~mask] = 999999999
+    
+    if threshold is None:
+        threshold = np.partition(relevance, num)[num]
+        
+    return relevance <= threshold
 
 def estimate_resin(percentile):
     if percentile == 0:

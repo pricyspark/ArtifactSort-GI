@@ -47,11 +47,40 @@
        </attribute>
        <layout class="QVBoxLayout" name="verticalLayout_2">
         <item>
-         <widget class="QLabel" name="main">
-          <property name="text">
-           <string>Main Scan:</string>
-          </property>
-         </widget>
+         <layout class="QHBoxLayout" name="horizontalLayout_5">
+          <item>
+           <widget class="QLabel" name="main">
+            <property name="text">
+             <string>Main Scan:</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="mainTooltip">
+            <property name="toolTip">
+             <string>Determines the order artifacts in the Upgrade and Lock tab are presented. 
+ORDERED: Inventory Kamera 
+UNORDERED: Irminsul, AdeptiScanner</string>
+            </property>
+            <property name="text">
+             <string/>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <spacer name="horizontalSpacer_3">
+            <property name="orientation">
+             <enum>Qt::Orientation::Horizontal</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>40</width>
+              <height>20</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+         </layout>
         </item>
         <item>
          <layout class="QHBoxLayout" name="mainInput" stretch="0,1">
@@ -75,11 +104,40 @@
          </layout>
         </item>
         <item>
-         <widget class="QLabel" name="extra">
-          <property name="text">
-           <string>Additional Scans:</string>
-          </property>
-         </widget>
+         <layout class="QHBoxLayout" name="horizontalLayout_6">
+          <item>
+           <widget class="QLabel" name="extra">
+            <property name="text">
+             <string>Additional Scans:</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="extraTooltip">
+            <property name="toolTip">
+             <string>Adds extra information, for example initial substat values for reshape analysis. 
+REPORTS INITIAL VALUES: Irminsul 
+DOESN'T REPORT: Any OCR-based scanner</string>
+            </property>
+            <property name="text">
+             <string/>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <spacer name="horizontalSpacer_4">
+            <property name="orientation">
+             <enum>Qt::Orientation::Horizontal</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>40</width>
+              <height>20</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+         </layout>
         </item>
         <item>
          <layout class="QHBoxLayout" name="extraInput" stretch="0,0">
@@ -163,8 +221,26 @@
              <height>710</height>
             </rect>
            </property>
-           <layout class="QGridLayout" name="gridLayout">
-            <item row="0" column="0">
+           <layout class="QVBoxLayout" name="verticalLayout_3" stretch="0,1">
+            <item>
+             <widget class="QLabel" name="label">
+              <property name="font">
+               <font>
+                <italic>false</italic>
+                <bold>true</bold>
+                <underline>false</underline>
+                <strikeout>false</strikeout>
+               </font>
+              </property>
+              <property name="text">
+               <string>IMPORTANT: Recommendations don't favor traditional optimization targets, so &quot;weird&quot; artifacts will get mixed in. Upgrading these can slightly improve locking recommendation accuracy, but otherwise only upgrade as needed.</string>
+              </property>
+              <property name="wordWrap">
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
+            <item>
              <layout class="QGridLayout" name="upgradeGrid"/>
             </item>
            </layout>
@@ -175,6 +251,11 @@
          <layout class="QVBoxLayout" name="upgradeArtifactInfo" stretch="0,0,0,0,0,0,0,1">
           <item>
            <widget class="QLabel" name="upgradeArtifactMain">
+            <property name="font">
+             <font>
+              <pointsize>20</pointsize>
+             </font>
+            </property>
             <property name="text">
              <string/>
             </property>
@@ -184,62 +265,126 @@
            </widget>
           </item>
           <item>
-           <widget class="QLabel" name="upgradeArtifactLvl">
-            <property name="text">
-             <string/>
-            </property>
-            <property name="margin">
-             <number>10</number>
-            </property>
-           </widget>
+           <layout class="QHBoxLayout" name="horizontalLayout_4" stretch="0,1,0,0">
+            <item>
+             <widget class="QLabel" name="upgradeArtifactLvl">
+              <property name="font">
+               <font>
+                <pointsize>15</pointsize>
+               </font>
+              </property>
+              <property name="text">
+               <string/>
+              </property>
+              <property name="margin">
+               <number>5</number>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <spacer name="horizontalSpacer_2">
+              <property name="orientation">
+               <enum>Qt::Orientation::Horizontal</enum>
+              </property>
+              <property name="sizeHint" stdset="0">
+               <size>
+                <width>40</width>
+                <height>20</height>
+               </size>
+              </property>
+             </spacer>
+            </item>
+            <item>
+             <widget class="QLabel" name="upgradeLock">
+              <property name="text">
+               <string/>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLabel" name="upgradeStar">
+              <property name="text">
+               <string/>
+              </property>
+             </widget>
+            </item>
+           </layout>
           </item>
           <item>
            <widget class="QLabel" name="upgradeArtifactSub1">
+            <property name="font">
+             <font>
+              <pointsize>15</pointsize>
+             </font>
+            </property>
             <property name="text">
              <string/>
             </property>
             <property name="margin">
-             <number>10</number>
+             <number>5</number>
             </property>
            </widget>
           </item>
           <item>
            <widget class="QLabel" name="upgradeArtifactSub2">
+            <property name="font">
+             <font>
+              <pointsize>15</pointsize>
+             </font>
+            </property>
             <property name="text">
              <string/>
             </property>
             <property name="margin">
-             <number>10</number>
+             <number>5</number>
             </property>
            </widget>
           </item>
           <item>
            <widget class="QLabel" name="upgradeArtifactSub3">
+            <property name="font">
+             <font>
+              <pointsize>15</pointsize>
+             </font>
+            </property>
             <property name="text">
              <string/>
             </property>
             <property name="margin">
-             <number>10</number>
+             <number>5</number>
             </property>
            </widget>
           </item>
           <item>
            <widget class="QLabel" name="upgradeArtifactSub4">
+            <property name="font">
+             <font>
+              <pointsize>15</pointsize>
+             </font>
+            </property>
             <property name="text">
              <string/>
             </property>
             <property name="margin">
-             <number>10</number>
+             <number>5</number>
             </property>
            </widget>
           </item>
           <item>
            <widget class="QLabel" name="upgradeArtifactSet">
+            <property name="font">
+             <font>
+              <pointsize>15</pointsize>
+             </font>
+            </property>
             <property name="text">
              <string/>
             </property>
+            <property name="wordWrap">
+             <bool>true</bool>
+            </property>
             <property name="margin">
-             <number>10</number>
+             <number>5</number>
             </property>
            </widget>
           </item>
@@ -291,66 +436,132 @@
          <layout class="QVBoxLayout" name="lockArtifactInfo" stretch="0,0,0,0,0,0,0,1">
           <item>
            <widget class="QLabel" name="lockArtifactMain">
+            <property name="font">
+             <font>
+              <pointsize>20</pointsize>
+             </font>
+            </property>
             <property name="text">
              <string/>
             </property>
             <property name="margin">
-             <number>10</number>
+             <number>5</number>
             </property>
            </widget>
           </item>
           <item>
-           <widget class="QLabel" name="lockArtifactLvl">
-            <property name="text">
-             <string/>
-            </property>
-            <property name="margin">
-             <number>10</number>
-            </property>
-           </widget>
+           <layout class="QHBoxLayout" name="horizontalLayout_7">
+            <item>
+             <widget class="QLabel" name="lockArtifactLvl">
+              <property name="font">
+               <font>
+                <pointsize>15</pointsize>
+               </font>
+              </property>
+              <property name="text">
+               <string/>
+              </property>
+              <property name="margin">
+               <number>5</number>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <spacer name="horizontalSpacer_5">
+              <property name="orientation">
+               <enum>Qt::Orientation::Horizontal</enum>
+              </property>
+              <property name="sizeHint" stdset="0">
+               <size>
+                <width>40</width>
+                <height>20</height>
+               </size>
+              </property>
+             </spacer>
+            </item>
+            <item>
+             <widget class="QLabel" name="lockLock">
+              <property name="text">
+               <string/>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLabel" name="lockStar">
+              <property name="text">
+               <string/>
+              </property>
+             </widget>
+            </item>
+           </layout>
           </item>
           <item>
            <widget class="QLabel" name="lockArtifactSub1">
+            <property name="font">
+             <font>
+              <pointsize>15</pointsize>
+             </font>
+            </property>
             <property name="text">
              <string/>
             </property>
             <property name="margin">
-             <number>10</number>
+             <number>5</number>
             </property>
            </widget>
           </item>
           <item>
            <widget class="QLabel" name="lockArtifactSub2">
+            <property name="font">
+             <font>
+              <pointsize>15</pointsize>
+             </font>
+            </property>
             <property name="text">
              <string/>
             </property>
             <property name="margin">
-             <number>10</number>
+             <number>5</number>
             </property>
            </widget>
           </item>
           <item>
            <widget class="QLabel" name="lockArtifactSub3">
+            <property name="font">
+             <font>
+              <pointsize>15</pointsize>
+             </font>
+            </property>
             <property name="text">
              <string/>
             </property>
             <property name="margin">
-             <number>10</number>
+             <number>5</number>
             </property>
            </widget>
           </item>
           <item>
            <widget class="QLabel" name="lockArtifactSub4">
+            <property name="font">
+             <font>
+              <pointsize>15</pointsize>
+             </font>
+            </property>
             <property name="text">
              <string/>
             </property>
             <property name="margin">
-             <number>10</number>
+             <number>5</number>
             </property>
            </widget>
           </item>
           <item>
            <widget class="QLabel" name="lockArtifactSet">
+            <property name="font">
+             <font>
+              <pointsize>15</pointsize>
+             </font>
+            </property>
             <property name="layoutDirection">
              <enum>Qt::LayoutDirection::LeftToRight</enum>
             </property>
@@ -360,8 +571,11 @@
             <property name="scaledContents">
              <bool>false</bool>
             </property>
+            <property name="wordWrap">
+             <bool>true</bool>
+            </property>
             <property name="margin">
-             <number>10</number>
+             <number>5</number>
             </property>
            </widget>
           </item>

@@ -7,7 +7,7 @@ from analyze import *
 from rank import rank_value
 #from rank import *
 from PySide6.QtWidgets import (QMainWindow, QApplication, QFileDialog, QLabel)
-from PySide6.QtGui import (QIcon, QPixmap) # TODO: Pretty sure this is bad practice, and should instead subclass MainWindow
+from PySide6.QtGui import (QIcon, QPixmap, QFont) # TODO: Pretty sure this is bad practice, and should instead subclass MainWindow
 #from PySide6 import QtCore
 #from PySide6.QtCore import (QSize)
 #from PySide6 import QtWidgets
@@ -46,6 +46,14 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.set_key = None
         self.target = None
         self.relevant = None
+        
+        self.mainTooltip.setPixmap(QPixmap(':/menu/icons/info.svg'))
+        self.mainTooltip.setScaledContents(True)
+        self.mainTooltip.setFixedSize(15, 15)
+        
+        self.extraTooltip.setPixmap(QPixmap(':/menu/icons/info.svg'))
+        self.extraTooltip.setScaledContents(True)
+        self.extraTooltip.setFixedSize(15, 15)
         
         self.upgradeArtifactImage = SquareLabel()
         self.upgradeArtifactInfo.insertWidget(0, self.upgradeArtifactImage)
@@ -288,7 +296,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             if self.delete_mask[i] == artifact['lock']:
                 # Incorrectly locked
                 icon_path = f':/{artifact['slotKey']}_icons/{artifact['setKey']}.webp'
-                button.clicked.connect(lambda _, idx=i: self.click_artifact(idx))
+                button.clicked.connect(lambda _, idx=i: self.click_lock_artifact(idx))
             else:
                 # Correctly locked
                 icon_path = f':/{artifact['slotKey']}_icons/default.webp'
@@ -312,6 +320,18 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             substat = artifact['unactivatedSubstats'][0]
             self.upgradeArtifactSub4.setText(f'{substat['key']}+{substat['value']} (unactivated)')
         self.upgradeArtifactSet.setText(artifact['setKey'])
+        if artifact['lock']:
+            self.upgradeLock.setPixmap(QPixmap(':/menu/icons/locked.svg'))
+        else:
+            self.upgradeLock.setPixmap(QPixmap(':/menu/icons/unlocked.svg'))
+        self.upgradeLock.setScaledContents(True)
+        self.upgradeLock.setFixedSize(35, 35)
+        if artifact['astralMark']:
+            self.upgradeStar.setPixmap(QPixmap(':/menu/icons/star.svg'))
+        else:
+            self.upgradeStar.setPixmap(QPixmap(':/menu/icons/unstar.svg'))
+        self.upgradeStar.setScaledContents(True)
+        self.upgradeStar.setFixedSize(35, 35)
     
     def click_lock_artifact(self, idx):
         artifact = self.artifact_dicts[idx]
@@ -330,9 +350,28 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             substat = artifact['unactivatedSubstats'][0]
             self.lockArtifactSub4.setText(f'{substat['key']}+{substat['value']} (unactivated)')
         self.lockArtifactSet.setText(artifact['setKey'])
+        if artifact['lock']:
+            # Should unlock
+            self.lockLock.setPixmap(QPixmap(':/menu/icons/unlocked.svg'))
+        else:
+            # Should lock
+            self.lockLock.setPixmap(QPixmap(':/menu/icons/locked.svg'))
+        self.lockLock.setScaledContents(True)
+        self.lockLock.setFixedSize(35, 35)
+        if artifact['astralMark']:
+            raise ValueError
+            self.lockStar.setPixmap(QPixmap(':/menu/icons/star.svg'))
+        else:
+            self.lockStar.setPixmap(QPixmap(':/menu/icons/unstar.svg'))
+        self.lockStar.setScaledContents(True)
+        self.lockStar.setFixedSize(35, 35)
 
-app = QApplication(sys.argv)
+if __name__ == '__main__':
+    app = QApplication(sys.argv)
+    font = app.font()
+    font.setPointSize(11)
+    app.setFont(font)
 
-window = MainWindow()
-window.show()
-app.exec()
+    window = MainWindow()
+    window.show()
+    app.exec()

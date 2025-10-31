@@ -285,4 +285,11 @@
         <file alias="NightOfTheSkysUnveiling.webp">icons/circlets/Item_Crown_of_the_Befallen.webp</file>
         <file alias="SilkenMoonsSerenade.webp">icons/circlets/Item_Holy_Crown_of_the_Believer.webp</file>
     </qresource>
+    <qresource prefix="/menu">
+        <file>icons/locked.svg</file>
+        <file>icons/unlocked.svg</file>
+        <file>icons/star.svg</file>
+        <file>icons/unstar.svg</file>
+        <file>icons/info.svg</file>
+    </qresource>
 </RCC>

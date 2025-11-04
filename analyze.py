@@ -6,30 +6,7 @@ from targets import *
 import functools
 from itertools import product, combinations, permutations
 
-CACHE_SIZE = 1000 # TODO: tune for percentile, especially more complex targets
-
-def _all_compositions(N, M):
-    """Yield all length-N tuples of non-neg ints summing to M."""
-    if N == 1:
-        yield (M,)
-    else:
-        for k in range(M+1):
-            for rest in _all_compositions(N-1, M-k):
-                yield (k,) + rest
-
-def _multinomial_prob(counts, N, M):
-    """P(counts) = M! / (∏ counts_i!) * (1/N)^M"""
-    num = math.factorial(M)
-    denom = 1
-    for c in counts:
-        denom *= math.factorial(c)
-    return num/denom * (1/N)**M
-
-def _distribution(N, M):
-    dist = []
-    for counts in _all_compositions(N, M):
-        dist.append((counts, _multinomial_prob(counts, N, M)))
-    return tuple(dist)
+CACHE_SIZE = 100000 # TODO: tune for percentile, especially more complex targets
 
 def next_lvl(lvl):
     if lvl < 0:
@@ -37,103 +14,73 @@ def next_lvl(lvl):
     else:
         return 4 * ((lvl // 4) + 1)
 
-@functools.lru_cache(maxsize=CACHE_SIZE)
-def _temp(N):
-    # start with “zero” sum
-    dist = {0: 1.0}
-    
-    if N == 0:
-        return dist
+def distro(N):
+    increments = np.array([7, 8, 9, 10])
+    n_vars = 4
 
-    # convolve N times
+    # initialize dictionary with starting state
+    dist = {(0, 0, 0, 0): 1.0}
+
+    # precompute all variable + increment combinations
+    var_choices = np.arange(n_vars)
+    inc_choices = increments
+    choices = [(v, inc) for v in var_choices for inc in inc_choices]
+
     for _ in range(N):
         new_dist = {}
-        for s, p_s in dist.items():
-            for x in (7, 8, 9, 10):
-                new_dist[s + x] = new_dist.get(s + x, 0) + p_s / 4
+        for state, prob in dist.items():
+            for v, inc in choices:
+                new_state = list(state)
+                new_state[v] += inc
+                new_state = tuple(new_state)
+                new_prob = prob * (1/len(choices))
+                new_dist[new_state] = new_dist.get(new_state, 0.0) + new_prob
         dist = new_dist
 
-    # dist now maps each sum → probability
-    return dict(sorted(new_dist.items()))
+    # convert to structured numpy arrays for clarity
+    states = np.array(list(dist.keys()), dtype=np.uint8)
+    probs = np.array(list(dist.values()))
 
-def distro(artifacts, lvls=None, num_upgrades=None):
-    """Create a distribution possible max artifacts. If given a single
-    artifact, return twin arrays artifacts and probabilities. If given
-    multiple artifacts, return twin lists of arrays instead.
+    # sanity check: probabilities sum to 1
+    assert np.isclose(probs.sum(), 1.0), probs.sum()
 
-    Args:
-        artifacts (_type_): _description_
-        lvls (_type_): _description_
+    return states, probs
 
-    Raises:
-        ValueError: _description_
-        ValueError: _description_
+def trim_distro(N, X):
+    # possible increments
+    increments = np.array([7, 8, 9, 10])
+    n_vars = min(X, 4)
+    n_total = 4  # total possible slots
 
-    Returns:
-        _type_: _description_
-    """
-    
-    dist = []
-    probs = []
-    if artifacts.ndim == 1:
-        if lvls == 20:
-            return artifacts.reshape((1, -1)), np.array([1])
-        
-        if num_upgrades is None:
-            num_upgrades = 5 - lvls // 4
-        dist.append(artifacts.copy())
-        probs.append(0)
-        seed = []
-        if np.count_nonzero(artifacts) == 4:
-            num_upgrades -= 1
-            sub_probs = SUB_PROBS.copy()
-            sub_probs[np.nonzero(artifacts)[0]] = 0
-            sub_probs /= np.sum(sub_probs)
-            for idx in np.where(artifacts == 0)[0]:
-                if sub_probs[idx] == 0:
-                    continue
-                for coef in (7, 8, 9, 10):
-                    temp = artifacts.copy()
-                    temp[idx] = coef
-                    seed.append((temp, sub_probs[idx] / 4))
-        else:
-            seed.append((artifacts.copy(), 1))
-            
-        main = find_main(artifacts)
-        upgrades = _distribution(4, num_upgrades)
-        for artifact, prob in seed:
-            for upgrade, upgrade_prob in upgrades:
-                substats = find_sub(artifact, main)
-                # TODO: make this not disgusting                
-                for first, first_prob in _temp(upgrade[0]).items():
-                    first_temp = artifact.copy()
-                    first_temp[substats[0]] += first
-                    for second, second_prob in _temp(upgrade[1]).items():
-                        second_temp = first_temp.copy()
-                        second_temp[substats[1]] += second
-                        for third, third_prob in _temp(upgrade[2]).items():
-                            third_temp = second_temp.copy()
-                            third_temp[substats[2]] += third
-                            for fourth, fourth_prob in _temp(upgrade[3]).items():
-                                fourth_temp = third_temp.copy()
-                                fourth_temp[substats[3]] += fourth
-                                dist.append(fourth_temp)
-                                probs.append(prob * upgrade_prob * first_prob * second_prob * third_prob * fourth_prob)
-                                
-        dist = np.array(dist, dtype=np.uint8)
-        probs = np.array(probs)
-    else:
-        try:
-            _ = iter(lvls)
-        except:
-            lvls = np.full(len(artifacts), lvls)
-        
-        for artifact, lvl in zip(artifacts, lvls):
-            temp_dist, temp_probs = distro(artifact, lvls=lvl)
-            dist.append(temp_dist)
-            probs.append(temp_probs)
+    # start with all zeros
+    dist = {tuple([0]*n_vars): 1.0}
 
-    return dist, probs
+    # each step: pick one of 4 possible slots
+    # if X < 4, (4 - X)/4 chance nothing happens
+    # else pick one of X variables
+    p_none = (n_total - n_vars) / n_total
+    p_var = 1 / n_total  # per variable
+
+    for _ in range(N):
+        new_dist = {}
+        for state, prob in dist.items():
+            # case 1: nothing happens
+            if p_none > 0:
+                new_dist[state] = new_dist.get(state, 0.0) + prob * p_none
+            # case 2: one of X vars gets incremented by 7–10
+            for v in range(n_vars):
+                for inc in increments:
+                    new_state = list(state)
+                    new_state[v] += inc
+                    new_state = tuple(new_state)
+                    new_prob = prob * p_var * (1/len(increments))
+                    new_dist[new_state] = new_dist.get(new_state, 0.0) + new_prob
+        dist = new_dist
+
+    states = np.array(list(dist.keys()), dtype=np.uint8)
+    probs = np.array(list(dist.values()))
+    assert np.isclose(probs.sum(), 1.0), probs.sum()
+    return states, probs
 
 def single_distro(artifacts):
     if artifacts.ndim == 1:
@@ -357,32 +304,52 @@ def base_artifact_useful_probs(mains, subs, probs, target):
 
     return mains_out, subs_out, probs_out
 
-def artifact_percentile(slot, target, threshold, lvl):
-    # Nest function so arrays are enclosing variables instead of
-    # parameters, this allows easier caching
-    @functools.lru_cache(maxsize=CACHE_SIZE)
-    def _percentile_helper(diff, num_upgrades):
-        if diff < 0:
-            return 0.2 if num_upgrades == 0 else 1
-        
-        if num_upgrades == 0: # This isn't necessary, but might speed things up
-            return 0
-
-        upper_bound = max_weight * 10 * num_upgrades
-        if diff >= upper_bound:
-            return 0
-            
-        output = 0
-        for sub in s:
-            for coef in (10, 9, 8, 7):
-                temp_diff = diff - coef * new_target[sub]
-                temp_prob = _percentile_helper(temp_diff, num_upgrades - 1)
-                if temp_prob == 0:
-                    break
-                output += temp_prob
-
-        return output / 16
+@functools.lru_cache(maxsize=CACHE_SIZE)
+def fixed_percentile_helper(diff, num_upgrades, weights):
+    if diff < 0:
+        return 1
     
+    max_weight = weights[-1]
+    
+    upper_bound = max_weight * 10 * num_upgrades
+    if diff >= upper_bound:
+        return 0
+        
+    output = 0
+    for weight in weights:
+        for coef in (10, 9, 8, 7):
+            temp_diff = diff - coef * weight
+            temp_prob = fixed_percentile_helper(temp_diff, num_upgrades - 1, weights)
+            if temp_prob == 0:
+                break
+            output += temp_prob
+
+    return output / 16
+
+@functools.lru_cache(maxsize=CACHE_SIZE)
+def random_percentile_helper(diff, num_upgrades, weights):
+    if diff < 0:
+        return 0.2 if num_upgrades == 0 else 1
+    
+    max_weight = weights[-1]
+    
+    upper_bound = max_weight * 10 * num_upgrades
+    if diff >= upper_bound:
+        return 0
+        
+    output = 0
+    for weight in weights:
+        for coef in (10, 9, 8, 7):
+            temp_diff = diff - coef * weight
+            temp_prob = random_percentile_helper(temp_diff, num_upgrades - 1, weights)
+            if temp_prob == 0:
+                break
+            output += temp_prob
+
+    return output / 16
+
+COEFS = [np.array(list(product((7, 8, 9, 10), repeat=k))) for k in range(5)]
+def artifact_percentile(slot: str, target: np.ndarray, threshold: int | float, lvl: int):
     if lvl < 0:
         raise ValueError('Invalid artifact level')
     
@@ -393,21 +360,20 @@ def artifact_percentile(slot, target, threshold, lvl):
     new_target = np.append(target, 0)
     
     output = 0
-    for m, s, p in zip(mains, subs, probs):
-        diff = threshold - new_target[m] * (160 if m < 3 else 80)
-        num_useful = np.count_nonzero(s != -1)
-        num_useless = 4 - num_useful
-        max_weight = np.max(new_target[s])
-        for coefs in product((7, 8, 9, 10), repeat=num_useful):
-            coefs = [0] * num_useless + list(coefs)
-            temp_diff = diff
-            for sub, coef in zip(s, coefs):
-                temp_diff -= coef * new_target[sub]
-                
-            output += p * _percentile_helper(temp_diff, num_upgrades) / 4 ** num_useful
-
-        _percentile_helper.cache_clear()
-
+    hundred_sixty_mask = np.logical_and(mains < 3, mains > -1)
+    base_diff = (threshold - new_target[mains] * np.where(hundred_sixty_mask, 160, 80)).astype(int)
+    num_useful = np.count_nonzero(subs != -1, axis=1)
+    num_useless = 4 - num_useful
+    
+    for diff, s, p, useful, useless in zip(base_diff, subs, probs, num_useful, num_useless):
+        weights = np.sort(new_target[s])
+        weights_tuple = tuple(weights)
+        temp = 0
+        base_substat_scores = (weights[useless:] @ COEFS[useful].T).astype(int)
+        for base_substat_score in base_substat_scores:
+            temp += random_percentile_helper(diff - base_substat_score, num_upgrades, weights_tuple)
+        output += p * temp / 4 ** useful
+           
     return output
 
 def avg(distribution, probs, targets, scores=None) -> float:
@@ -519,6 +485,19 @@ def score(artifacts, targets):
         targets = vectorize(targets)
         
     return artifacts @ targets
+
+def upgrade_percentile(artifact, slvl, target, threshold, base_score=None):
+    num_upgrades = 4 if slvl < 0 else 5 - slvl // 4
+    
+    if base_score is None:
+        base_score = score(artifact, target)
+    base_diff = threshold - base_score
+    
+    subs = find_sub(artifact)
+    weights = np.sort(target[subs])
+    weights_tuple = tuple(weights)
+    
+    return fixed_percentile_helper(base_diff, num_upgrades, weights_tuple)
 
 def reshape_percentile(base, target, threshold, unactivated, minimum=2):
     # TODO: This is copy-pasted from define. Find a more elegant solution
@@ -708,7 +687,7 @@ def simulate_exp(artifacts, slvls, targets, fun, num=1, mains=None):
             targets = vectorize(targets).reshape((1, -1))
         case np.ndarray():
             if targets.ndim == 1:
-                targets = targets.reshape((1, -1))    
+                targets = targets.reshape((1, -1))
         case _:
             temp = np.zeros((len(targets), 19), dtype=np.uint32)
             for i, target in enumerate(targets):
@@ -736,7 +715,7 @@ def simulate_exp(artifacts, slvls, targets, fun, num=1, mains=None):
     print()
     '''
     '''
-    artifacts = original_artifacts.copy()
+    artifacts[:] = original_artifacts.copy()
     #distros = distro(artifacts, lvls)
     persist = {}
     
@@ -779,8 +758,10 @@ def simulate_exp(artifacts, slvls, targets, fun, num=1, mains=None):
         persist['changed'] += list(chosen)
         print((target_maxes - start_maxes) / score_ranges)
         
+        '''
         reshuffle = np.random.choice(np.arange(len(artifacts))[slvls != 20], size=num, replace=False)
         persist['changed'] += list(reshuffle)
+        '''
             
     #print(np.histogram(slvls, bins=7)[0])
     return exp

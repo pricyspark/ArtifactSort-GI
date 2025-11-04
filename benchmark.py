@@ -2,8 +2,8 @@ import numpy as np
 from rank import *
 import functools
 import time
-from numba import types
-from numba.typed import Dict
+#from numba import types
+#from numba.typed import Dict
 
 CACHE_SIZE = 20000
 
@@ -13,11 +13,13 @@ class CachePercentile:
         self.target = target
         self.target.setflags(write=False)
         self.trim_distro = [[None for _ in range(5)] for _ in range(6)]
+        mains, subs, probs = base_artifact_probs(slot)
+        self.mains, self.subs, self.probs = base_artifact_useful_probs(mains, subs, probs, target)
         #self.trim_distro = [[trim_distro(i, j) for j in range(5)] for i in range(6)]
         
     @functools.lru_cache(maxsize=CACHE_SIZE)
     def helper(self, threshold):
-        return artifact_percentile(self.slot, self.target, threshold, 20)
+        return iterative_artifact_percentile(self.slot, self.target, threshold, 20, base=(self.mains, self.subs, self.probs))
     
     def percent(self, artifact, slvl):
         if slvl < 0:
@@ -37,30 +39,12 @@ class CachePercentile:
         d = temp
         
         avg = 0
-        scores = score(d, self.target) - 0.001
+        scores = score(d, self.target).astype(int) - 1
         for x, y in zip(scores, p):
             if y == 0:
                 continue
             avg += 1 / self.helper(x) * y
         return avg
-
-def distro_percentile(slot, artifact, slvl, target):
-    @functools.lru_cache(maxsize=CACHE_SIZE)
-    def _asdf(threshold):
-        return artifact_percentile(slot, target, threshold, 20)
-    
-    if slvl < 0:
-        num_upgrades = 4
-    else:
-        num_upgrades = 5 - slvl // 4
-        
-    d, p = adistro(artifact, num_upgrades=num_upgrades)
-    avg = 0
-    for x, y in zip(d, p):
-        if y == 0:
-            continue
-        avg += 1 / _asdf(score(x, target)-0.001) * y
-    return avg
 
 def rank_percentile(artifacts, slvls, persist, targets, k=1):
     '''Estimate probability artifact is in top k for given targets, and
@@ -403,8 +387,8 @@ def rank_smart(artifacts, slvls, persist, targets, k=1, base_trials=500, rng=Non
 
 if __name__ == '__main__':
     '''
-    NUM_SEEDS = 10
-    NUM_ITERATIONS = 1
+    NUM_SEEDS = 1
+    NUM_ITERATIONS = 2
     targets = (
         {'hp_': 6, 'hp': 2, 'crit_': 8},
         {'hp_': 6, 'hp': 2, 'crit_': 8, 'enerRech_': 10},
@@ -437,7 +421,7 @@ if __name__ == '__main__':
     for i in range(NUM_SEEDS):
         for j in range(NUM_ITERATIONS):
             artifacts, slvls = generate('flower', size=200, seed=i)
-            totals[i, j] = (simulate_exp(artifacts, slvls, targets, rank_value))
+            totals[i, j] = (simulate_exp(artifacts, slvls, targets, rank_percentile))
     end = time.perf_counter()
             
     print('done')
@@ -543,6 +527,9 @@ if __name__ == '__main__':
     print(asdf)
     print(random_percentile_helper.cache_info())
     '''
+    '''
+    '''
+    start = time.perf_counter()
     artifacts, slvls = generate('flower', size=1, seed=3)
     target = vectorize({'hp_': 6, 'hp': 2, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7})
     print(artifact_percentile('flower', target, score(artifacts[0], target), 0))
@@ -552,6 +539,19 @@ if __name__ == '__main__':
     target = vectorize({'hp_': 6, 'hp': 2, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7})
     print(artifact_percentile('flower', target, score(artifacts[0], target), 0))
     print_artifact(artifacts[0])
+    end = time.perf_counter()
+    print(end - start)
+    start = time.perf_counter()
+    artifacts, slvls = generate('flower', size=1, seed=3)
+    target = vectorize({'hp_': 6, 'hp': 2, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7})
+    print(iterative_artifact_percentile('flower', target, score(artifacts[0], target), 0))
+    print_artifact(artifacts[0])
+    artifacts, slvls = generate('flower', size=1, seed=4)
+    target = vectorize({'hp_': 6, 'hp': 2, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7})
+    print(iterative_artifact_percentile('flower', target, score(artifacts[0], target), 0))
+    print_artifact(artifacts[0])
+    end = time.perf_counter()
+    print(end - start)
     '''
     '''
     0.8426271369971801

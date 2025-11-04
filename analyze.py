@@ -5,6 +5,7 @@ import time
 from targets import *
 import functools
 from itertools import product, combinations, permutations
+from numba import njit
 
 CACHE_SIZE = 100000 # TODO: tune for percentile, especially more complex targets
 
@@ -13,6 +14,8 @@ def next_lvl(lvl):
         return 8
     else:
         return 4 * ((lvl // 4) + 1)
+
+INCREMENTS = np.array((7, 8, 9, 10), dtype=int)
 
 def distro(N):
     increments = np.array([7, 8, 9, 10])
@@ -200,7 +203,8 @@ def sample_upgrade(artifact, samples, num_upgrades=None, slvl=None, rng=None, se
 
         return output
     '''
-    
+
+#@njit
 def base_artifact_probs(slot):
     main_probs = MAIN_PROBS[slot]
     M = main_probs.size
@@ -283,6 +287,7 @@ def base_artifact_probs(slot):
     
     return mains, subs, probs
 
+#@njit
 def base_artifact_useful_probs(mains, subs, probs, target):
     useless_idx = np.where(target == 0)[0]
     
@@ -348,7 +353,7 @@ def random_percentile_helper(diff, num_upgrades, weights):
 
     return output / 16
 
-COEFS = [np.array(list(product((7, 8, 9, 10), repeat=k))) for k in range(5)]
+COEFS = [np.array(list(product((7, 8, 9, 10), repeat=k)), dtype=int) for k in range(5)]
 def artifact_percentile(slot: str, target: np.ndarray, threshold: int | float, lvl: int):
     if lvl < 0:
         raise ValueError('Invalid artifact level')
@@ -361,19 +366,118 @@ def artifact_percentile(slot: str, target: np.ndarray, threshold: int | float, l
     
     output = 0
     hundred_sixty_mask = np.logical_and(mains < 3, mains > -1)
-    base_diff = (threshold - new_target[mains] * np.where(hundred_sixty_mask, 160, 80)).astype(int)
+    base_diffs = threshold - new_target[mains] * np.where(hundred_sixty_mask, 160, 80)
     num_useful = np.count_nonzero(subs != -1, axis=1)
     num_useless = 4 - num_useful
     
-    for diff, s, p, useful, useless in zip(base_diff, subs, probs, num_useful, num_useless):
+    for base_diff, s, p, useful, useless in zip(base_diffs, subs, probs, num_useful, num_useless):
         weights = np.sort(new_target[s])
         weights_tuple = tuple(weights)
         temp = 0
-        base_substat_scores = (weights[useless:] @ COEFS[useful].T).astype(int)
+        base_substat_scores = weights[useless:] @ COEFS[useful].T
         for base_substat_score in base_substat_scores:
-            temp += random_percentile_helper(diff - base_substat_score, num_upgrades, weights_tuple)
+            temp += random_percentile_helper(base_diff - base_substat_score, num_upgrades, weights_tuple)
         output += p * temp / 4 ** useful
            
+    return output
+
+@njit
+def _iterative_helper(start: int, w_memo: np.ndarray, max_weight: int, weights: np.ndarray):
+    for i in range(w_memo.shape[0]):
+        base = 0.2 if i == 1 else 1
+        upper_bound = max_weight * 10 * i
+        for j in range(start, upper_bound):
+            temp = 0
+            for weight in weights:
+                for coef in (10, 9, 8, 7):
+                    temp_diff = j - coef * weight
+                    if temp_diff < 0:
+                        temp += base
+                        continue
+                    
+                    prev = w_memo[i - 1, temp_diff]
+                    if prev == 0:
+                        break
+                    temp += prev
+            w_memo[i, j] = temp / 16
+        w_memo[i, upper_bound:] = 0
+
+memo = {}
+def iterative_artifact_percentile(slot: str, target: np.ndarray, threshold: int, lvl: int, base=None):
+    if lvl < 0:
+        raise ValueError('Invalid artifact level')
+        
+    if base is None:
+        mains, subs, probs = base_artifact_probs(slot)
+        mains, subs, probs = base_artifact_useful_probs(mains, subs, probs, target)
+    else:
+        mains, subs, probs = base
+
+    num_upgrades = lvl // 4
+    new_target = np.append(target, 0)
+    
+    output = 0
+    hundred_sixty_mask = np.logical_and(mains < 3, mains > -1)
+    base_diffs = (threshold - new_target[mains] * np.where(hundred_sixty_mask, 160, 80))
+    num_useful = np.count_nonzero(subs != -1, axis=1)
+    num_useless = 4 - num_useful
+    
+    for base_diff, s, p, useful, useless in zip(base_diffs, subs, probs, num_useful, num_useless):
+        weights = np.sort(new_target[s])
+        #weights_tuple = tuple(weights)
+        weights_tuple = np.ascontiguousarray(weights).view(np.uint8).tobytes()
+        max_weight = weights[-1]
+        
+        start = None
+        if weights_tuple not in memo:
+            # TODO: the first row of this is all zeros. Maybe fix since
+            # that's wasted memory
+            super_loose_upper_bound = max(threshold + 1, (160 + 90) * max_weight) # TODO: this is so overkill but I'm too tired to think
+            memo[weights_tuple] = np.zeros((6, super_loose_upper_bound + 1)) # TODO: check if this is correct or should be expanded
+            start = 0
+        elif memo[weights_tuple].shape[1] < threshold + 1:
+            w_memo = memo[weights_tuple]
+            start = w_memo.shape[1]
+            new_memo = np.zeros((6, threshold + 1))
+            new_memo[:, :start] = w_memo
+            memo[weights_tuple] = new_memo
+        
+        w_memo: np.ndarray = memo[weights_tuple]
+        
+        if start is not None:
+            _iterative_helper(start, w_memo, max_weight, weights)
+            
+            '''
+            for i in range(w_memo.shape[0]):
+                base = 0.2 if i == 1 else 1
+                upper_bound = max_weight * 10 * i
+                for j in range(start, upper_bound):
+                    temp = 0
+                    #temp_diffs = j - (weights[:, None] * INCREMENTS).ravel()
+                    #temp = np.count_nonzero(temp_diffs < 0) * (0.2 if i == 1 else 1)
+                    #temp += np.sum(w_memo[i - 1, temp_diffs[temp_diffs >= 0]])
+                    for weight in weights:
+                        for coef in (10, 9, 8, 7):
+                            temp_diff = j - coef * weight
+                            if temp_diff < 0:
+                                temp += base # Seperate this in a different loop so you don't have to check every time
+                                continue
+                            
+                            prev = w_memo[i - 1, temp_diff]
+                            if prev == 0:
+                                break
+                            temp += prev
+                    w_memo[i, j] = temp / 16
+                w_memo[i, upper_bound:] = 0
+                    '''
+                    
+        temp = 0
+        base_substat_scores = weights[useless:] @ COEFS[useful].T
+        diffs = base_diff - base_substat_scores
+        temp = np.count_nonzero(diffs < 0) * (0.2 if num_upgrades == 0 else 1)
+        temp += np.sum(w_memo[num_upgrades, diffs[diffs >= 0]])
+        
+        output += p * temp / 4 ** useful
     return output
 
 def avg(distribution, probs, targets, scores=None) -> float:
@@ -807,6 +911,9 @@ def rate(artifacts, slots, mask, slvls, sets, ranker, k=1):
             counts[original_idxs, 1] = len(set_artifacts)
     
     return relevance, counts
+
+#def delete_rate(artifacts, slots, mask, slvls, sets):
+    
 
 def upgrade_analyze(relevance, counts, mask, slvls, num=None, threshold=None):
     scaled_relevance = np.sum(relevance * counts, axis=1)

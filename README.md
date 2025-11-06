@@ -49,46 +49,72 @@ If so, then Artifact Sort can help you!
    conda activate artifact_sort
    ```
 ## Usage
+Disclaimer: This project is in active development. There are guaranteed
+to be bugs and unaccounted for edge cases. Improper usage will likely
+crash the program or cause en error. This is fine, simply close the
+window and relaunch.
 1. Export in-game artifacts to GOODv3 using Irminsul. Currently only
    works with Irminsul because it's the only scanner that reports
    initialValue for substats, which is used during reshaping analysis.
-   Support for other OCR-based scanners is in progress.
-2. Place the scan within the project directory.
-3. <p>Run:<br>
-   Locking guide only</p>
+   Irminsul is the only scanner that I know reports this, but any other
+   scanner that includes this information will also work. Universal
+   support other scanners is in progress. 
+   
+   For best results,
+   also export from a scanner that preserves the order artifacts are
+   presented in-game. This allows the GUI to show artifacts in the
+   same order as the game. Otherwise finding specific artifacts becomes
+   a big hassle. Inventory Kamera preserves order, while Irminsul and
+   AdeptiScanner don't. Mileage may vary for others.
+
+   Note: Even in-game, Genshin doesn't seem to have a concrete ordering,
+   and there can be variations in the order even when the inventory
+   doesn't change. To guarantee order correctness, analyze immediately after
+   scanning.
+2. <p>Run:<br>
 
    ```sh
-   python rank.py <input json> > output.txt
+   python gui.py
    ```
+3. In the opened window, select your scan(s). If you only have one scan
+   (Irminsul), select it as the main scan. If you have two scans, select
+   the ordered scan as the main scan, and the second one as the
+   additional scan. Click "calculate".
 
-   Locking guide and resin guide
-   ```sh
-   python rank.py <input json> <artifact set> <optimization target> > output.txt
-   ```
-   The artifact set and optimization target must use GOOD formatted
-   strings, for example
-   ```sh
-   python rank.py <input json> GoldenTroupe "{'atk_': 6, 'atk': 2, 'crit_': 8}" > output.txt
-   ```
-   Optimization is a dictionary with a weighted sum of the considered
-   stats. The current input formatting isn't user friendly, and will be
-   fixed at a later date, likely with a GUI. For more examples of
-   properly formatted optimization targets, look in targets.py (Warning:
-   it's a mess in there).
+4. Wait for the analysis to finish. This will take several minutes.
+   There is a progress bar in rendered on the command line. The GUI
+   window will freeze during this time, and is normal.
 
-   You can also specify a power increase threshold of x%. If not
-   specified, it defaults to ANY%, or 0%. For example, a
-   5% increase would be
-   ```sh
-   python rank.py <input json> GoldenTroupe "{'atk_': 6, 'atk': 2, 'crit_': 8}" 0.05 > output.txt
+5. Check results in other tabs.
+
+   The ***upgrade tab*** recommends ~20 artifacts most likely to
+   become your best  for some target. (Targets for corresponding sets
+   are listed in targets.py). This is likely not very useful however, as
+   recommendations don't favor traditional optimization targets, so
+   "weird" artifacts will get mixed in.
+
+   The ***lock tab*** gives recommendations on what you should lock and
+   unlock. Its locking strategy is "lock everything except your worst
+   100 artifacts." Any artifacts that don't follow this scheme are
+   listed. It is recommended to use the auto-locking feature in-game to
+   lock ALL 5* artifacts by default, and use the lock tab to unlock
+   accordingly. This is very conservative and ensures you only trash
+   your absolute worst artifacts.
+
+   The ***define and reshape tab*** provides insight for resin efficiency.
+   Select a set and optimization target, and it will return expected
+   resin requirements to farm improvements of at least 0%, 1%, and 5%.
+   It also returns how much resin you save on average if you instead
+   define or reshape an artifact. Optimization targets are defined by a
+   dictionary with a weighted sum of the considered stats. The current
+   input formatting isn't user friendly, and a better input method is in
+   progress. For more examples of properly formatted optimization
+   targets, look in targets.py. (Warning: it's a mess in there)
+
+   Example optimization target:
    ```
-4. Inspect results in output.txt. Results are redirected to a seperate
-   file since they may be long. If the locking guide recommends
-   unlocking something you aren't comfortable trashing, feel free to
-   skip it. Properly weighting targets is still a WIP. There is lots of
-   data not currently presented in the output. The GUI is under
-   development and function interfaces will likely be reworked at some
-   point.
+   {'atk_': 6, 'atk': 2, 'crit_': 8}
+   ```
 ## Cleanup
 venv + pip
 ```sh
@@ -101,8 +127,11 @@ conda deactivate
 conda env remove -n artifact_sort
 ```
 ## Roadmap
-- [ ] GUI
+- [X] GUI
 - [X] Analysis for defining
 - [X] Analysis for reshaping
 - [ ] Automatic locking/unlocking
 - [ ] Packaging to .exe
+- [ ] Smarter caching and backing to disk
+- [ ] Multiprocess/multithread (curse you GIL)
+- [ ] Improve GUI, add more customization and info

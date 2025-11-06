@@ -114,10 +114,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         
         relevance, counts = rate(self.artifacts, self.slots, self.artifact_mask, self.slvls, self.sets, rank_value, k=2)
         self.upgrade_mask = upgrade_analyze(relevance, counts, self.artifact_mask, self.slvls, num=20)
-        start = time.perf_counter()
         relevance, counts = delete_rate(self.artifacts, self.slots, self.artifact_mask, self.slvls, self.sets)
-        end = time.perf_counter()
-        print(end - start)
         self.delete_mask = delete_analyze(relevance, counts, self.artifact_mask, num=100)
         self.statusbar.showMessage('Done', 10000)
         self.populate_upgrade()

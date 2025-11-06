@@ -2,6 +2,7 @@ import numpy as np
 from rank import *
 import functools
 import time
+import sys
 #from numba import types
 #from numba.typed import Dict
 
@@ -383,12 +384,26 @@ def rank_smart(artifacts, slvls, persist, targets, k=1, base_trials=500, rng=Non
     
     return value
 
+def _temp_bar(i, n):
+    BAR_LENGTH = 50
+    progress = i / n
+    filled_length = int(progress * BAR_LENGTH)
+    bar = '█' * filled_length + '░' * (BAR_LENGTH - filled_length)
+    sys.stdout.write(f'\r|{bar}| {round(progress * 100, 1)}%')
+    sys.stdout.flush()
+
 def delete_rate(artifacts, slots, mask, slvls, sets):
     caches = {}
     relevance = np.zeros((len(artifacts), 2), dtype=float)
     counts = np.zeros((len(artifacts), 2), dtype=int)
+    # TODO: get rid of these these are temp for the progress bar
+    total_num = 5 * (1 + len(SETS))
+    count = 0
     
     for slot in range(5):
+        count += 1
+        _temp_bar(count, total_num)
+        
         slot_mask = mask & (slots == slot)
         slot_original_idxs = np.flatnonzero(slot_mask)
         slot_artifacts = artifacts[slot_mask]
@@ -402,13 +417,13 @@ def delete_rate(artifacts, slots, mask, slvls, sets):
                 caches[cache_key] = CachePercentile(SLOTS[slot], target)
             for i, (artifact, slvl) in enumerate(zip(slot_artifacts, slot_lvls)):
                 temp[i, j] = caches[cache_key].percent(artifact, slvl)
-                print(caches[cache_key].helper.cache_info())
         relevance[slot_mask, 0] = np.max(temp, axis=1)
         counts[slot_mask, 0] = len(slot_artifacts)
-        if len(slot_artifacts) == 0:
-            raise ValueError
         
         for setKey in range(len(SETS)):
+            count += 1
+            _temp_bar(count, total_num)
+            
             set_mask = sets[slot_mask] == setKey
             if np.all(set_mask == 0):
                 continue
@@ -425,14 +440,11 @@ def delete_rate(artifacts, slots, mask, slvls, sets):
                     caches[cache_key] = CachePercentile(SLOTS[slot], target)
                 for i, (artifact, slvl) in enumerate(zip(set_artifacts, set_lvls)):
                     temp[i, j] = caches[cache_key].percent(artifact, slvl)
-                    print(caches[cache_key].helper.cache_info())
             relevance[set_original_idxs, 1] = np.max(temp, axis=1)
             counts[set_original_idxs, 1] = len(set_artifacts)
-            if len(set_artifacts) == 0:
-                raise ValueError
             
-    print(relevance[1])
-    print(counts[1])
+    print() # TODO: get rid of this
+            
     return relevance, counts
 
 if __name__ == '__main__':

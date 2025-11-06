@@ -73,25 +73,25 @@ SLOTS = ('flower', 'plume', 'sands', 'goblet', 'circlet')
 SLOT_2_NUM = {slot: index for index, slot in enumerate(SLOTS)}
 
 STATS = (
-    'hp',
-    'atk', 
-    'def', 
-    'hp_', 
-    'atk_', 
-    'def_', 
-    'enerRech_', 
-    'eleMas', 
-    'critRate_', 
-    'critDMG_', 
-    'pyro_dmg_', 
-    'electro_dmg_', 
-    'cryo_dmg_', 
-    'hydro_dmg_', 
-    'dendro_dmg_', 
-    'anemo_dmg_', 
-    'geo_dmg_', 
-    'physical_dmg_', 
-    'heal_'
+    'hp',           # 0
+    'atk',          # 1
+    'def',          # 2
+    'hp_',          # 3
+    'atk_',         # 4
+    'def_',         # 5
+    'enerRech_',    # 6
+    'eleMas',       # 7
+    'critRate_',    # 8
+    'critDMG_',     # 9
+    'pyro_dmg_',    # 10
+    'electro_dmg_', # 11
+    'cryo_dmg_',    # 12
+    'hydro_dmg_',   # 13
+    'dendro_dmg_',  # 14
+    'anemo_dmg_',   # 15
+    'geo_dmg_',     # 16
+    'physical_dmg_',# 17
+    'heal_'         # 18
 )
 
 STAT_2_NUM = {stat: index for index, stat in enumerate(STATS)}

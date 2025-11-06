@@ -5,7 +5,7 @@ import time
 from targets import *
 import functools
 from itertools import product, combinations, permutations
-from numba import njit
+#from numba import njit
 
 CACHE_SIZE = 100000 # TODO: tune for percentile, especially more complex targets
 
@@ -36,7 +36,7 @@ def distro(N):
                 new_state = list(state)
                 new_state[v] += inc
                 new_state = tuple(new_state)
-                new_prob = prob * (1/len(choices))
+                new_prob = prob / len(choices)
                 new_dist[new_state] = new_dist.get(new_state, 0.0) + new_prob
         dist = new_dist
 
@@ -44,45 +44,38 @@ def distro(N):
     states = np.array(list(dist.keys()), dtype=np.uint8)
     probs = np.array(list(dist.values()))
 
-    # sanity check: probabilities sum to 1
-    assert np.isclose(probs.sum(), 1.0), probs.sum()
-
     return states, probs
 
 def trim_distro(N, X):
     # possible increments
     increments = np.array([7, 8, 9, 10])
-    n_vars = min(X, 4)
-    n_total = 4  # total possible slots
+    N_VARS = min(X, 4)
+    N_TOTAL = 4  # total possible slots
 
     # start with all zeros
-    dist = {tuple([0]*n_vars): 1.0}
+    dist = {tuple([0] * N_VARS): 1.0}
 
-    # each step: pick one of 4 possible slots
-    # if X < 4, (4 - X)/4 chance nothing happens
-    # else pick one of X variables
-    p_none = (n_total - n_vars) / n_total
-    p_var = 1 / n_total  # per variable
+    P_NONE = (N_TOTAL - N_VARS) / N_TOTAL
+    P_VAR = 1 / N_TOTAL
 
     for _ in range(N):
         new_dist = {}
         for state, prob in dist.items():
             # case 1: nothing happens
-            if p_none > 0:
-                new_dist[state] = new_dist.get(state, 0.0) + prob * p_none
+            if P_NONE > 0:
+                new_dist[state] = new_dist.get(state, 0.0) + prob * P_NONE
             # case 2: one of X vars gets incremented by 7–10
-            for v in range(n_vars):
+            for v in range(N_VARS):
                 for inc in increments:
                     new_state = list(state)
                     new_state[v] += inc
                     new_state = tuple(new_state)
-                    new_prob = prob * p_var * (1/len(increments))
+                    new_prob = prob * P_VAR / 4 # len(increments)
                     new_dist[new_state] = new_dist.get(new_state, 0.0) + new_prob
         dist = new_dist
 
     states = np.array(list(dist.keys()), dtype=np.uint8)
     probs = np.array(list(dist.values()))
-    assert np.isclose(probs.sum(), 1.0), probs.sum()
     return states, probs
 
 def single_distro(artifacts):
@@ -105,14 +98,11 @@ def single_distro(artifacts):
             nz_idx  = np.nonzero(nz_mask)[0]           # shape (M,)
             M       = nz_idx.size
 
-            # 2. build row and column indices for dist update
-            #    rows: for each i in [0..M-1], rows = 1 + 4*i + [0,1,2,3]
             i = np.arange(M)
             j = np.arange(4, dtype=np.uint8)
             rows = 1 + 4*i[:, None] + j               # shape (M,4)
             cols = nz_idx[:, None]                    # shape (M,1)
 
-            # 3. add j+7 to dist at those positions in one shot
             dist[rows, cols] += (j + 7)               # broadcasts to (M,4)
             probs[1:] = np.repeat(sub_probs[sub_probs != 0], 4) / 4
             
@@ -210,7 +200,7 @@ def base_artifact_probs(slot):
     M = main_probs.size
 
     # Precompute the 24 permutations of positions [0,1,2,3]
-    perms = np.array(list(permutations(range(4))), dtype=int)  # (24,4)
+    PERMS = np.array(list(permutations(range(4))), dtype=int)  # (24,4)
 
     all_mains = []
     all_subs  = []
@@ -251,7 +241,7 @@ def base_artifact_probs(slot):
         w_sel = w[comb_idx]  # (C,4)
 
         # Reorder the 4 chosen weights along the 24 permutations: (C,24,4)
-        w_perm = w_sel[:, perms]  # advanced indexing -> (C,24,4)
+        w_perm = w_sel[:, PERMS]  # advanced indexing -> (C,24,4)
 
         # Denominators per step: total - exclusive cumsum of chosen weights
         # exclusive cumsum: cs_excl[..., k] = sum of previous weights (k terms)
@@ -365,7 +355,7 @@ def artifact_percentile(slot: str, target: np.ndarray, threshold: int | float, l
     new_target = np.append(target, 0)
     
     output = 0
-    hundred_sixty_mask = np.logical_and(mains < 3, mains > -1)
+    hundred_sixty_mask = (mains < 3) & (mains > -1)
     base_diffs = threshold - new_target[mains] * np.where(hundred_sixty_mask, 160, 80)
     num_useful = np.count_nonzero(subs != -1, axis=1)
     num_useless = 4 - num_useful
@@ -381,12 +371,18 @@ def artifact_percentile(slot: str, target: np.ndarray, threshold: int | float, l
            
     return output
 
-@njit
+#@njit
 def _iterative_helper(start: int, w_memo: np.ndarray, max_weight: int, weights: np.ndarray):
     for i in range(w_memo.shape[0]):
         base = 0.2 if i == 1 else 1
         upper_bound = max_weight * 10 * i
         for j in range(start, upper_bound):
+            # Vectorized version, which is slower ;;
+            # temp_diff = j - (weights[:, None] * INCREMENTS).ravel()
+            # neg = temp_diff < 0
+            # temp = np.count_nonzero(neg) * base
+            # temp += np.sum(w_memo[i - 1, temp_diff[~neg]])
+            
             temp = 0
             for weight in weights:
                 for coef in (10, 9, 8, 7):
@@ -402,7 +398,7 @@ def _iterative_helper(start: int, w_memo: np.ndarray, max_weight: int, weights: 
             w_memo[i, j] = temp / 16
         w_memo[i, upper_bound:] = 0
 
-memo = {}
+memo = {} # Manual memoization instead of caching _iterative_helper for numba compatability
 def iterative_artifact_percentile(slot: str, target: np.ndarray, threshold: int, lvl: int, base=None):
     if lvl < 0:
         raise ValueError('Invalid artifact level')
@@ -415,70 +411,50 @@ def iterative_artifact_percentile(slot: str, target: np.ndarray, threshold: int,
 
     num_upgrades = lvl // 4
     new_target = np.append(target, 0)
-    
-    output = 0
-    hundred_sixty_mask = np.logical_and(mains < 3, mains > -1)
-    base_diffs = (threshold - new_target[mains] * np.where(hundred_sixty_mask, 160, 80))
+    base = 0.2 if num_upgrades == 0 else 1
+
+    hundred_sixty_mask = (-1 < mains) & (mains < 3)
+    base_diffs = threshold - new_target[mains] * np.where(hundred_sixty_mask, 160, 80)
     num_useful = np.count_nonzero(subs != -1, axis=1)
     num_useless = 4 - num_useful
+    weights_all = np.sort(new_target[subs], axis=1)
     
-    for base_diff, s, p, useful, useless in zip(base_diffs, subs, probs, num_useful, num_useless):
-        weights = np.sort(new_target[s])
+    temp = np.empty(len(base_diffs))
+    for i, (base_diff, weights, useful, useless) in enumerate(zip(base_diffs, weights_all, num_useful, num_useless)):
         #weights_tuple = tuple(weights)
-        weights_tuple = np.ascontiguousarray(weights).view(np.uint8).tobytes()
+        weights_key = np.ascontiguousarray(weights).view(np.uint8).tobytes()
         max_weight = weights[-1]
         
         start = None
-        if weights_tuple not in memo:
+        if weights_key not in memo:
             # TODO: the first row of this is all zeros. Maybe fix since
             # that's wasted memory
-            super_loose_upper_bound = max(threshold + 1, (160 + 90) * max_weight) # TODO: this is so overkill but I'm too tired to think
-            memo[weights_tuple] = np.zeros((6, super_loose_upper_bound + 1)) # TODO: check if this is correct or should be expanded
+            super_loose_upper_bound = max(threshold + 1, 250 * max_weight) # TODO: this is so overkill but I'm too tired to think
+            memo[weights_key] = np.zeros((6, super_loose_upper_bound + 1)) # TODO: check if this is correct or should be expanded
             start = 0
-        elif memo[weights_tuple].shape[1] < threshold + 1:
-            w_memo = memo[weights_tuple]
+        elif memo[weights_key].shape[1] < threshold + 1:
+            w_memo = memo[weights_key]
             start = w_memo.shape[1]
             new_memo = np.zeros((6, threshold + 1))
             new_memo[:, :start] = w_memo
-            memo[weights_tuple] = new_memo
+            memo[weights_key] = new_memo
         
-        w_memo: np.ndarray = memo[weights_tuple]
+        w_memo: np.ndarray = memo[weights_key]
         
         if start is not None:
             _iterative_helper(start, w_memo, max_weight, weights)
             
-            '''
-            for i in range(w_memo.shape[0]):
-                base = 0.2 if i == 1 else 1
-                upper_bound = max_weight * 10 * i
-                for j in range(start, upper_bound):
-                    temp = 0
-                    #temp_diffs = j - (weights[:, None] * INCREMENTS).ravel()
-                    #temp = np.count_nonzero(temp_diffs < 0) * (0.2 if i == 1 else 1)
-                    #temp += np.sum(w_memo[i - 1, temp_diffs[temp_diffs >= 0]])
-                    for weight in weights:
-                        for coef in (10, 9, 8, 7):
-                            temp_diff = j - coef * weight
-                            if temp_diff < 0:
-                                temp += base # Seperate this in a different loop so you don't have to check every time
-                                continue
-                            
-                            prev = w_memo[i - 1, temp_diff]
-                            if prev == 0:
-                                break
-                            temp += prev
-                    w_memo[i, j] = temp / 16
-                w_memo[i, upper_bound:] = 0
-                    '''
-                    
-        temp = 0
         base_substat_scores = weights[useless:] @ COEFS[useful].T
         diffs = base_diff - base_substat_scores
-        temp = np.count_nonzero(diffs < 0) * (0.2 if num_upgrades == 0 else 1)
-        temp += np.sum(w_memo[num_upgrades, diffs[diffs >= 0]])
-        
-        output += p * temp / 4 ** useful
-    return output
+        row = w_memo[num_upgrades]
+        base_count = np.count_nonzero(diffs < 0)
+        recurse = np.take(row, diffs, mode='clip') # negatives become row[0]
+        temp[i] = recurse.sum() + base_count * (base - row[0])
+        # More readable equivalent
+        # neg = diffs < 0
+        # row = w_memo[num_upgrades]
+        # temp[i] = np.count_nonzero(neg) * base + np.sum(row[diffs[~neg]])
+    return np.sum(probs * temp / 4 ** num_useful)
 
 def avg(distribution, probs, targets, scores=None) -> float:
     """Find distribution's score average.
@@ -549,7 +525,7 @@ def std(distribution, probs, targets, scores=None, mean=None) -> float:
     """
     return np.sqrt(variance(distribution, probs, targets, scores, mean))
 
-def vectorize(targets: dict):
+def vectorize(targets):
     """Convert a target dictionary to a target array.
 
     Args:
@@ -559,15 +535,25 @@ def vectorize(targets: dict):
     Returns:
         NDArray: Array of stat weights.
     """
-    
-    output = np.zeros(19, dtype=np.uint32)
-    for target, value in targets.items():
-        if target == 'crit_':
-            output[8] = value
-            output[9] = value
-            continue
+    if isinstance(targets, dict):
+        output = np.zeros(19, dtype=np.uint32)
+        for key, value in targets.items():
+            if key == 'crit_':
+                output[8] = value
+                output[9] = value
+                continue
 
-        output[STAT_2_NUM[target]] = value
+            output[STAT_2_NUM[key]] = value
+    else:
+        output = np.zeros((len(targets), 19), dtype=np.uint32)
+        for i, target in enumerate(targets):
+            for key, value in target.items():
+                if key == 'crit_':
+                    output[i, 8] = value
+                    output[i, 9] = value
+                    continue
+
+                output[i, STAT_2_NUM[key]] = value
 
     return output
 
@@ -877,8 +863,9 @@ def rate(artifacts, slots, mask, slvls, sets, ranker, k=1):
     counts = np.zeros((len(artifacts), 2), dtype=int)
     for slot in range(5):
         # TODO: this won't work if there's 0 artifacts
-        slot_mask = np.logical_and(mask, slots == slot)
-        original_idxs = np.where(slot_mask)[0]
+        #slot_mask = np.logical_and(mask, slots == slot)
+        slot_mask = mask & (slots == slot)
+        slot_original_idxs = np.flatnonzero(slot_mask)
         slot_artifacts = artifacts[slot_mask]
         slot_lvls = slvls[slot_mask]
         persist = {}
@@ -890,7 +877,7 @@ def rate(artifacts, slots, mask, slvls, sets, ranker, k=1):
             if np.all(set_mask == 0):
                 continue
             #new_mask = np.logical_and(mask, sets == setKey)
-            original_idxs = np.where(slot_mask)[0][set_mask]
+            set_original_idxs = slot_original_idxs[set_mask]
             set_artifacts = slot_artifacts[set_mask]
             set_lvls = slot_lvls[set_mask]
             set_persist = {}
@@ -907,13 +894,10 @@ def rate(artifacts, slots, mask, slvls, sets, ranker, k=1):
                     set_persist[a] = b
                     #set_persist.append(None)
             #set_persist = [asdf[np.where(set_mask)[0]] for asdf in persist]
-            relevance[original_idxs, 1] = ranker(set_artifacts, set_lvls, set_persist, SET_TARGETS[SETS[setKey]][SLOTS[slot]], k=k)
-            counts[original_idxs, 1] = len(set_artifacts)
+            relevance[set_original_idxs, 1] = ranker(set_artifacts, set_lvls, set_persist, SET_TARGETS[SETS[setKey]][SLOTS[slot]], k=k)
+            counts[set_original_idxs, 1] = len(set_artifacts)
     
     return relevance, counts
-
-#def delete_rate(artifacts, slots, mask, slvls, sets):
-    
 
 def upgrade_analyze(relevance, counts, mask, slvls, num=None, threshold=None):
     scaled_relevance = np.sum(relevance * counts, axis=1)
@@ -925,14 +909,15 @@ def upgrade_analyze(relevance, counts, mask, slvls, num=None, threshold=None):
         
     return scaled_relevance >= threshold
 
-def delete_analyze(relevance, mask, num=None, threshold=None):
-    relevance = np.max(relevance, axis=1)
-    relevance[~mask] = 999999999
+def delete_analyze(relevance, counts, mask, num=None, threshold=None):
+    counts[~mask] = -1
+    scaled_relevance = np.max(relevance / counts, axis=1)
+    #relevance = np.max(relevance, axis=1)
     
     if threshold is None:
-        threshold = np.partition(relevance, num)[num]
+        threshold = np.partition(scaled_relevance[mask], num)[num]
         
-    return relevance <= threshold
+    return scaled_relevance <= threshold
 
 def estimate_resin(percentile):
     if percentile == 0:

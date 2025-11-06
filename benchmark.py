@@ -5,23 +5,24 @@ import time
 #from numba import types
 #from numba.typed import Dict
 
-CACHE_SIZE = 20000
+CACHE_SIZE = 200000
 
 class CachePercentile:
+    distros = [[trim_distro(j, i) for i in range(5)] for j in range(6)]
     def __init__(self, slot, target):
         self.slot = slot
         self.target = target
         self.target.setflags(write=False)
-        self.trim_distro = [[None for _ in range(5)] for _ in range(6)]
         mains, subs, probs = base_artifact_probs(slot)
         self.mains, self.subs, self.probs = base_artifact_useful_probs(mains, subs, probs, target)
-        #self.trim_distro = [[trim_distro(i, j) for j in range(5)] for i in range(6)]
         
     @functools.lru_cache(maxsize=CACHE_SIZE)
     def helper(self, threshold):
-        return iterative_artifact_percentile(self.slot, self.target, threshold, 20, base=(self.mains, self.subs, self.probs))
+        asdf = iterative_artifact_percentile(self.slot, self.target, threshold, 20, base=(self.mains, self.subs, self.probs))
+        return asdf
     
     def percent(self, artifact, slvl):
+        # TODO: maybe njit
         if slvl < 0:
             num_upgrades = 4
         else:
@@ -30,21 +31,17 @@ class CachePercentile:
         main = find_main(artifact)
         useful_subs = find_sub(artifact * self.target, main)
         num_useful = len(useful_subs)
-        if self.trim_distro[num_upgrades][num_useful] is None:
-            self.trim_distro[num_upgrades][num_useful] = trim_distro(num_upgrades, num_useful)
-        d, p = self.trim_distro[num_upgrades][num_useful]
+        d, p = CachePercentile.distros[num_upgrades][num_useful]
         temp = np.repeat(artifact[None, :], len(d), axis=0)
         for i, sub in enumerate(useful_subs):
             temp[:, sub] += d[:, i]
         d = temp
         
-        avg = 0
         scores = score(d, self.target).astype(int) - 1
-        for x, y in zip(scores, p):
-            if y == 0:
-                continue
-            avg += 1 / self.helper(x) * y
-        return avg
+        rarities = np.zeros(len(scores))
+        for i, x in enumerate(scores):
+            rarities[i] = self.helper(x)
+        return np.sum(p / rarities)
 
 def rank_percentile(artifacts, slvls, persist, targets, k=1):
     '''Estimate probability artifact is in top k for given targets, and
@@ -146,7 +143,7 @@ def rank_percentile(artifacts, slvls, persist, targets, k=1):
     else:
         return np.argmax(np.where(slvls[:, None] == 20, 0, percentiles)) // num_targets
 
-def simulate_delete(artifacts, slvls, targets, fun):
+def simulate_delete(slot, artifacts, slvls, targets):
     num_artifacts = len(artifacts)
     num_targets = len(targets)
     match targets:
@@ -207,10 +204,11 @@ def simulate_delete(artifacts, slvls, targets, fun):
                 qwer[t].remove(_)
     return 500
     '''
-    caches = [CachePercentile('flower', target) for target in targets]
+    caches = [CachePercentile(slot, target) for target in targets]
     percentiles = np.zeros((num_artifacts, num_targets))
     #percentiles = np.zeros((num_targets, num_artifacts))
     for i, (artifact, slvl) in enumerate(zip(artifacts, slvls)):
+        print('qwer')
         for j, target in enumerate(targets):
             percentiles[i, j] = caches[j].percent(artifact, slvl)
             
@@ -385,6 +383,58 @@ def rank_smart(artifacts, slvls, persist, targets, k=1, base_trials=500, rng=Non
     
     return value
 
+def delete_rate(artifacts, slots, mask, slvls, sets):
+    caches = {}
+    relevance = np.zeros((len(artifacts), 2), dtype=float)
+    counts = np.zeros((len(artifacts), 2), dtype=int)
+    
+    for slot in range(5):
+        slot_mask = mask & (slots == slot)
+        slot_original_idxs = np.flatnonzero(slot_mask)
+        slot_artifacts = artifacts[slot_mask]
+        slot_lvls = slvls[slot_mask]
+        
+        targets = vectorize(ALL_TARGETS[SLOTS[slot]])
+        temp = np.zeros((len(slot_artifacts), len(targets)))
+        for j, target in enumerate(targets):
+            cache_key = (slot, tuple(target))
+            if cache_key not in caches:
+                caches[cache_key] = CachePercentile(SLOTS[slot], target)
+            for i, (artifact, slvl) in enumerate(zip(slot_artifacts, slot_lvls)):
+                temp[i, j] = caches[cache_key].percent(artifact, slvl)
+                print(caches[cache_key].helper.cache_info())
+        relevance[slot_mask, 0] = np.max(temp, axis=1)
+        counts[slot_mask, 0] = len(slot_artifacts)
+        if len(slot_artifacts) == 0:
+            raise ValueError
+        
+        for setKey in range(len(SETS)):
+            set_mask = sets[slot_mask] == setKey
+            if np.all(set_mask == 0):
+                continue
+            
+            set_original_idxs = slot_original_idxs[set_mask]
+            set_artifacts = slot_artifacts[set_mask]
+            set_lvls = slot_lvls[set_mask]
+            
+            targets = vectorize(SET_TARGETS[SETS[setKey]][SLOTS[slot]])
+            temp = np.zeros((len(set_artifacts), len(targets)))
+            for j, target in enumerate(targets):
+                cache_key = (slot, tuple(target))
+                if cache_key not in caches:
+                    caches[cache_key] = CachePercentile(SLOTS[slot], target)
+                for i, (artifact, slvl) in enumerate(zip(set_artifacts, set_lvls)):
+                    temp[i, j] = caches[cache_key].percent(artifact, slvl)
+                    print(caches[cache_key].helper.cache_info())
+            relevance[set_original_idxs, 1] = np.max(temp, axis=1)
+            counts[set_original_idxs, 1] = len(set_artifacts)
+            if len(set_artifacts) == 0:
+                raise ValueError
+            
+    print(relevance[1])
+    print(counts[1])
+    return relevance, counts
+
 if __name__ == '__main__':
     '''
     NUM_SEEDS = 1
@@ -461,56 +511,41 @@ if __name__ == '__main__':
     print(end - start)
     '''
     targets = (
-        {'hp_': 6, 'hp': 2, 'crit_': 8},
-        {'hp_': 6, 'hp': 2, 'crit_': 8, 'enerRech_': 10},
-        {'hp_': 6, 'hp': 2, 'crit_': 8, 'eleMas': 7},
-        {'hp_': 6, 'hp': 2, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7},
-        {'hp_': 6, 'hp': 2, 'enerRech_': 10},
-        {'hp_': 6, 'hp': 2, 'enerRech_': 10, 'eleMas': 7},
-        {'hp_': 6, 'hp': 2, 'enerRech_': 10, 'eleMas': 16},
-
-        {'atk_': 6, 'atk': 2, 'crit_': 8},
-        {'atk_': 6, 'atk': 2, 'crit_': 8, 'enerRech_': 10},
-        {'atk_': 6, 'atk': 2, 'crit_': 8, 'eleMas': 7},
-        {'atk_': 6, 'atk': 2, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7},
-        {'atk_': 6, 'atk': 2, 'enerRech_': 10},
-        {'atk_': 6, 'atk': 2, 'enerRech_': 10, 'eleMas': 7},
-        {'atk_': 6, 'atk': 2, 'enerRech_': 10, 'eleMas': 16},
-
-        {'def_': 6, 'def': 2, 'crit_': 8},
-        {'def_': 6, 'def': 2, 'crit_': 8, 'enerRech_': 10},
-        {'def_': 6, 'def': 2, 'crit_': 8, 'eleMas': 7},
-        {'def_': 6, 'def': 2, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7},
-        {'def_': 6, 'def': 2, 'enerRech_': 10},
-        {'def_': 6, 'def': 2, 'enerRech_': 10, 'eleMas': 7},
-        {'def_': 6, 'def': 2, 'enerRech_': 10, 'eleMas': 16}
+        {'hp_': 6, 'hp': 2, 'pyro_dmg_': 8, 'crit_': 8},
+        {'hp_': 6, 'hp': 2, 'pyro_dmg_': 8, 'crit_': 8, 'enerRech_': 10},
+        {'hp_': 6, 'hp': 2, 'pyro_dmg_': 8, 'crit_': 8, 'eleMas': 7},
+        {'hp_': 6, 'hp': 2, 'pyro_dmg_': 8, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7},
+        {'hp_': 6, 'hp': 2, 'electro_dmg_': 8, 'crit_': 8},
+        {'hp_': 6, 'hp': 2, 'electro_dmg_': 8, 'crit_': 8, 'enerRech_': 10},
+        {'hp_': 6, 'hp': 2, 'electro_dmg_': 8, 'crit_': 8, 'eleMas': 7},
+        {'hp_': 6, 'hp': 2, 'electro_dmg_': 8, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7}
     )
     asdf = []
     for _ in range(10):
         artifacts = []
         slvls = []
         base = 10
-        a, s = generate('flower', size=base * 32, seed=_)
+        a, s = generate('goblet', size=base * 32, seed=_)
         artifacts.append(a)
         slvls.append(s)
         
-        a, s = generate('flower', size=base * 16, seed=_, lvls=4)
+        a, s = generate('goblet', size=base * 16, seed=_, lvls=4)
         artifacts.append(a)
         slvls.append(s)
         
-        a, s = generate('flower', size=base * 8, seed=_, lvls=8)
+        a, s = generate('goblet', size=base * 8, seed=_, lvls=8)
         artifacts.append(a)
         slvls.append(s)
         
-        a, s = generate('flower', size=base * 4, seed=_, lvls=12)
+        a, s = generate('goblet', size=base * 4, seed=_, lvls=12)
         artifacts.append(a)
         slvls.append(s)
         
-        a, s = generate('flower', size=base * 2, seed=_, lvls=16)
+        a, s = generate('goblet', size=base * 2, seed=_, lvls=16)
         artifacts.append(a)
         slvls.append(s)
         
-        a, s = generate('flower', size=base, seed=_, lvls=20)
+        a, s = generate('goblet', size=base, seed=_, lvls=20)
         artifacts.append(a)
         slvls.append(s)
         
@@ -518,7 +553,7 @@ if __name__ == '__main__':
         slvls = np.concatenate(slvls)
         
         start = time.perf_counter()
-        asdf.append(simulate_delete(artifacts, slvls, targets, None))
+        asdf.append(simulate_delete('goblet', artifacts, slvls, targets))
         #asdf.append(simulate_exp(artifacts, slvls, targets, rank_smart))
         end = time.perf_counter()
         print(end - start)
@@ -526,6 +561,8 @@ if __name__ == '__main__':
     print(np.mean(asdf))
     print(asdf)
     print(random_percentile_helper.cache_info())
+    '''
+    '''
     '''
     '''
     '''
@@ -552,8 +589,6 @@ if __name__ == '__main__':
     print_artifact(artifacts[0])
     end = time.perf_counter()
     print(end - start)
-    '''
-    '''
     0.8426271369971801
     3.0315445739979623
     3.090717732993653
@@ -562,3 +597,5 @@ if __name__ == '__main__':
     3.034152496009483
     3.4467439479922177
     '''
+    #target = vectorize({'atk_': 6, 'atk': 2, 'crit_': 8})
+    #print(iterative_artifact_percentile('flower', target, 640, lvl=20))

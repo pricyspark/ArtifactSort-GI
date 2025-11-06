@@ -1,8 +1,8 @@
 import numpy as np
 from analyze import *
 import time
-from scipy.stats import entropy
-import statistics
+#from scipy.stats import entropy
+#import statistics
 import sys
 import ast
 np.seterr(all='raise')
@@ -225,6 +225,7 @@ def rank_value(artifacts, slvls, persist, targets, k=1, base_trials=500, rng=Non
     winners = winner_prob(scores, cutoff, k)                # (N,T,U)
     p = np.mean(winners, axis=1)   # (N,U)
 
+    '''
     # Check if we need more trials using Hoeffding bound
     chosen = rival = None
     if k == 1:
@@ -241,12 +242,11 @@ def rank_value(artifacts, slvls, persist, targets, k=1, base_trials=500, rng=Non
         temp = np.partition(p, (-k-1, -k), axis=0)           # (2,U)
         rival = temp[-k-1]
         chosen = temp[-k]
-    if np.all(chosen - rival < epsilon):
+    if np.all(chosen - rival < epsilon) and num_trials < 10000:
         # TODO: add memory limit in case of infinite recursion
         persist.clear() # Inefficiently deletes current artifacts instead of appending new trials
         print('doubling trials to', num_trials * 2)
         return rank_value(artifacts, slvls, persist, targets, k, num_trials * 2, rng)
-    '''
     '''
     '''
     
@@ -1790,6 +1790,11 @@ if __name__ == '__main__':
                 print(f'{SLOTS[i]}: {slot_resin} resin, {math.ceil(slot_resin / 180)} days')
         print()
     
-    relevant = rate(artifacts, slots, rarities, slvls, sets, rank_value, k=2, num=100)
+    mask = np.zeros(len(artifact_dicts), dtype=bool)
+    for i, artifact in enumerate(artifact_dicts):
+        mask[i] = artifact['rarity'] == 5 and not artifact['astralMark']
+    
+    relevant, counts = rate(artifacts, slots, mask, slvls, sets, rank_value, k=2)
+    relevant = delete_analyze(relevant, mask, num=100)
     print('Toggle the lock on:')
-    visualize(relevant, artifact_dicts)        
+    visualize(relevant, artifact_dicts)

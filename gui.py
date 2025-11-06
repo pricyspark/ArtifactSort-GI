@@ -5,6 +5,7 @@ import re
 from artifact import *
 from analyze import *
 from rank import rank_value
+from benchmark import *
 #from rank import *
 from PySide6.QtWidgets import (QMainWindow, QApplication, QFileDialog, QLabel)
 from PySide6.QtGui import (QIcon, QPixmap, QFont) # TODO: Pretty sure this is bad practice, and should instead subclass MainWindow
@@ -113,7 +114,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         
         relevance, counts = rate(self.artifacts, self.slots, self.artifact_mask, self.slvls, self.sets, rank_value, k=2)
         self.upgrade_mask = upgrade_analyze(relevance, counts, self.artifact_mask, self.slvls, num=20)
-        self.delete_mask = delete_analyze(relevance, self.artifact_mask, num=100)
+        start = time.perf_counter()
+        relevance, counts = delete_rate(self.artifacts, self.slots, self.artifact_mask, self.slvls, self.sets)
+        end = time.perf_counter()
+        print(end - start)
+        self.delete_mask = delete_analyze(relevance, counts, self.artifact_mask, num=100)
         self.statusbar.showMessage('Done', 10000)
         self.populate_upgrade()
         self.populate_lock()
@@ -266,13 +271,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             row, col = divmod(i, NUM_COLS)
             
             button = SquareToolButton()
-            if self.upgrade_mask[i]:
+            if not self.upgrade_mask[i] or not self.artifact_mask[i]:
+                # Correctly locked
+                icon_path = f':/{artifact['slotKey']}_icons/default.webp'
+            else:
                 # Incorrectly locked
                 icon_path = f':/{artifact['slotKey']}_icons/{artifact['setKey']}.webp'
                 button.clicked.connect(lambda _, idx=i: self.click_upgrade_artifact(idx))
-            else:
-                # Correctly locked
-                icon_path = f':/{artifact['slotKey']}_icons/default.webp'
             button.setIcon(QIcon(icon_path))
             grid.addWidget(button, row, col)
     
@@ -293,13 +298,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             row, col = divmod(i, NUM_COLS)
             
             button = SquareToolButton()
-            if self.delete_mask[i] == artifact['lock']:
+            if self.delete_mask[i] != artifact['lock'] or not self.artifact_mask[i]:
+                # Correctly locked or ignore
+                icon_path = f':/{artifact['slotKey']}_icons/default.webp'
+            else:
                 # Incorrectly locked
                 icon_path = f':/{artifact['slotKey']}_icons/{artifact['setKey']}.webp'
                 button.clicked.connect(lambda _, idx=i: self.click_lock_artifact(idx))
-            else:
-                # Correctly locked
-                icon_path = f':/{artifact['slotKey']}_icons/default.webp'
             button.setIcon(QIcon(icon_path))
             grid.addWidget(button, row, col)
             

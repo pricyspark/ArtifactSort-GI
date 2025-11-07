@@ -6,3 +6,4 @@ MainWindow.py
 *.autosave
 *.TMP
 resources.py
+*.pkl

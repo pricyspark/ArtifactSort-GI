@@ -399,30 +399,31 @@ def _iterative_helper(start: int, w_memo: np.ndarray, max_weight: int, weights: 
         w_memo[i, upper_bound:] = 0
 
 memo = {} # Manual memoization instead of caching _iterative_helper for numba compatability
-def iterative_artifact_percentile(slot: str, target: np.ndarray, threshold: int, lvl: int, base=None):
+def iterative_artifact_percentile(useful_target: np.ndarray, threshold: int, lvl: int, slot=None, base=None):
     if lvl < 0:
         raise ValueError('Invalid artifact level')
         
     if base is None:
         mains, subs, probs = base_artifact_probs(slot)
-        mains, subs, probs = base_artifact_useful_probs(mains, subs, probs, target)
+        mains, subs, probs = base_artifact_useful_probs(mains, subs, probs, useful_target)
+        hundred_sixty_mask = (-1 < mains) & (mains < 3)
+        base_scores = useful_target[mains] * np.where(hundred_sixty_mask, 160, 80)
+        num_useful = np.count_nonzero(subs != -1, axis=1)
+        num_useless = 4 - num_useful
+        weights_all = np.sort(useful_target[subs], axis=1)
     else:
-        mains, subs, probs = base
+        mains, subs, probs, base_scores, num_useful, num_useless, weights_all = base
 
     num_upgrades = lvl // 4
-    new_target = np.append(target, 0)
+    #new_target = np.append(target, 0)
     base = 0.2 if num_upgrades == 0 else 1
 
-    hundred_sixty_mask = (-1 < mains) & (mains < 3)
-    base_diffs = threshold - new_target[mains] * np.where(hundred_sixty_mask, 160, 80)
-    num_useful = np.count_nonzero(subs != -1, axis=1)
-    num_useless = 4 - num_useful
-    weights_all = np.sort(new_target[subs], axis=1)
+    base_diffs = threshold - base_scores
     
     temp = np.empty(len(base_diffs))
     for i, (base_diff, weights, useful, useless) in enumerate(zip(base_diffs, weights_all, num_useful, num_useless)):
         #weights_tuple = tuple(weights)
-        weights_key = np.ascontiguousarray(weights).view(np.uint8).tobytes()
+        weights_key = np.ascontiguousarray(weights).view(np.uint16).tobytes()
         max_weight = weights[-1]
         
         start = None

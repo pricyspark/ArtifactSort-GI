@@ -70,7 +70,8 @@ window and relaunch.
    Note: Even in-game, Genshin doesn't seem to have a concrete ordering,
    and there can be variations in the order even when the inventory
    doesn't change. To guarantee order correctness, analyze immediately after
-   scanning.
+   scanning. Sorting by order obtained gives consistent ordering every
+   time, but Inventory Kamera automatically disables this.
 2. <p>Run:<br>
 
    ```sh
@@ -81,9 +82,10 @@ window and relaunch.
    the ordered scan as the main scan, and the second one as the
    additional scan. Click "calculate".
 
-4. Wait for the analysis to finish. This will take several minutes.
-   There is a progress bar in rendered on the command line. The GUI
-   window will freeze during this time, and is normal.
+4. Wait for the analysis to finish. The first time you run this, will
+   take several minutes. Subsequent calculations will be faster. There
+   is a progress bar in rendered on the command line. The GUI window
+   will freeze during this time, and is normal.
 
 5. Check results in other tabs.
 
@@ -130,8 +132,9 @@ conda env remove -n artifact_sort
 - [X] GUI
 - [X] Analysis for defining
 - [X] Analysis for reshaping
+- [X] Saving cache to disk
 - [ ] Automatic locking/unlocking
 - [ ] Packaging to .exe
-- [ ] Smarter caching and backing to disk
+- [ ] Smarter caching
 - [ ] Multiprocess/multithread (curse you GIL)
 - [ ] Improve GUI, add more customization and info

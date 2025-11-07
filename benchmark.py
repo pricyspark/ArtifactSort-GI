@@ -3,10 +3,18 @@ from rank import *
 import functools
 import time
 import sys
+import pickle
 #from numba import types
 #from numba.typed import Dict
 
 CACHE_SIZE = 200000
+CACHE_PATH = 'cache.pkl'
+
+try:
+    with open(CACHE_PATH, 'rb') as f:
+        helper_cache = pickle.load(f)
+except:
+    helper_cache = {}
 
 class CachePercentile:
     distros = [[trim_distro(j, i) for i in range(5)] for j in range(6)]
@@ -14,12 +22,39 @@ class CachePercentile:
         self.slot = slot
         self.target = target
         self.target.setflags(write=False)
+        self.useful_target = np.append(target, 0)
+        self.useful_target.setflags(write=False)
         mains, subs, probs = base_artifact_probs(slot)
-        self.mains, self.subs, self.probs = base_artifact_useful_probs(mains, subs, probs, target)
+        mains, subs, probs = base_artifact_useful_probs(mains, subs, probs, target)
+        self.mains, self.subs, self.probs = mains, subs, probs
+        hundred_sixty_mask = (-1 < mains) & (mains < 3)
+        self.base_scores = self.useful_target[mains] * np.where(hundred_sixty_mask, 160, 80)
+        self.num_useful = np.count_nonzero(subs != -1, axis=1)
+        self.num_useless = 4 - self.num_useful
+        self.weights_all = np.sort(self.useful_target[subs], axis=1)
+        self.max_threshold = 999999
         
+    # Double caching is memoory inefficient, but lru_cache is still
+    # significantly faster.
+    # TODO: make this more elegant
     @functools.lru_cache(maxsize=CACHE_SIZE)
     def helper(self, threshold):
-        asdf = iterative_artifact_percentile(self.slot, self.target, threshold, 20, base=(self.mains, self.subs, self.probs))
+        target_key = (self.slot, threshold, np.ascontiguousarray(self.target).view(np.uint16).tobytes())
+        if target_key in helper_cache:
+            return helper_cache[target_key]
+        asdf = iterative_artifact_percentile(
+            self.useful_target, 
+            threshold, 
+            20, 
+            base=(
+                self.mains, 
+                self.subs, 
+                self.probs, 
+                self.base_scores, 
+                self.num_useful, 
+                self.num_useless, 
+                self.weights_all))
+        helper_cache[target_key] = asdf
         return asdf
     
     def percent(self, artifact, slvl):
@@ -445,9 +480,29 @@ def delete_rate(artifacts, slots, mask, slvls, sets):
             
     print() # TODO: get rid of this
             
+    with open(CACHE_PATH, 'wb') as f:
+        pickle.dump(helper_cache, f)
     return relevance, counts
 
 if __name__ == '__main__':
+    filename = 'scans/genshin_export_2025-11-07_03-31.json'
+    artifact_dicts, artifacts, base_artifacts, slots, rarities, slvls, unactivated, sets = load(filename)
+    
+    artifact_mask = np.zeros(len(artifact_dicts), dtype=bool)
+    for i, artifact in enumerate(artifact_dicts):
+        artifact_mask[i] = artifact['rarity'] == 5 and not artifact['astralMark']
+    
+    check = np.load('relevance.npy')
+    start = time.perf_counter()
+    relevance, counts = delete_rate(artifacts, slots, artifact_mask, slvls, sets)
+    if not np.allclose(check, relevance):
+        raise ValueError
+    #np.save('relevance.npy', relevance)
+    delete_mask = delete_analyze(relevance, counts, artifact_mask, num=100)
+    end = time.perf_counter()
+    print(end - start)
+    #with open('cache/asdf.pkl', 'wb') as f:
+    #    pickle.dump(helper_cache, f)
     '''
     NUM_SEEDS = 1
     NUM_ITERATIONS = 2
@@ -522,6 +577,7 @@ if __name__ == '__main__':
     end = time.perf_counter()
     print(end - start)
     '''
+    '''
     targets = (
         {'hp_': 6, 'hp': 2, 'pyro_dmg_': 8, 'crit_': 8},
         {'hp_': 6, 'hp': 2, 'pyro_dmg_': 8, 'crit_': 8, 'enerRech_': 10},
@@ -573,6 +629,7 @@ if __name__ == '__main__':
     print(np.mean(asdf))
     print(asdf)
     print(random_percentile_helper.cache_info())
+    '''
     '''
     '''
     '''

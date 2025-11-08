@@ -48,6 +48,11 @@ If so, then Artifact Sort can help you!
    conda env create -f environment.yml
    conda activate artifact_sort
    ```
+3. Compile GUI elements
+   ```sh
+   pyside6-uic mainwindow.ui -o MainWindow.py
+   pyside6-rrc resources.qrc -o resources.py
+   ```
 ## Usage
 Disclaimer: This project is in active development. There are guaranteed
 to be bugs and unaccounted for edge cases. Improper usage will likely

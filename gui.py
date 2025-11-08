@@ -2,11 +2,8 @@ import sys
 import os
 import ast
 import re
+import time
 from artifact import *
-from analyze import *
-from rank import rank_value
-from benchmark import *
-#from rank import *
 from PySide6.QtWidgets import (QMainWindow, QApplication, QFileDialog, QLabel)
 from PySide6.QtGui import (QIcon, QPixmap, QFont) # TODO: Pretty sure this is bad practice, and should instead subclass MainWindow
 #from PySide6 import QtCore

@@ -1,10 +1,13 @@
 import numpy as np
-from analyze import *
 import time
 #from scipy.stats import entropy
 #import statistics
 import sys
 import ast
+from .constants import *
+from .core import *
+from .upgrades import *
+from .distributions import *
 np.seterr(all='raise')
 '''
 def calc_relevance(scores, k):
@@ -1747,54 +1750,3 @@ def rank_pairwise(artifacts, lvls, persist, targets, k=2, num_trials=1000, rng=N
     relevance = np.sum(out, axis=1)
     relevance /= np.where(lvls == 20, 1, MAX_REQ_EXP[lvls])
     return relevance
-    
-if __name__ == '__main__':
-    filename = sys.argv[1]
-    artifact_dicts, artifacts, base_artifacts, slots, rarities, slvls, unactivated, sets = load(filename)
-    
-    if len(sys.argv) > 2:
-        set_key = SET_2_NUM[sys.argv[2]]
-        # TODO: literal_eval makes me nervous, think of a more elegant solution
-        target = vectorize(ast.literal_eval(sys.argv[3]))
-        
-        try:
-            improvement = float(sys.argv[4])
-        except:
-            improvement = 0.0
-    
-        print('If farming domains:')
-        resin = set_resin(artifacts, slots, rarities, slvls, sets, set_key, target, improvement=improvement)
-        for i, slot_resin in enumerate(resin):
-            if slot_resin == math.inf:
-                print(f'{SLOTS[i]}: ∞ resin, {100 * improvement}% improvement is not possible')
-            else:
-                print(f'{SLOTS[i]}: {slot_resin} resin, {math.ceil(slot_resin / 180)} days')
-        print()
-    
-        print('If reshaping, on average saves:')
-        resin = set_reshape_resin(artifacts, base_artifacts, slots, rarities, slvls, unactivated, sets, set_key, target, improvement=improvement)
-        for i, (slot_resin, artifact_idx) in enumerate(resin):
-            if slot_resin == math.inf:
-                print(f'{SLOTS[i]}: ∞ resin, {100 * improvement}% improvement is not possible')
-            else:
-                print(f'{SLOTS[i]}: {slot_resin} resin, {math.ceil(slot_resin / 180)} days')
-            print_artifact_dict(artifact_dicts[artifact_idx])
-        print()
-        
-        print('If defining a new artifact, on average saves:')
-        resin = set_define_resin(artifacts, slots, rarities, slvls, sets, set_key, target, improvement=improvement)
-        for i, slot_resin in enumerate(resin):
-            if slot_resin == math.inf:
-                print(f'{SLOTS[i]}: ∞ resin, {100 * improvement}% improvement is not possible')
-            else:
-                print(f'{SLOTS[i]}: {slot_resin} resin, {math.ceil(slot_resin / 180)} days')
-        print()
-    
-    mask = np.zeros(len(artifact_dicts), dtype=bool)
-    for i, artifact in enumerate(artifact_dicts):
-        mask[i] = artifact['rarity'] == 5 and not artifact['astralMark']
-    
-    relevant, counts = rate(artifacts, slots, mask, slvls, sets, rank_value, k=2)
-    relevant = delete_analyze(relevant, mask, num=100)
-    print('Toggle the lock on:')
-    visualize(relevant, artifact_dicts)

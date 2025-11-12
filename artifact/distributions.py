@@ -1,9 +1,8 @@
 import numpy as np
-from .constants import *
-from .core import *
+from numpy.typing import NDArray
+from .constants import ARTIFACT_DTYPE, INCREMENTS
 
-def distro(N):
-    increments = np.array([7, 8, 9, 10])
+def distro(N: int) -> tuple[NDArray[ARTIFACT_DTYPE], NDArray]:
     n_vars = 4
 
     # initialize dictionary with starting state
@@ -11,11 +10,10 @@ def distro(N):
 
     # precompute all variable + increment combinations
     var_choices = np.arange(n_vars)
-    inc_choices = increments
-    choices = [(v, inc) for v in var_choices for inc in inc_choices]
+    choices = [(v, inc) for v in var_choices for inc in INCREMENTS]
 
     for _ in range(N):
-        new_dist = {}
+        new_dist = {} # TODO: should I type-hint this?
         for state, prob in dist.items():
             for v, inc in choices:
                 new_state = list(state)
@@ -26,12 +24,12 @@ def distro(N):
         dist = new_dist
 
     # convert to structured numpy arrays for clarity
-    states = np.array(list(dist.keys()), dtype=np.uint8)
+    states = np.array(list(dist.keys()), dtype=ARTIFACT_DTYPE)
     probs = np.array(list(dist.values()))
 
     return states, probs
 
-def trim_distro(N, X):
+def trim_distro(N: int, X: int) -> tuple[NDArray[ARTIFACT_DTYPE], NDArray]:
     # possible increments
     increments = np.array([7, 8, 9, 10])
     N_VARS = min(X, 4)
@@ -44,7 +42,7 @@ def trim_distro(N, X):
     P_VAR = 1 / N_TOTAL
 
     for _ in range(N):
-        new_dist = {}
+        new_dist = {} # TODO: should I type-hint this?
         for state, prob in dist.items():
             # case 1: nothing happens
             if P_NONE > 0:
@@ -59,11 +57,12 @@ def trim_distro(N, X):
                     new_dist[new_state] = new_dist.get(new_state, 0.0) + new_prob
         dist = new_dist
 
-    states = np.array(list(dist.keys()), dtype=np.uint8)
+    states = np.array(list(dist.keys()), dtype=ARTIFACT_DTYPE)
     probs = np.array(list(dist.values()))
     return states, probs
 
 def single_distro(artifacts):
+    raise NotImplementedError
     if artifacts.ndim == 1:
         # Rename to "artifact" to make things less confusing
         artifact = artifacts

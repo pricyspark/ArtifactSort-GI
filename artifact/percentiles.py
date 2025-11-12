@@ -1,12 +1,23 @@
 import numpy as np
 import math
+from numpy.typing import NDArray
+from collections.abc import Collection
+from typing import cast
 from functools import lru_cache
-from .constants import *
-from .probs import *
-from .core import *
+from itertools import product
+from .constants import CACHE_SIZE, ARTIFACT_DTYPE, TARGET_DTYPE
+from .probs import base_artifact_probs, base_artifact_useful_probs, base_define_probs
+from .core import score, find_sub
+#from .core import *
+
+COEFS = [np.array(list(product((7, 8, 9, 10), repeat=k)), dtype=ARTIFACT_DTYPE) for k in range(5)]
 
 @lru_cache(maxsize=CACHE_SIZE)
-def fixed_percentile_helper(diff, num_upgrades, weights):
+def fixed_percentile_helper(
+    diff: int, 
+    num_upgrades: int, 
+    weights: tuple[int]
+) -> float:
     if diff < 0:
         return 1
     
@@ -28,7 +39,11 @@ def fixed_percentile_helper(diff, num_upgrades, weights):
     return output / 16
 
 @lru_cache(maxsize=CACHE_SIZE)
-def random_percentile_helper(diff, num_upgrades, weights):
+def random_percentile_helper(
+    diff: int, 
+    num_upgrades: int, 
+    weights: tuple[int]
+) -> float:
     if diff < 0:
         return 0.2 if num_upgrades == 0 else 1
     
@@ -49,8 +64,12 @@ def random_percentile_helper(diff, num_upgrades, weights):
 
     return output / 16
 
-COEFS = [np.array(list(product((7, 8, 9, 10), repeat=k)), dtype=int) for k in range(5)]
-def artifact_percentile(slot: str, target: np.ndarray, threshold: int | float, lvl: int):
+def artifact_percentile(
+    slot: str, 
+    target: NDArray[TARGET_DTYPE], 
+    threshold: int, 
+    lvl: int
+) -> float:
     if lvl < 0:
         raise ValueError('Invalid artifact level')
     
@@ -78,7 +97,12 @@ def artifact_percentile(slot: str, target: np.ndarray, threshold: int | float, l
     return output
 
 #@njit
-def _iterative_helper(start: int, w_memo: np.ndarray, max_weight: int, weights: np.ndarray):
+def _iterative_helper(
+    start: int, 
+    w_memo: NDArray[TARGET_DTYPE], 
+    max_weight: int, 
+    weights: NDArray[TARGET_DTYPE]
+) -> None:
     for i in range(w_memo.shape[0]):
         base = 0.2 if i == 1 else 1
         upper_bound = max_weight * 10 * i
@@ -105,11 +129,18 @@ def _iterative_helper(start: int, w_memo: np.ndarray, max_weight: int, weights: 
         w_memo[i, upper_bound:] = 0
 
 memo = {} # Manual memoization instead of caching _iterative_helper for numba compatability
-def iterative_artifact_percentile(useful_target: np.ndarray, threshold: int, lvl: int, slot=None, base=None):
+def iterative_artifact_percentile(
+    useful_target: NDArray[TARGET_DTYPE], 
+    threshold: int, 
+    lvl: int, 
+    slot: str | None = None, 
+    info: Collection | None = None
+) -> float:
     if lvl < 0:
         raise ValueError('Invalid artifact level')
         
-    if base is None:
+    if info is None:
+        assert isinstance(slot, str)
         mains, subs, probs = base_artifact_probs(slot)
         mains, subs, probs = base_artifact_useful_probs(mains, subs, probs, useful_target)
         hundred_sixty_mask = (-1 < mains) & (mains < 3)
@@ -118,7 +149,7 @@ def iterative_artifact_percentile(useful_target: np.ndarray, threshold: int, lvl
         num_useless = 4 - num_useful
         weights_all = np.sort(useful_target[subs], axis=1)
     else:
-        mains, subs, probs, base_scores, num_useful, num_useless, weights_all = base
+        mains, subs, probs, base_scores, num_useful, num_useless, weights_all = info
 
     num_upgrades = lvl // 4
     #new_target = np.append(target, 0)
@@ -163,11 +194,17 @@ def iterative_artifact_percentile(useful_target: np.ndarray, threshold: int, lvl
         # temp[i] = np.count_nonzero(neg) * base + np.sum(row[diffs[~neg]])
     return np.sum(probs * temp / 4 ** num_useful)
 
-def upgrade_percentile(artifact, slvl, target, threshold, base_score=None):
+def upgrade_percentile(
+    artifact: NDArray[ARTIFACT_DTYPE], 
+    slvl: int, 
+    target: NDArray[TARGET_DTYPE], 
+    threshold: int, 
+    base_score: int | None = None
+) -> float:
     num_upgrades = 4 if slvl < 0 else 5 - slvl // 4
     
     if base_score is None:
-        base_score = score(artifact, target)
+        base_score = cast(int, score(artifact, target))
     base_diff = threshold - base_score
     
     subs = find_sub(artifact)
@@ -176,11 +213,15 @@ def upgrade_percentile(artifact, slvl, target, threshold, base_score=None):
     
     return fixed_percentile_helper(base_diff, num_upgrades, weights_tuple)
 
-def define_percentile(slot, target, threshold):
+def define_percentile(
+    slot: str, 
+    target: NDArray[TARGET_DTYPE], 
+    threshold: int
+) -> float:
     @lru_cache(maxsize=CACHE_SIZE)
-    def _define_helper(diff, num_good, num_upgrades):
+    def _define_helper(diff: int, num_good: int, num_upgrades: int) -> float:
         if num_good + num_upgrades < MINIMUM:
-            return None
+            return -1
         
         if diff < 0 and num_good >= MINIMUM:
             return 0.2 if num_upgrades == 0 else 1 # TODO: fine out if this should be 1/3
@@ -196,9 +237,9 @@ def define_percentile(slot, target, threshold):
         for sub in s:
             temp_num_good = num_good + 1 if sub in best_subs else num_good
             for coef in (10, 9, 8, 7):
-                temp_diff = diff - coef * new_target[sub]
+                temp_diff = diff - cast(int, coef * new_target[sub])
                 temp_prob = _define_helper(temp_diff, temp_num_good, num_upgrades - 1)
-                if temp_prob is None:
+                if temp_prob == -1:
                     break
                 
                 output += temp_prob
@@ -222,34 +263,37 @@ def define_percentile(slot, target, threshold):
     mains, subs, probs = base_define_probs(slot, target)
     mains, subs, probs = base_artifact_useful_probs(mains, subs, probs, target)
     
-    new_target = np.append(target, 0)
+    new_target = np.append(target, 0).astype(TARGET_DTYPE)
     
     best_subs = subs[0, [np.argpartition(new_target[subs[0]], -2)[-2:]]]
     
     output = 0
     for m, s, p in zip(mains, subs, probs):
-        diff = threshold - new_target[m] * (160 if m < 3 else 80)
-        num_useful = np.count_nonzero(s != -1)
+        diff = threshold - cast(int, new_target[m]) * (160 if m < 3 else 80)
+        num_useful = int(np.count_nonzero(s != -1)) # TODO: is this kind of casting the best option
         num_useless = 4 - num_useful
         max_weight = np.max(new_target[s])
-        for coefs in product((7, 8, 9, 10), repeat=num_useful):
+        for coefs in COEFS[num_useful]:
             coefs = [0] * num_useless + list(coefs)
-            temp_diff = diff
-            for sub, coef in zip(s, coefs):
-                temp_diff -= coef * new_target[sub]
-
+            temp_diff = diff - cast(int, coefs @ new_target[s])
             output += p * _define_helper(temp_diff, 0, 5) / 4 ** num_useful
             
         _define_helper.cache_clear()
         
     return output / prob_valid
 
-def reshape_percentile(base, target, threshold, unactivated, minimum=2):
+def reshape_percentile(
+    base: NDArray[ARTIFACT_DTYPE],
+    target: NDArray[TARGET_DTYPE], 
+    threshold: int, 
+    unactivated: bool, 
+    minimum: int = 2
+) -> float:
     # TODO: This is copy-pasted from define. Find a more elegant solution
     @lru_cache(maxsize=CACHE_SIZE)
-    def _reshape_helper(diff, num_good, num_upgrades):
+    def _reshape_helper(diff: int, num_good: int, num_upgrades: int) -> float:
         if num_good + num_upgrades < minimum:
-            return None
+            return -1
         
         if diff < 0 and num_good >= minimum:
             return 1
@@ -265,9 +309,9 @@ def reshape_percentile(base, target, threshold, unactivated, minimum=2):
         for sub in subs:
             temp_num_good = num_good + 1 if sub in best_subs else num_good
             for coef in (10, 9, 8, 7):
-                temp_diff = diff - coef * target[sub]
+                temp_diff = cast(int, diff - coef * target[sub])
                 temp_prob = _reshape_helper(temp_diff, temp_num_good, num_upgrades - 1)
-                if temp_prob is None:
+                if temp_prob == -1:
                     break
                 
                 output += temp_prob
@@ -288,17 +332,16 @@ def reshape_percentile(base, target, threshold, unactivated, minimum=2):
             temp += math.comb(5, i)
         prob_valid += temp / 2 ** 5
     
-    base_score = score(base, target)
+    base_score = cast(int, score(base, target))
     
-    main = find_main(base)
-    subs = find_sub(base, main)
+    subs = find_sub(base)
     
     best_subs = np.argpartition(target[subs], -2)
     best_subs = subs[best_subs[-2:]]
     max_weight = np.max(target[subs])
     
     num_upgrades = 4 if unactivated else 5
-    diff = (threshold - base_score).astype(int)
+    diff = threshold - base_score
     
     output = _reshape_helper(diff, 0, num_upgrades)
     _reshape_helper.cache_clear()

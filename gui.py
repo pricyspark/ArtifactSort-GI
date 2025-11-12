@@ -31,19 +31,19 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         
         self.statusbar.showMessage('Awaiting scan')
         
-        self.mainScan = None
-        self.extraScans = None
-        self.artifact_dicts = None
-        self.artifacts = None
-        self.base_artifacts = None
-        self.slots = None
-        self.rarities = None
-        self.slvls = None
-        self.unactivated = None
-        self.sets = None
-        self.set_key = None
-        self.target = None
-        self.relevant = None
+        self.mainScan: str | None = None
+        self.extraScans: str | None = None
+        self.artifact_dicts: dict | None = None
+        self.artifacts: NDArray[ARTIFACT_DTYPE] | None = None
+        self.base_artifacts: NDArray[ARTIFACT_DTYPE] | None = None
+        self.slots: NDArray[np.uint8] | None = None
+        self.rarities: NDArray[np.uint8] | None = None
+        self.slvls: NDArray[SLVL_DTYPE] | None = None
+        self.unactivated: NDArray[np.bool] | None = None
+        self.sets: NDArray[np.unsignedinteger] | None = None
+        self.set_key: int | None = None
+        self.target: NDArray[TARGET_DTYPE] | None = None
+        self.relevant: NDArray[np.bool] | None = None
         
         self.mainTooltip.setPixmap(QPixmap(':/menu/icons/info.svg'))
         self.mainTooltip.setScaledContents(True)
@@ -107,12 +107,19 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         
         self.artifact_mask = np.zeros(len(self.artifact_dicts), dtype=bool)
         for i, artifact in enumerate(self.artifact_dicts):
-            self.artifact_mask[i] = artifact['rarity'] == 5 and not artifact['astralMark']
+            if 'astralMark' in artifact:
+                self.artifact_mask[i] = artifact['rarity'] == 5 and not artifact['astralMark']
+            else:
+                # TODO: warn no astral mark. Say which scanner didn't.
+                self.artifact_mask[i] = artifact['rarity'] == 5
         
         relevance, counts = rate(self.artifacts, self.slots, self.artifact_mask, self.slvls, self.sets, rank_value, k=2)
         self.upgrade_mask = upgrade_analyze(relevance, counts, self.artifact_mask, self.slvls, num=20)
+        start = time.perf_counter()
         relevance, counts = delete_rate(self.artifacts, self.slots, self.artifact_mask, self.slvls, self.sets)
         self.delete_mask = delete_analyze(relevance, counts, self.artifact_mask, num=100)
+        end = time.perf_counter()
+        print(end - start)
         self.statusbar.showMessage('Done', 10000)
         self.populate_upgrade()
         self.populate_lock()
@@ -122,33 +129,38 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.statusbar.showMessage('Process a scan first', 10000)
             return
         
+        assert self.artifact_dicts is not None
+        
         raw_set = self.setCombo.currentText()
         if raw_set == 'Set':
             self.statusbar.showMessage('Choose a set first', 10000)
             return
         
-        self.set_key = raw_set.replace('-', ' ')
-        self.set_key = re.sub(r'[^A-Za-z\s]', '', self.set_key)
-        self.set_key = self.set_key.title()
-        self.set_key = self.set_key.replace(' ', '')
-        self.set_key = SET_2_NUM[self.set_key]
+        set_key = raw_set.replace('-', ' ')
+        set_key = re.sub(r'[^A-Za-z\s]', '', set_key)
+        set_key = set_key.title()
+        set_key = set_key.replace(' ', '')
+        self.set_key = SET_2_NUM[set_key]
         
         # TODO: literal_eval makes me nervous, think of a more elegant
         # solution
         try:
             self.target = vectorize(ast.literal_eval(self.targetLine.text()))
+            # TODO: make sure input weight is a natural number and they
+            # sum to <=400. This makes sure score fits in uint16. Maybe
+            # use uint32 and the range becomes <=26000000
         except:
             self.statusbar.showMessage('Improperly formatted optimization target', 10000)
             return
         
         resin_params = (
-            self.artifacts,
-            self.slots,
-            self.rarities,
-            self.slvls,
-            self.sets,
+            cast(np.ndarray, self.artifacts),
+            cast(np.ndarray, self.slots),
+            cast(np.ndarray, self.rarities),
+            cast(np.ndarray, self.slvls),
+            cast(np.ndarray, self.sets),
             self.set_key,
-            self.target
+            cast(np.ndarray, self.target)
         )
         
         resin_0 = set_resin(*resin_params, improvement=0.0)
@@ -251,7 +263,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def populate_upgrade(self):
         grid = self.upgradeGrid
         while grid.count():
-            w = grid.itemAt(0).widget()
+            first = grid.itemAt(0)
+            assert first is not None # Not sure if this is the right way to shut up the type checker
+            w = first.widget()
             if w:
                 grid.removeWidget(w)
                 w.deleteLater()
@@ -278,7 +292,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def populate_lock(self):
         grid = self.lockGrid
         while grid.count():
-            w = grid.itemAt(0).widget()
+            first = grid.itemAt(0)
+            assert first is not None # Not sure if this is the right way to shut up the type checker
+            w = first.widget()
             if w:
                 grid.removeWidget(w)
                 w.deleteLater()
@@ -303,6 +319,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             grid.addWidget(button, row, col)
             
     def click_upgrade_artifact(self, idx):
+        assert self.artifact_dicts is not None
         artifact = self.artifact_dicts[idx]
         self.upgradeArtifactImage.setPixmap(QPixmap(f':/{artifact['slotKey']}_icons/{artifact['setKey']}.webp'))
         self.upgradeArtifactMain.setText(artifact['mainStatKey'])
@@ -333,6 +350,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.upgradeStar.setFixedSize(35, 35)
     
     def click_lock_artifact(self, idx):
+        assert self.artifact_dicts is not None
         artifact = self.artifact_dicts[idx]
         self.lockArtifactImage.setPixmap(QPixmap(f':/{artifact['slotKey']}_icons/{artifact['setKey']}.webp'))
         self.lockArtifactMain.setText(artifact['mainStatKey'])
@@ -358,7 +376,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.lockLock.setScaledContents(True)
         self.lockLock.setFixedSize(35, 35)
         if artifact['astralMark']:
-            raise ValueError
+            raise ValueError('This should not be possible. Starred artifacts should be ignored')
             self.lockStar.setPixmap(QPixmap(':/menu/icons/star.svg'))
         else:
             self.lockStar.setPixmap(QPixmap(':/menu/icons/unstar.svg'))

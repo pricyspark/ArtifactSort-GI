@@ -4,6 +4,7 @@ import time
 #import statistics
 import sys
 import ast
+from typing import Any, cast
 from .constants import *
 from .core import *
 from .upgrades import *
@@ -64,33 +65,6 @@ def winner_prob(scores, cutoff, k):
     points_eq = eq * frac_per_tie[None, ...]    # (N,T,U)
     return above + points_eq                    # (N,T,U)
 
-def new_estimate_exp(probs, slvls):
-    exp_max = MAX_REQ_EXP[slvls]
-    exp_learn = LEARN_REQ_EXP[slvls]
-    
-    scores = probs.sum(axis=1) / np.maximum(1.0, exp_max)
-    order  = np.argsort(scores)[::-1]
-
-    total = 0.0
-    taken = np.zeros(probs.shape[1], dtype=float)  # == (1 - remaining_prob)
-    coef = 1.0
-    #print('start')
-    for idx in order:
-        prob_here = 1.0 - np.prod(taken)
-        #print(taken)
-        #print(prob_here)
-        if prob_here < 0.001:
-            break
-        
-        prob_learn = np.prod(1 - probs[idx])
-        prob_max = 1 - prob_learn
-        total += prob_here * (prob_max * exp_max[idx] + prob_learn * exp_learn[idx])
-        taken += coef * probs[idx]  # in-place
-        coef *= 1.1
-        taken = np.minimum(taken, 1)
-    #print('end')
-    return total
-
 def estimate_exp(probs, exp):
     # rank once; scores don't change in the loop
     scores = probs.sum(axis=1) / np.maximum(1.0, exp)
@@ -139,7 +113,16 @@ def estimate_exp(probs, exp):
     '''
     return total
 
-def rank_value(artifacts, slvls, persist, targets, k=1, base_trials=500, rng=None, seed=None):
+def rank_value(
+    artifacts: NDArray[ARTIFACT_DTYPE], 
+    slvls: NDArray[SLVL_DTYPE], 
+    persist: dict, 
+    targets: NDArray[TARGET_DTYPE], 
+    k: int = 1, 
+    base_trials: int = 500, 
+    rng: Generator | None = None, 
+    seed: Any = None
+) -> NDArray:
     '''Estimate probability artifact is in top k for given targets, and
     sort based on p/(cost to max). If artifacts upgraded straight to
     max, this would be optimal. 
@@ -180,16 +163,12 @@ def rank_value(artifacts, slvls, persist, targets, k=1, base_trials=500, rng=Non
         persist['maxed'] = maxed
         persist['targets'] = None
         
-        # Hoeffding bound for 99% confidence
-        #print(num_artifacts)
-        persist['epsilon'] = np.sqrt(2 * np.log((num_artifacts - 1) / 0.01) / base_trials)
-        
     num_trials = persist['maxed'].shape[1]
     
     # Score artifacts if needed
-    if not np.array_equal(persist['targets'], targets):
+    if not np.array_equal(cast(np.ndarray, persist['targets']), targets):
         persist['targets'] = targets
-        persist['scores'] = score(persist['maxed'], targets.T)
+        persist['scores'] = cast(np.ndarray, score(persist['maxed'], targets.T))
 
     # Update changed artifacts
     if len(persist['changed']) != 0:
@@ -199,7 +178,7 @@ def rank_value(artifacts, slvls, persist, targets, k=1, base_trials=500, rng=Non
         except:
             changed = [changed]
         for idx in changed:
-            persist['maxed'][idx], _ = sample_upgrade(artifacts[idx], num_trials, slvl=slvls[idx], rng=rng)
+            persist['maxed'][idx], _ = sample_upgrade(artifacts[idx], num_trials, slvl=cast(int, slvls[idx]), rng=rng)
             persist['scores'][idx] = score(persist['maxed'][idx], targets.T)
             
         persist['changed'] = []
@@ -216,7 +195,7 @@ def rank_value(artifacts, slvls, persist, targets, k=1, base_trials=500, rng=Non
     # START COMPUTATION
     # ------------------------------------------------------------------
 
-    scores, epsilon = persist['scores'], persist['epsilon']
+    scores = persist['scores']
     
     # Calculate winning score cutoffs
     if k == 1:
@@ -228,44 +207,6 @@ def rank_value(artifacts, slvls, persist, targets, k=1, base_trials=500, rng=Non
     winners = winner_prob(scores, cutoff, k)                # (N,T,U)
     p = np.mean(winners, axis=1)   # (N,U)
 
-    '''
-    # Check if we need more trials using Hoeffding bound
-    chosen = rival = None
-    if k == 1:
-        #temp = np.argpartition(p, (-3, -2, -1), axis=0)    # (N,U)
-        asdf, rival, chosen = np.argpartition(p, (-3, -2, -1), axis=0)[-3:]           # (2,U)
-        if np.all(slvls[chosen] == 20):
-            print('max')
-            chosen = p[rival]
-            rival = p[asdf]       
-        else:
-            chosen = p[chosen]
-            rival = p[rival]         
-    else:
-        temp = np.partition(p, (-k-1, -k), axis=0)           # (2,U)
-        rival = temp[-k-1]
-        chosen = temp[-k]
-    if np.all(chosen - rival < epsilon) and num_trials < 10000:
-        # TODO: add memory limit in case of infinite recursion
-        persist.clear() # Inefficiently deletes current artifacts instead of appending new trials
-        print('doubling trials to', num_trials * 2)
-        return rank_value(artifacts, slvls, persist, targets, k, num_trials * 2, rng)
-    '''
-    '''
-    
-    if np.all(slvls[chosen] == 20):
-        print('All chosen are maxed')
-        print('chosen:', p[chosen[0]])
-        print('rival:', p[rival])
-    
-    if np.all(p[chosen[0]] - p[rival] < epsilon):
-        # TODO: add memory limit in case of infinite recursion
-        persist.clear() # Inefficiently deletes current artifacts instead of appending new trials
-        print('doubling trials to', num_trials * 2)
-        return rank_value(artifacts, slvls, persist, targets, k, num_trials * 2, rng)
-    '''
-    
-    # Enough trials, continue
     #total_p = p.sum(axis=1)   # (N,)
     total_p = 1 - np.prod(1 - p, axis=1) # (N,)
     

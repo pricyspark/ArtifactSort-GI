@@ -1,89 +1,97 @@
 import numpy as np
 import json
 import math
-from .constants import *
+from numpy.typing import NDArray
+from typing import Any, cast
+from typing import IO
+from collections.abc import Collection, Sequence
+from .constants import ARTIFACT_DTYPE, SLOT_2_NUM, SET_2_NUM, STAT_2_NUM, SUB_VALUES, STATS, SLOTS, SETS, SLVL_DTYPE
+from .upgrades import estimate_upgrades
 
-def artifact_to_dict(artifacts):
-    pass
+# TODO: maybe create a special GOOD_artifact TypedDict, but this isn't
+# necessary. It's just to make the code more clear
 
-def dict_to_artifact(dicts):
-    # TODO: add error checking for scans that don't store base
-    if type(dicts) == dict:
-        artifact = np.zeros(19, dtype=np.uint8)
-        base_artifact = np.zeros(19, dtype=np.uint8)
-        
-        slot: int = SLOT_2_NUM[dicts['slotKey']]
-        rarity: int = dicts['rarity']
-        slvl: int = int(dicts['level'])
-        setKey: int = SET_2_NUM[dicts['setKey']]
-        main: int = STAT_2_NUM[dicts['mainStatKey']]
-        if main < 3:
-            artifact[main] = 160
-            base_artifact[main] = 160
-        else:
-            artifact[main] = 80
-            base_artifact[main] = 80
-            
-        for substat in dicts['substats']:
-            stat = STAT_2_NUM[substat['key']]
-            value = substat['value']
-            coef = round(value / SUB_VALUES[stat] * 10)
-            artifact[stat] = coef
-            
-            init_value = substat['initialValue']
-            init_coef = round(init_value / SUB_VALUES[stat] * 10)
-            base_artifact[stat] = init_coef
-        
-        for substat in dicts['unactivatedSubstats']:
-            stat = STAT_2_NUM[substat['key']]
-            value = substat['value']
-            coef = round(value / SUB_VALUES[stat] * 10)
-            artifact[stat] = coef
-            
-            init_value = substat['initialValue']
-            init_coef = round(init_value / SUB_VALUES[stat] * 10)
-            base_artifact[stat] = init_coef
-            
-            slvl -= 4
-        
-        unactivated = dicts['totalRolls'] == 8
-        
-        return artifact, base_artifact, slot, rarity, slvl, unactivated, setKey
-        
+# TODO: make a dataclass or something because the outputs are so long
+
+def artifact_to_dict(artifacts: NDArray[ARTIFACT_DTYPE]) -> dict[str, Any]:
+    raise NotImplementedError
+    return {}
+
+def dict_to_artifact(
+    d: dict[str, Any]
+) -> tuple[NDArray[ARTIFACT_DTYPE], NDArray[ARTIFACT_DTYPE], int, int, int, bool, int]:
+    artifact = np.zeros(19, dtype=ARTIFACT_DTYPE)
+    base_artifact = np.zeros(19, dtype=np.uint8)
+    slot = SLOT_2_NUM[d['slotKey']]
+    rarity = d['rarity']
+    slvl = d['level']
+    setKey = SET_2_NUM[d['setKey']]
+    main = STAT_2_NUM[d['mainStatKey']]
+    if main < 3:
+        artifact[main] = 160
+        base_artifact[main] = 160
     else:
-        temp_artifacts = []
-        temp_base_artifacts = []
-        temp_slots = []
-        temp_rarities = []
-        temp_slvls = []
-        temp_unactivated = []
-        temp_sets = []
+        artifact[main] = 80
+        base_artifact[main] = 80
         
-        #artifacts = np.zeros((len(dicts), 19), dtype=np.uint8)
-        #slots = np.zeros(len(dicts), dtype=np.uint8)
-        #lvls = np.zeros(len(dicts), dtype=np.uint8)
-        #sets = np.zeros(len(dicts), dtype=int)
-        for dictionary in dicts:
-            artifact, base_artifact, slot, rarity, slvl, unactivated, setKey = dict_to_artifact(dictionary)
-            temp_artifacts.append(artifact)
-            temp_base_artifacts.append(base_artifact)
-            temp_slots.append(slot)
-            temp_rarities.append(rarity)
-            temp_slvls.append(slvl)
-            temp_unactivated.append(unactivated)
-            temp_sets.append(setKey)
+    estimate_num_upgrades: list[int | float] = []
+    for substat in d['substats']:
+        stat = STAT_2_NUM[substat['key']]
+        value = substat['value']
+        coef = round(value / SUB_VALUES[stat] * 10)
+        artifact[stat] = coef
+        
+        if 'initialValue' in substat:
+            init_value = substat['initialValue']
+            init_coef = round(init_value / SUB_VALUES[stat] * 10)
+            base_artifact[stat] = init_coef
+        else:
+            estimate_num_upgrades.append(estimate_upgrades(coef))
+    
+    for substat in d['unactivatedSubstats']:
+        stat = STAT_2_NUM[substat['key']]
+        value = substat['value']
+        coef = round(value / SUB_VALUES[stat] * 10)
+        artifact[stat] = coef
+        base_artifact[stat] = coef
+        
+        slvl -= 4
+    
+    if estimate_num_upgrades:
+        # Assign base_artifact afterwards because there's a chance it
+        # estimates < 8 total substats, which is impossible.
+        guess = sum(estimate_num_upgrades) + len(d['unactivatedSubstats'])
+        for substat, n in zip(d['substats'], estimate_num_upgrades):
+            stat = STAT_2_NUM[substat['key']]
+            value = substat['value']
+            coef = round(value / SUB_VALUES[stat] * 10)
+            base_artifact[stat] = round(coef / (math.ceil(n) if guess < 8 else n))
             
-        artifacts = np.array(temp_artifacts, dtype=np.uint8)
-        base_artifacts = np.array(temp_base_artifacts, dtype=np.uint8)
-        slots = np.array(temp_slots, dtype=np.uint8)
-        rarities = np.array(temp_rarities, dtype=np.uint8)
-        slvls = np.array(temp_slvls, dtype=np.int8)
-        unactivated = np.array(temp_unactivated, dtype=bool)
-        sets = np.array(temp_sets, dtype=np.uint8)
-        
-        return artifacts, base_artifacts, slots, rarities, slvls, unactivated, sets
+        unactivated = max(8, round(guess)) == 8
+    else:
+        unactivated = d['totalRolls'] == 8 # This is only used for max artifacts, so for now this is enough
+    
+    return artifact, base_artifact, slot, rarity, slvl, unactivated, setKey
 
-def load(filename):
+def dicts_to_artifacts(
+    dicts: Collection[dict[str, Any]]
+) -> tuple[NDArray[ARTIFACT_DTYPE], NDArray[ARTIFACT_DTYPE], NDArray[np.uint8], NDArray[np.uint8], NDArray[SLVL_DTYPE], NDArray[np.bool], NDArray[np.unsignedinteger]]:
+    num_dicts = len(dicts)
+    artifacts = np.zeros((num_dicts, 19), dtype=ARTIFACT_DTYPE)
+    base_artifacts = np.zeros((num_dicts, 19), dtype=ARTIFACT_DTYPE)
+    slots = np.zeros(num_dicts, dtype=np.uint8)
+    rarities = np.zeros(num_dicts, dtype=np.uint8)
+    slvls = np.zeros(num_dicts, dtype=SLVL_DTYPE)
+    unactivated = np.zeros(num_dicts, dtype=np.bool)
+    sets = np.zeros(num_dicts, dtype=np.uint16)
+    
+    for i, d in enumerate(dicts):
+        artifacts[i], base_artifacts[i], slots[i], rarities[i], slvls[i], unactivated[i], sets[i] = dict_to_artifact(d)
+    return artifacts, base_artifacts, slots, rarities, slvls, unactivated, sets
+
+def load(
+    filename: str
+) -> tuple[dict, NDArray[ARTIFACT_DTYPE], NDArray[ARTIFACT_DTYPE], NDArray[np.uint8], NDArray[np.uint8], NDArray[SLVL_DTYPE], NDArray[np.bool], NDArray[np.unsignedinteger]]:
     with open(filename) as f:
         data = json.load(f)
     
@@ -91,9 +99,9 @@ def load(filename):
         raise ValueError('Only GOODv3 is supported.')
     
     artifact_dict = data['artifacts']
-    return artifact_dict, *dict_to_artifact(artifact_dict)
+    return artifact_dict, *dicts_to_artifacts(artifact_dict)
 
-def _artifact_eq(a1, a2):
+def _artifact_eq(a1: dict[str, Any], a2: dict[str, Any]) -> bool:
     if (a1['setKey']        != a2['setKey'] or
         a1['slotKey']       != a2['slotKey'] or 
         a1['level']         != a2['level'] or
@@ -110,10 +118,14 @@ def _artifact_eq(a1, a2):
         
     return True
 
-def merge_scans(f1, f2, outfile=None):
+def merge_scans(
+    f1: str, 
+    f2: str, 
+    outfile: IO | None = None
+) -> tuple[dict, NDArray[ARTIFACT_DTYPE], NDArray[ARTIFACT_DTYPE], NDArray[np.uint8], NDArray[np.uint8], NDArray[SLVL_DTYPE], NDArray[np.bool], NDArray[np.unsignedinteger]]:
     # TODO: maybe *args, **kwargs for arbitrary numbers of scans
     with open(f1) as f:
-        d1 = json.load(f)    
+        d1 = json.load(f)
     if d1['format'] != 'GOOD' or d1['version'] != 3:
         raise ValueError('Only GOODv3 is supported.')
     
@@ -158,24 +170,26 @@ def merge_scans(f1, f2, outfile=None):
             raise ValueError
     if outfile is not None:     
         json.dump(artifact_dict, outfile)
-    return artifact_dict['artifacts'], *dict_to_artifact(artifact_dict['artifacts'])
+    return artifact_dict['artifacts'], *dicts_to_artifacts(artifact_dict['artifacts'])
 
-def print_artifact(artifacts, human_readable=True) -> None:
-    if artifacts.ndim == 1:
-        stats = np.nonzero(artifacts)[0]
+def print_artifact(
+    artifact: NDArray[ARTIFACT_DTYPE], 
+    human_readable=True
+) -> None:
+    if artifact.ndim == 1:
+        stats = np.flatnonzero(artifact)
         for stat in stats:
-            if human_readable:
-                print(STATS[stat], round(artifacts[stat] * SUB_VALUES[stat] / 10, 2))
-            else:
-                print(STATS[stat], artifacts[stat])
+            value = round(cast(float, artifact[stat] * SUB_VALUES[stat] / 10), 2) if human_readable else artifact[stat]
+            print(f'{STATS[stat]} {value}')
     else:
-        for artifact in artifacts:
-            print_artifact(artifact)
+        for a in artifact:
+            print_artifact(a)
             print()
             
-def print_artifact_dict(artifacts):
+def print_artifact_dict(artifacts: dict[str, Any] | Collection[dict]) -> None:
     if isinstance(artifacts, dict):
         artifacts = [artifacts]
+        artifacts = cast(list[dict], artifacts)
         
     for artifact in artifacts:
         print(f'+--------------------+')
@@ -192,7 +206,7 @@ def print_artifact_dict(artifacts):
             print(f'|*{s[:19]:<19}|')
         print(f'+--------------------+')
         
-def visualize(mask, artifact_dicts):
+def visualize(mask: NDArray[np.bool], artifact_dicts: Sequence[dict]) -> None:
     unactivated = []
     lvls = []
     slots = []
@@ -219,7 +233,10 @@ def visualize(mask, artifact_dicts):
             print_artifact_dict(artifact)
             print()
 
-def ordered_visualize(mask, artifact_dicts):
+def ordered_visualize(
+    mask: NDArray[np.bool], 
+    artifact_dicts: Sequence[dict]
+) -> None:
     unactivated = []
     lvls = []
     slots = []

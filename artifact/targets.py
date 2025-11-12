@@ -6,7 +6,7 @@
 # Super paranoid targets for extremely specialized stats. Probably don't
 # use though, since a since stat target doesn't have enough degrees of
 # freedom to differentiate artifacts well.
-SCHIZO_TARGETS = {
+SCHIZO_TARGETS: dict[str, tuple[dict[str, int], ...]] = {
     'flower': (
         {'hp_': 6, 'hp': 2},
         {'hp_': 6, 'hp': 2, 'crit_': 8},
@@ -253,7 +253,7 @@ SCHIZO_TARGETS = {
     )
 }
 
-ALL_TARGETS = {
+ALL_TARGETS: dict[str, tuple[dict[str, int], ...]] = {
     'flower': (
         {'hp_': 6, 'hp': 2, 'crit_': 8},
         {'hp_': 6, 'hp': 2, 'crit_': 8, 'enerRech_': 10},
@@ -486,7 +486,7 @@ ALL_TARGETS = {
     )
 }
 
-DPS_TARGETS = {
+DPS_TARGETS: dict[str, tuple[dict[str, int], ...]] = {
     'flower': (
         {'hp_': 6, 'hp': 2, 'crit_': 8},
         {'hp_': 6, 'hp': 2, 'crit_': 8, 'enerRech_': 10},
@@ -665,7 +665,7 @@ DPS_TARGETS = {
     )
 }
 
-HEAL_TARGETS = {
+HEAL_TARGETS: dict[str, tuple[dict[str, int], ...]] = {
     'flower': (
         {'hp_': 6, 'hp': 2, 'enerRech_': 10},
         {'hp_': 6, 'hp': 2, 'enerRech_': 10, 'eleMas': 7},
@@ -733,7 +733,7 @@ HEAL_TARGETS = {
     )
 }
 
-SUPPORT_TARGETS = {
+SUPPORT_TARGETS: dict[str, tuple[dict[str, int], ...]] = {
     'flower': (
         {'hp_': 6, 'hp': 2, 'enerRech_': 10},
         {'hp_': 6, 'hp': 2, 'enerRech_': 10, 'eleMas': 7},
@@ -801,7 +801,7 @@ SUPPORT_TARGETS = {
     )
 }
 
-SET_TARGETS = {
+SET_TARGETS: dict[str, dict[str, tuple[dict[str, int], ...]]] = {
     # Some niche supports use 4p to teamwide buff, making this universal
     'ArchaicPetra': ALL_TARGETS,
 

@@ -1,71 +1,41 @@
 import numpy as np
-from .core import *
+from numpy.typing import NDArray
+from typing import cast
+from .constants import ARTIFACT_DTYPE, TARGET_DTYPE
+from .core import score
 
-def avg(distribution, probs, targets, scores=None) -> float:
-    """Find distribution's score average.
-
-    Args:
-        distribution (_type_): _description_
-        probs (_type_): _description_
-        targets (_type_): _description_
-        scores (_type_, optional): _description_. Defaults to None.
-
-    Returns:
-        _type_: _description_
-    """
-    
-    if scores is None:
-        scores = score(distribution, targets)
+def avg(
+    states: NDArray[ARTIFACT_DTYPE], 
+    probs: NDArray, 
+    targets: NDArray[TARGET_DTYPE]
+) -> float | NDArray:
+    scores = cast(np.ndarray, score(states, targets))
     return scores @ probs
 
-def second_moment(distribution, probs, targets, scores=None) -> float:
-    """Find distribution's score second moment.
-
-    Args:
-        distribution (_type_): _description_
-        probs (_type_): _description_
-        targets (_type_): _description_
-        scores (_type_, optional): _description_. Defaults to None.
-
-    Returns:
-        _type_: _description_
-    """
-    
-    if scores is None:
-        scores = score(distribution, targets)
+def second_moment(
+    states: NDArray[ARTIFACT_DTYPE], 
+    probs: NDArray, 
+    targets: NDArray[TARGET_DTYPE]
+) -> float | NDArray:
+    scores = cast(np.ndarray, score(states, targets))
     return scores**2 @ probs
 
-def variance(distribution, probs, targets, scores=None, mean=None) -> float:
-    """Find distribution's score variance.
-
-    Args:
-        distribution (_type_): _description_
-        probs (_type_): _description_
-        targets (_type_): _description_
-        scores (_type_, optional): _description_. Defaults to None.
-        mean (_type_, optional): _description_. Defaults to None.
-
-    Returns:
-        _type_: _description_
-    """
-    if scores is None:
-        scores = score(distribution, targets)
+def variance(
+    states: NDArray[ARTIFACT_DTYPE], 
+    probs: NDArray, 
+    targets: NDArray[TARGET_DTYPE], 
+    mean: float | NDArray | None = None
+) -> float | NDArray:
     if mean is None:
-        mean = avg(distribution, probs, targets, scores)
+        mean = avg(states, probs, targets)
         
+    scores = cast(np.ndarray, score(states, targets))
     return (scores - mean)**2 @ probs
 
-def std(distribution, probs, targets, scores=None, mean=None) -> float:
-    """Find distribution's score standard deviation.
-
-    Args:
-        distribution (_type_): _description_
-        probs (_type_): _description_
-        targets (_type_): _description_
-        scores (_type_, optional): _description_. Defaults to None.
-        mean (_type_, optional): _description_. Defaults to None.
-
-    Returns:
-        float: _description_
-    """
-    return np.sqrt(variance(distribution, probs, targets, scores, mean))
+def std(
+    states: NDArray[ARTIFACT_DTYPE], 
+    probs: NDArray, 
+    targets: NDArray[TARGET_DTYPE], 
+    mean: float | NDArray | None = None
+) -> float | NDArray:
+    return np.sqrt(variance(states, probs, targets, mean))

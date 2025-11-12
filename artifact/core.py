@@ -1,71 +1,51 @@
 import numpy as np
-from .constants import *
+from numpy.typing import NDArray
+from collections.abc import Collection
+from .constants import ARTIFACT_DTYPE, TARGET_DTYPE, STAT_2_NUM, STAT_DTYPE
 
-def find_main(artifact):
+def find_main(artifact: NDArray[ARTIFACT_DTYPE]) -> int:
     mask = artifact == 160
     if np.any(mask):
-        return np.where(mask == True)[0][0]
+        return np.flatnonzero(mask)[0]
     else:
-        return np.where(artifact == 80)[0][0]
+        return np.flatnonzero(artifact == 80)[0]
     
-def find_sub(artifact, main=None): # TODO: i'm skeptical of performance
+def find_sub(
+    artifact: NDArray[ARTIFACT_DTYPE], 
+    main: int | None = None
+) -> NDArray[STAT_DTYPE]: # TODO: i'm skeptical of performance
     if main is None:
         main = find_main(artifact)
     
     temp = artifact[main]
     artifact[main] = 0
-    subs = np.nonzero(artifact)[0]
+    subs = np.flatnonzero(artifact)
     artifact[main] = temp
     
     return subs
 
-def vectorize(targets):
-    """Convert a target dictionary to a target array.
+def vectorize(target: dict[str, int]) -> NDArray[TARGET_DTYPE]:
+    output = np.zeros(19, dtype=TARGET_DTYPE)
+    for key, value in target.items():
+        if key == 'crit_':
+            output[8] = value
+            output[9] = value
+            continue
 
-    Args:
-        targets (dict): Mapping from stat to weight. Weights must be
-        ints, or they will be cast.
-
-    Returns:
-        NDArray: Array of stat weights.
-    """
-    if isinstance(targets, dict):
-        output = np.zeros(19, dtype=np.uint32)
-        for key, value in targets.items():
-            if key == 'crit_':
-                output[8] = value
-                output[9] = value
-                continue
-
-            output[STAT_2_NUM[key]] = value
-    else:
-        output = np.zeros((len(targets), 19), dtype=np.uint32)
-        for i, target in enumerate(targets):
-            for key, value in target.items():
-                if key == 'crit_':
-                    output[i, 8] = value
-                    output[i, 9] = value
-                    continue
-
-                output[i, STAT_2_NUM[key]] = value
+        output[STAT_2_NUM[key]] = value
 
     return output
 
-def score(artifacts, targets):
-    """Calculate scores. If given a single artifact, returns a scalar.
-    If ggiven multiple artifacts, returns an array.
+def multi_vectorize(
+    targets: Collection[dict[str, int]]
+) -> NDArray[TARGET_DTYPE]:
+    output = np.zeros((len(targets), 19), dtype=TARGET_DTYPE)
+    for i, target in enumerate(targets):
+        output[i] = vectorize(target)
+    return output
 
-    Args:
-        artifacts (_type_): _description_
-        targets (_type_): _description_
-
-    Returns:
-        _type_: _description_
-    """
-    
-    # TODO: additionally put vectorization to caller functions so this
-    # doesn't repeat
-    if type(targets) == dict:
-        targets = vectorize(targets)
-        
+def score(
+    artifacts: NDArray[ARTIFACT_DTYPE], 
+    targets: NDArray[TARGET_DTYPE]
+) -> int | NDArray[TARGET_DTYPE]:
     return artifacts @ targets

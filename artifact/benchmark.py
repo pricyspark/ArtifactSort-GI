@@ -1,37 +1,36 @@
 import numpy as np
-from .core import *
-from .upgrades import *
-from .io import *
-from .rate import *
+from typing import cast, Callable
+from numpy.typing import NDArray
+from .core import score
+from .io import print_artifact
+from .rate import CachePercentile
+from .constants import UPGRADE_REQ_EXP, ARTIFACT_DTYPE, SLVL_DTYPE, TARGET_DTYPE
+from .upgrades import smart_upgrade_until_max, smart_upgrade, next_lvl
 
-def simulate_exp(artifacts, slvls, targets, fun, num=1, mains=None):
+def simulate_exp(
+    artifacts: NDArray[ARTIFACT_DTYPE], 
+    slvls: NDArray[SLVL_DTYPE], 
+    targets: NDArray[TARGET_DTYPE], 
+    fun: Callable, 
+    num: int = 1, 
+    mains: None = None
+) -> int:
     # TODO: check if anything is maxed. They shouldn't be
     # TODO: add benchmark for how long it takes to acheive top 1%, not
     # just top 1
-    match targets:
-        case dict():
-            targets = vectorize(targets).reshape((1, -1))
-        case np.ndarray():
-            if targets.ndim == 1:
-                targets = targets.reshape((1, -1))
-        case _:
-            temp = np.zeros((len(targets), 19), dtype=np.uint32)
-            for i, target in enumerate(targets):
-                temp[i] = vectorize(target)
-            targets = temp
-    
     original_artifacts = artifacts.copy()
     smart_upgrade_until_max(artifacts, slvls)
     
+    # TODO: WTF is this
     if type(targets) == dict or (type(targets) == np.ndarray and targets.ndim == 1):
-        scores = score(artifacts, targets)
+        scores = cast(np.ndarray, score(artifacts, targets))
         goal = np.argmax(scores)
         goal_scores = scores[goal]
     else:
-        goal = np.zeros(len(targets), dtype=int)
+        goal = np.zeros(len(targets), dtype=ARTIFACT_DTYPE)
         goal_scores = np.zeros(len(targets), dtype=float)
         for i, target in enumerate(targets):
-            scores = score(artifacts, target)
+            scores = cast(np.ndarray, score(artifacts, target))
             goal[i] = np.argmax(scores)
             goal_scores[i] = scores[goal[i]]
     
@@ -71,8 +70,8 @@ def simulate_exp(artifacts, slvls, targets, fun, num=1, mains=None):
             
             # Upgrade
             smart_upgrade(artifacts[idx])
-            exp += UPGRADE_REQ_EXP[slvls[idx]]
-            slvls[idx] = next_lvl(slvls[idx])
+            exp += cast(int, UPGRADE_REQ_EXP[slvls[idx]])
+            slvls[idx] = next_lvl(cast(int, slvls[idx]))
             #distros[0][idx], distros[1][idx] = distro(artifacts[idx], lvls[idx])
             
             print(exp)
@@ -92,26 +91,20 @@ def simulate_exp(artifacts, slvls, targets, fun, num=1, mains=None):
     #print(np.histogram(slvls, bins=7)[0])
     return exp
 
-def simulate_delete(slot, artifacts, slvls, targets):
+def simulate_delete(
+    slot: str, 
+    artifacts: NDArray[ARTIFACT_DTYPE], 
+    slvls: NDArray[SLVL_DTYPE], 
+    targets: NDArray[TARGET_DTYPE]
+) -> int:
     num_artifacts = len(artifacts)
     num_targets = len(targets)
-    match targets:
-        case dict():
-            targets = vectorize(targets).reshape((1, -1))
-        case np.ndarray():
-            if targets.ndim == 1:
-                targets = targets.reshape((1, -1))
-        case _:
-            temp = np.zeros((len(targets), 19), dtype=np.uint32)
-            for i, target in enumerate(targets):
-                temp[i] = vectorize(target)
-            targets = temp
-    
     original_artifacts = artifacts.copy()
     smart_upgrade_until_max(artifacts, slvls)
     
+    # TODO: WTF is this
     if type(targets) == dict or (type(targets) == np.ndarray and targets.ndim == 1):
-        scores = score(artifacts, targets)
+        scores = cast(np.ndarray, score(artifacts, targets))
         goal = np.argmax(scores)
         goal_scores = scores[goal]
     else:
@@ -119,7 +112,7 @@ def simulate_delete(slot, artifacts, slvls, targets):
         qwer = [set() for _ in range(num_targets)]
         goal = []
         goal_scores = np.zeros(len(targets), dtype=float)
-        scores = score(artifacts, targets.T) # (N,D)
+        scores = cast(np.ndarray, score(artifacts, targets.T)) # (N,D)
         goal_scores = np.max(scores, axis=0)  # (D,)
         for i, target in enumerate(targets):
             asdf = np.where(scores[:, i] >= goal_scores[i] * 1)[0]
@@ -167,7 +160,7 @@ def simulate_delete(slot, artifacts, slvls, targets):
         if slvls[_] < 0:
             levels[0] += 1
         else:
-            levels[slvls[_]] += 1
+            levels[int(slvls[_])] += 1
         if _ in maybe:
             for t in maybe[_]:
                 if len(qwer[t]) == 1:

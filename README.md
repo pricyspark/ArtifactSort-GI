@@ -28,6 +28,7 @@ If so, then Artifact Sort can help you!
 1. Clone the repo
    ```sh
    git clone https://github.com/pricyspark/ArtifactSort.git
+   cd ArtifactSort
    ```
 2. <p>Set up environment using:<br>
    venv + pip (Windows)</p>
@@ -43,6 +44,13 @@ If so, then Artifact Sort can help you!
    source .venv/bin/activate
    pip install -r requirements.txt
    ```
+
+   mamba
+   ```sh
+   mamba env create -f environment.yml
+   mamba activate artifact_sort
+   ```
+
    conda
    ```sh
    conda env create -f environment.yml
@@ -51,26 +59,21 @@ If so, then Artifact Sort can help you!
 3. Compile GUI elements
    ```sh
    pyside6-uic mainwindow.ui -o MainWindow.py
-   pyside6-rrc resources.qrc -o resources.py
+   pyside6-rcc resources.qrc -o resources.py
    ```
 ## Usage
 Disclaimer: This project is in active development. There are guaranteed
 to be bugs and unaccounted for edge cases. Improper usage will likely
 crash the program or cause en error. This is fine, simply close the
 window and relaunch.
-1. Export in-game artifacts to GOODv3 using Irminsul. Currently only
-   works with Irminsul because it's the only scanner that reports
-   initialValue for substats, which is used during reshaping analysis.
-   Irminsul is the only scanner that I know reports this, but any other
-   scanner that includes this information will also work. Universal
-   support other scanners is in progress. 
+1. Export in-game artifacts using a scanner.
    
-   For best results,
-   also export from a scanner that preserves the order artifacts are
-   presented in-game. This allows the GUI to show artifacts in the
-   same order as the game. Otherwise finding specific artifacts becomes
-   a big hassle. Inventory Kamera preserves order, while Irminsul and
-   AdeptiScanner don't. Mileage may vary for others.
+   For best results, scan with Irminsul and Inventory Kamera. Irminsul
+   captures extra data to ensure maximum accuracy. Inventory Kamera
+   keeps track of scan order, so artifacts can be presented in the same
+   order as they are in game. Otherwise finding specific artifacts becomes
+   a big hassle. This is a surprisingly rare trait, for example Irminsul
+   and AdeptiScanner don't maintain order. Mileage may vary for others.
 
    Note: Even in-game, Genshin doesn't seem to have a concrete ordering,
    and there can be variations in the order even when the inventory

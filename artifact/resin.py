@@ -1,13 +1,25 @@
 import numpy as np
+from numpy.typing import NDArray
 import math
-from .percentiles import *
+from .constants import ARTIFACT_DTYPE, LVL_DTYPE, TARGET_DTYPE, SLOTS
+from .core import score
+from .percentiles import artifact_percentile, reshape_percentile, define_percentile
 
-def estimate_resin(percentile):
+def estimate_resin(percentile: float) -> float:
     if percentile == 0:
         return math.inf
     return math.ceil(1.065 / percentile) * 40
 
-def set_resin(artifacts, slots, rarities, lvls, sets, set_key, target, improvement=0.0):
+def set_resin(
+    artifacts: NDArray[ARTIFACT_DTYPE], 
+    slots: NDArray[np.uint8], 
+    rarities: NDArray[np.uint8], 
+    lvls: NDArray[LVL_DTYPE], 
+    sets: NDArray[np.uint8], 
+    set_key: int, 
+    target: NDArray[TARGET_DTYPE], 
+    improvement: float = 0.0
+) -> list[float]:
     slot_estimates = []
     
     for slot in range(5):

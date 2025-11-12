@@ -1,24 +1,28 @@
 import numpy as np
+from numpy.typing import NDArray
+from typing import cast
 import sys
 import pickle
 from functools import lru_cache
-from .constants import *
-from .targets import *
-from .core import *
-from .distributions import *
-from .probs import *
-from .percentiles import *
-from .rank import *
+from typing import Callable
+from .constants import CACHE_PATH, SLVL_DTYPE, SLOTS, SETS, ARTIFACT_DTYPE, CACHE_SIZE, TARGET_DTYPE
+from .targets import ALL_TARGETS, SET_TARGETS
+from .core import find_main, find_sub, score, multi_vectorize
+from .distributions import trim_distro
+from .probs import base_artifact_probs, base_artifact_useful_probs
+from .percentiles import iterative_artifact_percentile
 
 try:
     with open(CACHE_PATH, 'rb') as f:
-        helper_cache = pickle.load(f)
+        helper_cache: dict[tuple[str, int, bytes], float] = pickle.load(f)
+    print('Cache loaded')
 except:
-    helper_cache = {}
+    helper_cache: dict[tuple[str, int, bytes], float] = {}
+    print('No cache found')
 
 class CachePercentile:
     distros = [[trim_distro(j, i) for i in range(5)] for j in range(6)]
-    def __init__(self, slot, target):
+    def __init__(self, slot: str, target: NDArray[TARGET_DTYPE]) -> None:
         self.slot = slot
         self.target = target
         self.target.setflags(write=False)
@@ -38,7 +42,7 @@ class CachePercentile:
     # significantly faster.
     # TODO: make this more elegant
     @lru_cache(maxsize=CACHE_SIZE)
-    def helper(self, threshold):
+    def helper(self, threshold: int) -> float:
         target_key = (self.slot, threshold, np.ascontiguousarray(self.target).view(np.uint16).tobytes())
         if target_key in helper_cache:
             return helper_cache[target_key]
@@ -46,7 +50,7 @@ class CachePercentile:
             self.useful_target, 
             threshold, 
             20, 
-            base=(
+            info=(
                 self.mains, 
                 self.subs, 
                 self.probs, 
@@ -57,7 +61,7 @@ class CachePercentile:
         helper_cache[target_key] = asdf
         return asdf
     
-    def percent(self, artifact, slvl):
+    def percent(self, artifact: NDArray[ARTIFACT_DTYPE], slvl: int) -> float:
         # TODO: maybe njit
         if slvl < 0:
             num_upgrades = 4
@@ -73,13 +77,20 @@ class CachePercentile:
             temp[:, sub] += d[:, i]
         d = temp
         
-        scores = score(d, self.target).astype(int) - 1
+        scores = cast(np.ndarray, score(d, self.target)).astype(int) - 1
         rarities = np.zeros(len(scores))
         for i, x in enumerate(scores):
             rarities[i] = self.helper(x)
         return np.sum(p / rarities)
 
-def rate(artifacts, slots, mask, slvls, sets, ranker, k=1):
+def rate(
+    artifacts: NDArray[ARTIFACT_DTYPE], 
+    slots: NDArray[np.unsignedinteger], 
+    mask: NDArray[np.bool], 
+    slvls: NDArray[SLVL_DTYPE], 
+    sets: NDArray[np.unsignedinteger], 
+    ranker: Callable, k: int = 1
+) -> tuple[NDArray, NDArray[np.unsignedinteger]]:
     # TODO: change persist to persist_artifact and persist_meta, for
     # more intuitive control over things like set masking
     relevance = np.zeros((len(artifacts), 2), dtype=float)
@@ -122,12 +133,20 @@ def rate(artifacts, slots, mask, slvls, sets, ranker, k=1):
     
     return relevance, counts
 
-def upgrade_analyze(relevance, counts, mask, slvls, num=None, threshold=None):
+def upgrade_analyze(
+    relevance: NDArray, 
+    counts: NDArray[np.unsignedinteger], 
+    mask: NDArray[np.bool], 
+    slvls: NDArray[SLVL_DTYPE], 
+    num: int | None = None, 
+    threshold: int | float | None = None
+) -> NDArray[np.bool]:
     scaled_relevance = np.sum(relevance * counts, axis=1)
     scaled_relevance[~mask] = -999999999
     scaled_relevance[slvls == 20] = -999999999
     
     if threshold is None:
+        assert num is not None
         threshold = np.partition(scaled_relevance, -num)[-num]
         
     return scaled_relevance >= threshold
@@ -140,7 +159,13 @@ def _temp_bar(i, n):
     sys.stdout.write(f'\r|{bar}| {round(progress * 100, 1)}%')
     sys.stdout.flush()
 
-def delete_rate(artifacts, slots, mask, slvls, sets):
+def delete_rate(
+    artifacts: NDArray[ARTIFACT_DTYPE], 
+    slots: NDArray[np.unsignedinteger], 
+    mask: NDArray[np.bool], 
+    slvls: NDArray[SLVL_DTYPE], 
+    sets: NDArray[np.unsignedinteger]
+) -> tuple[NDArray, NDArray[np.unsignedinteger]]:
     caches = {}
     relevance = np.zeros((len(artifacts), 2), dtype=float)
     counts = np.zeros((len(artifacts), 2), dtype=int)
@@ -157,7 +182,7 @@ def delete_rate(artifacts, slots, mask, slvls, sets):
         slot_artifacts = artifacts[slot_mask]
         slot_lvls = slvls[slot_mask]
         
-        targets = vectorize(ALL_TARGETS[SLOTS[slot]])
+        targets = multi_vectorize(ALL_TARGETS[SLOTS[slot]])
         temp = np.zeros((len(slot_artifacts), len(targets)))
         for j, target in enumerate(targets):
             cache_key = (slot, tuple(target))
@@ -180,7 +205,7 @@ def delete_rate(artifacts, slots, mask, slvls, sets):
             set_artifacts = slot_artifacts[set_mask]
             set_lvls = slot_lvls[set_mask]
             
-            targets = vectorize(SET_TARGETS[SETS[setKey]][SLOTS[slot]])
+            targets = multi_vectorize(SET_TARGETS[SETS[setKey]][SLOTS[slot]])
             temp = np.zeros((len(set_artifacts), len(targets)))
             for j, target in enumerate(targets):
                 cache_key = (slot, tuple(target))
@@ -197,12 +222,19 @@ def delete_rate(artifacts, slots, mask, slvls, sets):
         pickle.dump(helper_cache, f)
     return relevance, counts
 
-def delete_analyze(relevance, counts, mask, num=None, threshold=None):
+def delete_analyze(
+    relevance: NDArray, 
+    counts: NDArray[np.unsignedinteger], 
+    mask: NDArray[np.bool], 
+    num: int | None = None, 
+    threshold: int | float | None = None
+) -> NDArray[np.bool]:
     counts[~mask] = -1
     scaled_relevance = np.max(relevance / counts, axis=1)
     #relevance = np.max(relevance, axis=1)
     
     if threshold is None:
+        assert num is not None
         threshold = np.partition(scaled_relevance[mask], num)[num]
         
     return scaled_relevance <= threshold

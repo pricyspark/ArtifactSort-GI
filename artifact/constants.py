@@ -1,5 +1,4 @@
 import numpy as np
-from itertools import product
 
 # TODO: This isn't the order they appear in-game for some reason
 SETS = (
@@ -93,6 +92,14 @@ STATS = (
 
 STAT_2_NUM = {stat: index for index, stat in enumerate(STATS)}
 
+ARTIFACT_DTYPE = np.uint8
+TARGET_DTYPE = np.uint16
+LVL_DTYPE = np.uint8
+SLVL_DTYPE = np.int8
+STAT_DTYPE = np.int_ # This could be int8, but this is convenient
+# Maybe create a useful stat dtype, which is signed. This makes normal
+# stats unsigned
+
 MAIN_PROBS = {
     'flower':   np.array((1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)),
     'plume':    np.array((0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)),
@@ -123,7 +130,7 @@ SUB_VALUES = np.array(
     )
 )
 
-SUB_COEFS = np.array((7, 8, 9, 10), dtype=np.uint8)
+INCREMENTS = np.array((7, 8, 9, 10), dtype=ARTIFACT_DTYPE)
 
 ARTIFACT_REQ_EXP = np.array(
     (
@@ -164,22 +171,6 @@ MAX_REQ_EXP = np.array(
     dtype=int
 )
 
-LEARN_REQ_EXP = np.array(
-    (
-        140404, 137404, 133679, 129254, # 0 1/6 1/6 1/6 1/6 2/6
-        148925, 143025, 136350, 128850, # 4 1/5 1/5 1/5 2/5
-        150625, 141400, 131275, 120225, # 8 1/4 1/4 2/4
-        144267, 131242, 116092, 98492, # 12 1/3 2/3
-        117175, 93675,  66625,  35575, 
-        0,
-        165225, 159325, 152650, 145150
-    )
-)
-
 CACHE_SIZE = 200000
 
 CACHE_PATH = 'cache.pkl'
-
-INCREMENTS = np.array((7, 8, 9, 10), dtype=int)
-
-COEFS = [np.array(list(product((7, 8, 9, 10), repeat=k)), dtype=int) for k in range(5)]

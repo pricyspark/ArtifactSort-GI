@@ -36,14 +36,13 @@ class CachePercentile:
         self.num_useful = np.count_nonzero(subs != -1, axis=1)
         self.num_useless = 4 - self.num_useful
         self.weights_all = np.sort(self.useful_target[subs], axis=1)
-        self.max_threshold = 999999
         
-    # Double caching is memoory inefficient, but lru_cache is still
+    # Double caching is memory inefficient, but lru_cache is still
     # significantly faster.
     # TODO: make this more elegant
     @lru_cache(maxsize=CACHE_SIZE)
     def helper(self, threshold: int) -> float:
-        target_key = (self.slot, threshold, np.ascontiguousarray(self.target).view(np.uint16).tobytes())
+        target_key = (self.slot, threshold, np.ascontiguousarray(self.target).tobytes())
         if target_key in helper_cache:
             return helper_cache[target_key]
         asdf = iterative_artifact_percentile(
@@ -78,10 +77,10 @@ class CachePercentile:
         d = temp
         
         scores = cast(np.ndarray, score(d, self.target)).astype(int) - 1
-        rarities = np.zeros(len(scores))
-        for i, x in enumerate(scores):
-            rarities[i] = self.helper(x)
-        return np.sum(p / rarities)
+        values, inverse = np.unique(scores, return_inverse=True) # Cannot njit this
+        probs = np.bincount(inverse, weights=p)
+        rarities = [self.helper(x) for x in values]
+        return np.sum(probs / rarities)
 
 def rate(
     artifacts: NDArray[ARTIFACT_DTYPE], 

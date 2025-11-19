@@ -5,7 +5,7 @@ from numpy.typing import NDArray
 from typing import Any, cast
 from typing import IO
 from collections.abc import Collection, Sequence
-from .constants import ARTIFACT_DTYPE, SLOT_2_NUM, SET_2_NUM, STAT_2_NUM, SUB_VALUES, STATS, SLOTS, SETS, SLVL_DTYPE
+from .constants import ARTIFACT_DTYPE, SLOT_2_NUM, SET_2_NUM, STAT_2_NUM, SUB_VALUES, STATS, SLOTS, SETS, SLVL_DTYPE, LVL_DTYPE
 from .upgrades import estimate_upgrades
 
 # TODO: maybe create a special GOOD_artifact TypedDict, but this isn't
@@ -19,11 +19,12 @@ def artifact_to_dict(artifacts: NDArray[ARTIFACT_DTYPE]) -> dict[str, Any]:
 
 def dict_to_artifact(
     d: dict[str, Any]
-) -> tuple[NDArray[ARTIFACT_DTYPE], NDArray[ARTIFACT_DTYPE], int, int, int, bool, int]:
+) -> tuple[NDArray[ARTIFACT_DTYPE], NDArray[ARTIFACT_DTYPE], int, int, int, int, bool, int]:
     artifact = np.zeros(19, dtype=ARTIFACT_DTYPE)
     base_artifact = np.zeros(19, dtype=np.uint8)
     slot = SLOT_2_NUM[d['slotKey']]
     rarity = d['rarity']
+    lvl = d['level']
     slvl = d['level']
     setKey = SET_2_NUM[d['setKey']]
     main = STAT_2_NUM[d['mainStatKey']]
@@ -69,29 +70,34 @@ def dict_to_artifact(
             
         unactivated = max(8, round(guess)) == 8
     else:
-        unactivated = d['totalRolls'] == 8 # This is only used for max artifacts, so for now this is enough
-    
-    return artifact, base_artifact, slot, rarity, slvl, unactivated, setKey
+        if 'totalRolls' in d:
+            unactivated = d['totalRolls'] == 8 # This is only used for max artifacts, so for now this is enough
+        else:
+            assert rarity == 1, f'Incompatible scan or data. Please contact pricyspark or open a PR. Include the scanner used and this snippet: \n{d}'
+            unactivated = False
+            
+    return artifact, base_artifact, slot, rarity, lvl, slvl, unactivated, setKey
 
 def dicts_to_artifacts(
     dicts: Collection[dict[str, Any]]
-) -> tuple[NDArray[ARTIFACT_DTYPE], NDArray[ARTIFACT_DTYPE], NDArray[np.uint8], NDArray[np.uint8], NDArray[SLVL_DTYPE], NDArray[np.bool], NDArray[np.unsignedinteger]]:
+) -> tuple[NDArray[ARTIFACT_DTYPE], NDArray[ARTIFACT_DTYPE], NDArray[np.uint8], NDArray[np.uint8], NDArray[LVL_DTYPE], NDArray[SLVL_DTYPE], NDArray[np.bool], NDArray[np.unsignedinteger]]:
     num_dicts = len(dicts)
     artifacts = np.zeros((num_dicts, 19), dtype=ARTIFACT_DTYPE)
     base_artifacts = np.zeros((num_dicts, 19), dtype=ARTIFACT_DTYPE)
     slots = np.zeros(num_dicts, dtype=np.uint8)
     rarities = np.zeros(num_dicts, dtype=np.uint8)
+    lvls = np.zeros(num_dicts, dtype=LVL_DTYPE)
     slvls = np.zeros(num_dicts, dtype=SLVL_DTYPE)
     unactivated = np.zeros(num_dicts, dtype=np.bool)
     sets = np.zeros(num_dicts, dtype=np.uint16)
     
     for i, d in enumerate(dicts):
-        artifacts[i], base_artifacts[i], slots[i], rarities[i], slvls[i], unactivated[i], sets[i] = dict_to_artifact(d)
-    return artifacts, base_artifacts, slots, rarities, slvls, unactivated, sets
+        artifacts[i], base_artifacts[i], slots[i], rarities[i], lvls[i], slvls[i], unactivated[i], sets[i] = dict_to_artifact(d)
+    return artifacts, base_artifacts, slots, rarities, lvls, slvls, unactivated, sets
 
 def load(
     filename: str
-) -> tuple[dict, NDArray[ARTIFACT_DTYPE], NDArray[ARTIFACT_DTYPE], NDArray[np.uint8], NDArray[np.uint8], NDArray[SLVL_DTYPE], NDArray[np.bool], NDArray[np.unsignedinteger]]:
+) -> tuple[dict, NDArray[ARTIFACT_DTYPE], NDArray[ARTIFACT_DTYPE], NDArray[np.uint8], NDArray[np.uint8], NDArray[LVL_DTYPE], NDArray[SLVL_DTYPE], NDArray[np.bool], NDArray[np.unsignedinteger]]:
     with open(filename) as f:
         data = json.load(f)
     
@@ -122,7 +128,7 @@ def merge_scans(
     f1: str, 
     f2: str, 
     outfile: IO | None = None
-) -> tuple[dict, NDArray[ARTIFACT_DTYPE], NDArray[ARTIFACT_DTYPE], NDArray[np.uint8], NDArray[np.uint8], NDArray[SLVL_DTYPE], NDArray[np.bool], NDArray[np.unsignedinteger]]:
+) -> tuple[dict, NDArray[ARTIFACT_DTYPE], NDArray[ARTIFACT_DTYPE], NDArray[np.uint8], NDArray[np.uint8], NDArray[LVL_DTYPE], NDArray[SLVL_DTYPE], NDArray[np.bool], NDArray[np.unsignedinteger]]:
     # TODO: maybe *args, **kwargs for arbitrary numbers of scans
     with open(f1) as f:
         d1 = json.load(f)

@@ -6,13 +6,23 @@ import time
 from artifact import *
 from PySide6.QtWidgets import (QMainWindow, QApplication, QFileDialog, QLabel)
 from PySide6.QtGui import (QIcon, QPixmap, QFont) # TODO: Pretty sure this is bad practice, and should instead subclass MainWindow
+from PySide6.QtCharts import QChart, QChartView, QLineSeries, QValueAxis, QLogValueAxis
 #from PySide6 import QtCore
 #from PySide6.QtCore import (QSize)
 #from PySide6 import QtWidgets
+from PySide6.QtCore import Qt
 
 from MainWindow import Ui_MainWindow
 from square_widget import SquareToolButton, SquareLabel
+from chart import HoverChartView
 import resources
+
+# TODO: handling each stat as a seperate QLabel is super verbose and
+# terrible. At some point, stop being a lazy idiot
+
+def _substat_text(artifact_dict: dict, index: int) -> str:
+    substats = artifact_dict['substats']
+    return f'{substats[index]['key']}+{substats[index]['value']}'
 
 class MainWindow(QMainWindow, Ui_MainWindow):
     def __init__(self):
@@ -38,6 +48,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.base_artifacts: NDArray[ARTIFACT_DTYPE] | None = None
         self.slots: NDArray[np.uint8] | None = None
         self.rarities: NDArray[np.uint8] | None = None
+        self.lvls: NDArray[LVL_DTYPE] | None = None
         self.slvls: NDArray[SLVL_DTYPE] | None = None
         self.unactivated: NDArray[np.bool] | None = None
         self.sets: NDArray[np.unsignedinteger] | None = None
@@ -100,6 +111,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.base_artifacts, 
             self.slots, 
             self.rarities, 
+            self.lvls,
             self.slvls, 
             self.unactivated, 
             self.sets
@@ -130,6 +142,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             return
         
         assert self.artifact_dicts is not None
+        assert self.base_artifacts is not None
+        assert self.slots is not None
+        assert self.rarities is not None
+        assert self.lvls is not None
+        assert self.unactivated is not None
+        assert self.sets is not None
+        #assert self. is not None
         
         raw_set = self.setCombo.currentText()
         if raw_set == 'Set':
@@ -153,112 +172,171 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.statusbar.showMessage('Improperly formatted optimization target', 10000)
             return
         
-        resin_params = (
-            cast(np.ndarray, self.artifacts),
-            cast(np.ndarray, self.slots),
-            cast(np.ndarray, self.rarities),
-            cast(np.ndarray, self.slvls),
-            cast(np.ndarray, self.sets),
-            self.set_key,
-            cast(np.ndarray, self.target)
-        )
-        
-        resin_0 = set_resin(*resin_params, improvement=0.0)
-        resin_1 = set_resin(*resin_params, improvement=0.01)
-        resin_5 = set_resin(*resin_params, improvement=0.05)
-        
-        resin_text = [f'If farming domains until an improvement\n']
-        for i, slot_resin in enumerate(resin_0):
-            if slot_resin == math.inf:
-                resin_text.append(f'{SLOTS[i]}: ∞ resin, improvement is not possible')
-            else:
-                resin_text.append(f'{SLOTS[i]}: {slot_resin} resin, {math.ceil(slot_resin / 180)} days')
-        resin_text.append(f'\nIf farming domains until an improvement of at least 1%\n')
-        for i, slot_resin in enumerate(resin_1):
-            if slot_resin == math.inf:
-                resin_text.append(f'{SLOTS[i]}: ∞ resin, 1% improvement is not possible')
-            else:
-                resin_text.append(f'{SLOTS[i]}: {slot_resin} resin, {math.ceil(slot_resin / 180)} days')
-        resin_text.append(f'\nIf farming domains until an improvement of at least 5%\n')
-        for i, slot_resin in enumerate(resin_5):
-            if slot_resin == math.inf:
-                resin_text.append(f'{SLOTS[i]}: ∞ resin, 5% improvement is not possible')
-            else:
-                resin_text.append(f'{SLOTS[i]}: {slot_resin} resin, {math.ceil(slot_resin / 180)} days')
-        self.resinBox.setText('\n'.join(resin_text))
-        
-        reshape_params = (
+        def resin_chart(container, resin_points, maximum) -> None:
+            resin_series = QLineSeries()
+            resin_series.setName('Resin')
+            for i, resin in enumerate(resin_points[1]):
+                resin_series.append(i, resin)
+                
+            define_series = QLineSeries()
+            define_series.setName('Define')
+            for i, resin in enumerate(resin_points[2]):
+                define_series.append(i, resin)
+                
+            reshape_series = QLineSeries()
+            reshape_series.setName('Reshape')
+            for i, resin in enumerate(resin_points[3]):
+                reshape_series.append(i, resin[0])
+            
+            chart = QChart()
+            chart.addSeries(resin_series)
+            chart.addSeries(define_series)
+            chart.addSeries(reshape_series)
+            
+            x_axis = QValueAxis()
+            x_axis.setTitleText('Improvement (%)')
+            x_axis.setRange(0, len(resin_points[1]) - 1)
+            chart.addAxis(x_axis, Qt.AlignBottom)
+            resin_series.attachAxis(x_axis)
+            define_series.attachAxis(x_axis)
+            reshape_series.attachAxis(x_axis)
+            
+            y_axis = QLogValueAxis()
+            y_axis.setTitleText('Resin')
+            y_axis.setRange(1, maximum)
+            y_axis.setLabelFormat('%.0e')
+            chart.addAxis(y_axis, Qt.AlignLeft)
+            resin_series.attachAxis(y_axis)
+            define_series.attachAxis(y_axis)
+            reshape_series.attachAxis(y_axis)
+            
+            view = HoverChartView(
+                chart,
+                [
+                    ("Resin", resin_series),
+                    ("Define", define_series),
+                    ("Reshape", reshape_series),
+                ],
+            )
+            layout = container.layout()
+            assert layout is not None
+            
+            while layout.count() > 0:
+                item = layout.takeAt(0)
+                widget = item.widget()
+                if widget is not None:
+                    widget.deleteLater()
+            
+            layout.addWidget(view)
+            
+        range_params = (
             self.artifacts,
             self.base_artifacts,
             self.slots,
             self.rarities,
-            self.slvls,
+            self.lvls,
             self.unactivated,
             self.sets,
             self.set_key,
             self.target
         )
         
-        reshape_resin_0 = set_reshape_resin(*reshape_params, improvement=0.0)
-        reshape_resin_1 = set_reshape_resin(*reshape_params, improvement=0.01)
-        reshape_resin_5 = set_reshape_resin(*reshape_params, improvement=0.05)
+        flower_points = range_resin(*range_params, 'flower')
+        plume_points = range_resin(*range_params, 'plume')
+        sands_points = range_resin(*range_params, 'sands')
+        goblet_points = range_resin(*range_params, 'goblet')
+        circlet_points = range_resin(*range_params, 'circlet')
+        points = (flower_points, plume_points, sands_points, goblet_points, circlet_points)
+        resin_max = max([points[1][-1] for points in points])
         
-        reshape_text = [f'If reshaping instead of farming until an improvement, each Dust of Enlightenment saves an average of\n']
-        for i, (slot_resin, artifact_idx) in enumerate(reshape_resin_0):
-            if slot_resin == math.inf:
-                reshape_text.append(f'{SLOTS[i]}: ∞ resin, improvement is not possible')
-            else:
-                reshape_text.append(f'{SLOTS[i]}: {slot_resin} resin, {math.ceil(slot_resin / 180)} days')
-            print_artifact_dict(self.artifact_dicts[artifact_idx])
-        reshape_text.append(f'\nIf reshaping instead of farming until an improvement of at least 1%, each Dust of Enlightenment saves an average of\n')
-        for i, (slot_resin, artifact_idx) in enumerate(reshape_resin_1):
-            if slot_resin == math.inf:
-                reshape_text.append(f'{SLOTS[i]}: ∞ resin, 1% improvement is not possible')
-            else:
-                reshape_text.append(f'{SLOTS[i]}: {slot_resin} resin, {math.ceil(slot_resin / 180)} days')
-            print_artifact_dict(self.artifact_dicts[artifact_idx])
-        reshape_text.append(f'\nIf reshaping instead of farming until an improvement of at least 5%, each Dust of Enlightenment saves an average of\n')
-        for i, (slot_resin, artifact_idx) in enumerate(reshape_resin_5):
-            if slot_resin == math.inf:
-                reshape_text.append(f'{SLOTS[i]}: ∞ resin, 5% improvement is not possible')
-            else:
-                reshape_text.append(f'{SLOTS[i]}: {slot_resin} resin, {math.ceil(slot_resin / 180)} days')
-            print_artifact_dict(self.artifact_dicts[artifact_idx])
-        self.reshapeBox.setText('\n'.join(reshape_text))
+        # TODO: you can def make a function that dynamically creates
+        # labels and assigns text for them instead of manually doing
+        # this like an idiot. But I'm too lazy to figure that out with
+        # PySide. This is comically stupid
         
-        define_params = (
-            self.artifacts,
-            self.slots,
-            self.rarities,
-            self.slvls,
-            self.sets,
-            self.set_key,
-            self.target
-        )
+        best_flower = self.artifact_dicts[flower_points[0]]
+        best_plume = self.artifact_dicts[plume_points[0]]
+        best_sands = self.artifact_dicts[sands_points[0]]
+        best_goblet = self.artifact_dicts[goblet_points[0]]
+        best_circlet = self.artifact_dicts[circlet_points[0]]
         
-        define_resin_0 = set_define_resin(*define_params, improvement=0.0)
-        define_resin_1 = set_define_resin(*define_params, improvement=0.01)
-        define_resin_5 = set_define_resin(*define_params, improvement=0.05)
+        reshape_flower = self.artifact_dicts[flower_points[3][0][1]] # temp. For now display the best for 0%
+        reshape_plume = self.artifact_dicts[plume_points[3][0][1]]
+        reshape_sands = self.artifact_dicts[sands_points[3][0][1]]
+        reshape_goblet = self.artifact_dicts[goblet_points[3][0][1]]
+        reshape_circlet = self.artifact_dicts[circlet_points[3][0][1]]
         
-        define_text = [f'If defining instead of farming until an improvement, each Sanctifying Elixir saves an average of\n']
-        for i, slot_resin in enumerate(define_resin_0):
-            if slot_resin == math.inf:
-                define_text.append(f'{SLOTS[i]}: ∞ resin, improvement is not possible')
-            else:
-                define_text.append(f'{SLOTS[i]}: {slot_resin} resin, {math.ceil(slot_resin / 180)} days')
-        define_text.append(f'\nIf defining instead of farming until an improvement of at least 1%, each Sanctifying Elixir saves an average of\n')
-        for i, slot_resin in enumerate(define_resin_1):
-            if slot_resin == math.inf:
-                define_text.append(f'{SLOTS[i]}: ∞ resin, 1% improvement is not possible')
-            else:
-                define_text.append(f'{SLOTS[i]}: {slot_resin} resin, {math.ceil(slot_resin / 180)} days')
-        define_text.append(f'\nIf defining instead of farming until an improvement of at least 5%, each Sanctifying Elixir saves an average of\n')
-        for i, slot_resin in enumerate(define_resin_5):
-            if slot_resin == math.inf:
-                define_text.append(f'{SLOTS[i]}: ∞ resin, 5% improvement is not possible')
-            else:
-                define_text.append(f'{SLOTS[i]}: {slot_resin} resin, {math.ceil(slot_resin / 180)} days')
-        self.defineBox.setText('\n'.join(define_text))
+        self.flowerBestMain.setText(best_flower['mainStatKey'])
+        self.flowerBestSub1.setText(_substat_text(best_flower, 0))
+        self.flowerBestSub2.setText(_substat_text(best_flower, 1))
+        self.flowerBestSub3.setText(_substat_text(best_flower, 2))
+        self.flowerBestSub4.setText(_substat_text(best_flower, 3))
+        self.flowerReshapeMain.setText(reshape_flower['mainStatKey'])
+        self.flowerReshapeSub1.setText(_substat_text(reshape_flower, 0))
+        self.flowerReshapeSub2.setText(_substat_text(reshape_flower, 1))
+        self.flowerReshapeSub3.setText(_substat_text(reshape_flower, 2))
+        self.flowerReshapeSub4.setText(_substat_text(reshape_flower, 3))
+        
+        self.plumeBestMain.setText(best_plume['mainStatKey'])
+        self.plumeBestSub1.setText(_substat_text(best_plume, 0))
+        self.plumeBestSub2.setText(_substat_text(best_plume, 1))
+        self.plumeBestSub3.setText(_substat_text(best_plume, 2))
+        self.plumeBestSub4.setText(_substat_text(best_plume, 3))
+        self.plumeReshapeMain.setText(reshape_plume['mainStatKey'])
+        self.plumeReshapeSub1.setText(_substat_text(reshape_plume, 0))
+        self.plumeReshapeSub2.setText(_substat_text(reshape_plume, 1))
+        self.plumeReshapeSub3.setText(_substat_text(reshape_plume, 2))
+        self.plumeReshapeSub4.setText(_substat_text(reshape_plume, 3))
+        
+        self.sandsBestMain.setText(best_sands['mainStatKey'])
+        self.sandsBestSub1.setText(_substat_text(best_sands, 0))
+        self.sandsBestSub2.setText(_substat_text(best_sands, 1))
+        self.sandsBestSub3.setText(_substat_text(best_sands, 2))
+        self.sandsBestSub4.setText(_substat_text(best_sands, 3))
+        self.sandsReshapeMain.setText(reshape_sands['mainStatKey'])
+        self.sandsReshapeSub1.setText(_substat_text(reshape_sands, 0))
+        self.sandsReshapeSub2.setText(_substat_text(reshape_sands, 1))
+        self.sandsReshapeSub3.setText(_substat_text(reshape_sands, 2))
+        self.sandsReshapeSub4.setText(_substat_text(reshape_sands, 3))
+        
+        self.gobletBestMain.setText(best_goblet['mainStatKey'])
+        self.gobletBestSub1.setText(_substat_text(best_goblet, 0))
+        self.gobletBestSub2.setText(_substat_text(best_goblet, 1))
+        self.gobletBestSub3.setText(_substat_text(best_goblet, 2))
+        self.gobletBestSub4.setText(_substat_text(best_goblet, 3))
+        self.gobletReshapeMain.setText(reshape_goblet['mainStatKey'])
+        self.gobletReshapeSub1.setText(_substat_text(reshape_goblet, 0))
+        self.gobletReshapeSub2.setText(_substat_text(reshape_goblet, 1))
+        self.gobletReshapeSub3.setText(_substat_text(reshape_goblet, 2))
+        self.gobletReshapeSub4.setText(_substat_text(reshape_goblet, 3))
+        
+        self.circletBestMain.setText(best_circlet['mainStatKey'])
+        self.circletBestSub1.setText(_substat_text(best_circlet, 0))
+        self.circletBestSub2.setText(_substat_text(best_circlet, 1))
+        self.circletBestSub3.setText(_substat_text(best_circlet, 2))
+        self.circletBestSub4.setText(_substat_text(best_circlet, 3))
+        self.circletReshapeMain.setText(reshape_circlet['mainStatKey'])
+        self.circletReshapeSub1.setText(_substat_text(reshape_circlet, 0))
+        self.circletReshapeSub2.setText(_substat_text(reshape_circlet, 1))
+        self.circletReshapeSub3.setText(_substat_text(reshape_circlet, 2))
+        self.circletReshapeSub4.setText(_substat_text(reshape_circlet, 3))
+        
+        '''
+        asdf = [points[3] for points in (flower_points, plume_points, sands_points, goblet_points, circlet_points)]
+        
+        for i in asdf:
+            idk = set()
+            for _ in i:
+                idk.add(_[1])
+            if len(idk) != 1:
+                print('Warning: It happened')
+        '''
+            
+        resin_chart(self.flowerContainer, flower_points, resin_max)
+        resin_chart(self.plumeContainer, plume_points, resin_max)
+        resin_chart(self.sandsContainer, sands_points, resin_max)
+        resin_chart(self.gobletContainer, goblet_points, resin_max)
+        resin_chart(self.circletContainer, circlet_points, resin_max)
         
     def populate_upgrade(self):
         grid = self.upgradeGrid
@@ -327,11 +405,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         substats = artifact['substats']
         # TODO: make this more dynamic instead of hardcoding 3/4
         # substats and 0/1 unactivated substats
-        self.upgradeArtifactSub1.setText(f'{substats[0]['key']}+{substats[0]['value']}')
-        self.upgradeArtifactSub2.setText(f'{substats[1]['key']}+{substats[1]['value']}')
-        self.upgradeArtifactSub3.setText(f'{substats[2]['key']}+{substats[2]['value']}')
+        self.upgradeArtifactSub1.setText(_substat_text(artifact, 0))
+        self.upgradeArtifactSub1.setText(_substat_text(artifact, 1))
+        self.upgradeArtifactSub2.setText(_substat_text(artifact, 2))
         if len(substats) == 4:
-            self.upgradeArtifactSub4.setText(f'{substats[3]['key']}+{substats[3]['value']}')
+            self.upgradeArtifactSub4.setText(_substat_text(artifact, 3))
         else:
             substat = artifact['unactivatedSubstats'][0]
             self.upgradeArtifactSub4.setText(f'{substat['key']}+{substat['value']} (unactivated)')
@@ -342,6 +420,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.upgradeLock.setPixmap(QPixmap(':/menu/icons/unlocked.svg'))
         self.upgradeLock.setScaledContents(True)
         self.upgradeLock.setFixedSize(35, 35)
+        if 'astralMark' not in artifact:
+            return
         if artifact['astralMark']:
             self.upgradeStar.setPixmap(QPixmap(':/menu/icons/star.svg'))
         else:
@@ -358,11 +438,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         substats = artifact['substats']
         # TODO: make this more dynamic instead of hardcoding 3/4
         # substats and 0/1 unactivated substats
-        self.lockArtifactSub1.setText(f'{substats[0]['key']}+{substats[0]['value']}')
-        self.lockArtifactSub2.setText(f'{substats[1]['key']}+{substats[1]['value']}')
-        self.lockArtifactSub3.setText(f'{substats[2]['key']}+{substats[2]['value']}')
+        self.lockArtifactSub1.setText(_substat_text(artifact, 0))
+        self.lockArtifactSub2.setText(_substat_text(artifact, 1))
+        self.lockArtifactSub3.setText(_substat_text(artifact, 2))
         if len(substats) == 4:
-            self.lockArtifactSub4.setText(f'{substats[3]['key']}+{substats[3]['value']}')
+            self.lockArtifactSub4.setText(_substat_text(artifact, 3))
         else:
             substat = artifact['unactivatedSubstats'][0]
             self.lockArtifactSub4.setText(f'{substat['key']}+{substat['value']} (unactivated)')
@@ -375,6 +455,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.lockLock.setPixmap(QPixmap(':/menu/icons/locked.svg'))
         self.lockLock.setScaledContents(True)
         self.lockLock.setFixedSize(35, 35)
+        if 'astralMark' not in artifact:
+            return
         if artifact['astralMark']:
             raise ValueError('This should not be possible. Starred artifacts should be ignored')
             self.lockStar.setPixmap(QPixmap(':/menu/icons/star.svg'))
@@ -385,6 +467,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
+    print("Platform:", app.platformName())
     font = app.font()
     font.setPointSize(11)
     app.setFont(font)

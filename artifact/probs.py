@@ -124,7 +124,11 @@ def base_define_probs(
     target: NDArray[TARGET_DTYPE]
 ) -> tuple[NDArray[STAT_DTYPE], NDArray[STAT_DTYPE], NDArray]:
     main = np.argmax(np.where(MAIN_PROBS[slot] == 0, 0, target))
-    best_subs = np.argpartition(np.where(np.arange(19) == main, 0, target), -2)[-2:]
+    if target[main] == 0:
+        # All main are useless, choose main with the highest sub prob to
+        # maximize prob of useful substats
+        main = np.argmax(np.where(MAIN_PROBS[slot] == 0, 0, SUB_PROBS))
+    best_subs = np.argpartition(np.where(np.arange(10) == main, 0, target[:10]), -2)[-2:]
     
     if main < 10:
         cand = np.delete(np.arange(10, dtype=STAT_DTYPE), [main, *best_subs])

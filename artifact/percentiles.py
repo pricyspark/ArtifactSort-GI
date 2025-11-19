@@ -260,16 +260,19 @@ def define_percentile(
         temp += math.comb(5, i)
     prob_valid += 0.2 * temp / 2 ** 5
     
+    # TODO: there are cacheable. The result is the same for each
+    # threshold
     mains, subs, probs = base_define_probs(slot, target)
     mains, subs, probs = base_artifact_useful_probs(mains, subs, probs, target)
     
-    new_target = np.append(target, 0).astype(TARGET_DTYPE)
+    new_target = np.append(target, 0)
     
     best_subs = subs[0, [np.argpartition(new_target[subs[0]], -2)[-2:]]]
     
     output = 0
+    signed_threshold = np.int_(threshold) # Ensure signed for negatives
     for m, s, p in zip(mains, subs, probs):
-        diff = threshold - cast(int, new_target[m]) * (160 if m < 3 else 80)
+        diff = signed_threshold - cast(int, new_target[m]) * (160 if m < 3 else 80)
         num_useful = int(np.count_nonzero(s != -1)) # TODO: is this kind of casting the best option
         num_useless = 4 - num_useful
         max_weight = np.max(new_target[s])
@@ -341,7 +344,7 @@ def reshape_percentile(
     max_weight = np.max(target[subs])
     
     num_upgrades = 4 if unactivated else 5
-    diff = threshold - base_score
+    diff = np.int_(threshold - base_score) # Ensure signed for negatives
     
     output = _reshape_helper(diff, 0, num_upgrades)
     _reshape_helper.cache_clear()

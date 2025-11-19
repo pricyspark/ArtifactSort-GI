@@ -2,64 +2,64 @@ import numpy as np
 
 # TODO: This isn't the order they appear in-game for some reason
 SETS = (
-    'Initiate',
-    'Adventurer',
-    'LuckyDog',
-    'TravelingDoctor',
-    'ResolutionOfSojourner',
-    'TinyMiracle',
-    'Berserker',
-    'Instructor',
-    'TheExile',
-    'DefendersWill',
-    'BraveHeart',
-    'MartialArtist',
-    'Gambler',
-    'Scholar',
-    'PrayersForWisdom',
-    'PrayersForDestiny',
-    'PrayersForIllumination',
-    'PrayersToSpringtime',
-    'GladiatorsFinale',
-    'WanderersTroupe',
-    'NoblesseOblige',
-    'BloodstainedChivalry',
-    'MaidenBeloved',
-    'ViridescentVenerer',
-    'ArchaicPetra',
-    'RetracingBolide',
-    'Thundersoother',
-    'ThunderingFury',
-    'Lavawalker',
-    'CrimsonWitchOfFlames',
-    'BlizzardStrayer',
-    'HeartOfDepth',
-    'TenacityOfTheMillelith',
-    'PaleFlame',
-    'ShimenawasReminiscence',
-    'EmblemOfSeveredFate',
-    'HuskOfOpulentDreams',
-    'OceanHuedClam',
-    'VermillionHereafter',
-    'EchoesOfAnOffering',
-    'DeepwoodMemories',
-    'GildedDreams',
-    'DesertPavilionChronicle',
-    'FlowerOfParadiseLost',
-    'NymphsDream',
-    'VourukashasGlow',
-    'MarechausseeHunter',
-    'GoldenTroupe',
-    'SongOfDaysPast',
-    'NighttimeWhispersInTheEchoingWoods',
-    'FragmentOfHarmonicWhimsy',
-    'UnfinishedReverie',
-    'ScrollOfTheHeroOfCinderCity',
-    'ObsidianCodex',
-    'FinaleOfTheDeepGalleries',
-    'LongNightsOath',
-    'NightOfTheSkysUnveiling',
-    'SilkenMoonsSerenade'
+    'Initiate',                             # 0
+    'Adventurer',                           # 1
+    'LuckyDog',                             # 2
+    'TravelingDoctor',                      # 3
+    'ResolutionOfSojourner',                # 4
+    'TinyMiracle',                          # 5
+    'Berserker',                            # 6
+    'Instructor',                           # 7
+    'TheExile',                             # 8
+    'DefendersWill',                        # 9
+    'BraveHeart',                           # 10
+    'MartialArtist',                        # 11
+    'Gambler',                              # 12
+    'Scholar',                              # 13
+    'PrayersForWisdom',                     # 14
+    'PrayersForDestiny',                    # 15
+    'PrayersForIllumination',               # 16
+    'PrayersToSpringtime',                  # 17
+    'GladiatorsFinale',                     # 18
+    'WanderersTroupe',                      # 19
+    'NoblesseOblige',                       # 20
+    'BloodstainedChivalry',                 # 21
+    'MaidenBeloved',                        # 22
+    'ViridescentVenerer',                   # 23
+    'ArchaicPetra',                         # 24
+    'RetracingBolide',                      # 25
+    'Thundersoother',                       # 26
+    'ThunderingFury',                       # 27
+    'Lavawalker',                           # 28
+    'CrimsonWitchOfFlames',                 # 29
+    'BlizzardStrayer',                      # 30
+    'HeartOfDepth',                         # 31
+    'TenacityOfTheMillelith',               # 32
+    'PaleFlame',                            # 33
+    'ShimenawasReminiscence',               # 34
+    'EmblemOfSeveredFate',                  # 35
+    'HuskOfOpulentDreams',                  # 36
+    'OceanHuedClam',                        # 37
+    'VermillionHereafter',                  # 38
+    'EchoesOfAnOffering',                   # 39
+    'DeepwoodMemories',                     # 40
+    'GildedDreams',                         # 41
+    'DesertPavilionChronicle',              # 42
+    'FlowerOfParadiseLost',                 # 43
+    'NymphsDream',                          # 44
+    'VourukashasGlow',                      # 45
+    'MarechausseeHunter',                   # 46
+    'GoldenTroupe',                         # 47
+    'SongOfDaysPast',                       # 48
+    'NighttimeWhispersInTheEchoingWoods',   # 49
+    'FragmentOfHarmonicWhimsy',             # 50
+    'UnfinishedReverie',                    # 51
+    'ScrollOfTheHeroOfCinderCity',          # 52
+    'ObsidianCodex',                        # 53
+    'FinaleOfTheDeepGalleries',             # 54
+    'LongNightsOath',                       # 55
+    'NightOfTheSkysUnveiling',              # 56
+    'SilkenMoonsSerenade'                   # 57
 )
 
 SET_2_NUM = {artifact_set: index for index, artifact_set in enumerate(SETS)}

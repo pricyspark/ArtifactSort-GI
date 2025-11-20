@@ -29,6 +29,9 @@ def range_resin(
     slot_mask = np.logical_and(rarities == 5, slots == SLOT_2_NUM[slot])
     slot_mask = np.logical_and(slot_mask, lvls == 20)
     slot_mask = np.logical_and(slot_mask, sets == set_key)
+    if np.count_nonzero(slot_mask) == 0:
+        return (-1, [], [], [])
+    
     scores = cast(NDArray, score(artifacts[slot_mask], target))
     slot_idx = np.argmax(scores)
     idx = np.flatnonzero(slot_mask)[slot_idx]

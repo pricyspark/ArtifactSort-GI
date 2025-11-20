@@ -24,6 +24,12 @@ def _substat_text(artifact_dict: dict, index: int) -> str:
     substats = artifact_dict['substats']
     return f'{substats[index]['key']}+{substats[index]['value']}'
 
+def _clear_layout(layout):
+    while layout.count() > 0:
+        widget = layout.takeAt(0).widget()
+        if widget is not None:
+            widget.deleteLater()
+
 class MainWindow(QMainWindow, Ui_MainWindow):
     def __init__(self):
         super().__init__()
@@ -105,6 +111,73 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             return
         # TODO: this mesage doesn't work, likely a thread issue with GIL
         self.statusbar.showMessage('Calculating...')
+        
+        # Clear charts, if they exist
+        flower_layout = self.flowerContainer.layout()
+        plume_layout = self.plumeContainer.layout()
+        sands_layout = self.sandsContainer.layout()
+        goblet_layout = self.gobletContainer.layout()
+        circlet_layout = self.circletContainer.layout()
+        
+        assert flower_layout is not None
+        assert plume_layout is not None
+        assert sands_layout is not None
+        assert goblet_layout is not None
+        assert circlet_layout is not None
+        
+        _clear_layout(flower_layout)
+        _clear_layout(plume_layout)
+        _clear_layout(sands_layout)
+        _clear_layout(goblet_layout)
+        _clear_layout(circlet_layout)
+        
+        # Clear artifacts
+        self.flowerBestSub1.setText('')
+        self.flowerBestSub2.setText('')
+        self.flowerBestSub3.setText('')
+        self.flowerBestSub4.setText('')
+        self.flowerReshapeMain.setText('')
+        self.flowerReshapeSub1.setText('')
+        self.flowerReshapeSub2.setText('')
+        self.flowerReshapeSub3.setText('')
+        self.flowerReshapeSub4.setText('')
+        self.plumeBestSub1.setText('')
+        self.plumeBestSub2.setText('')
+        self.plumeBestSub3.setText('')
+        self.plumeBestSub4.setText('')
+        self.plumeReshapeMain.setText('')
+        self.plumeReshapeSub1.setText('')
+        self.plumeReshapeSub2.setText('')
+        self.plumeReshapeSub3.setText('')
+        self.plumeReshapeSub4.setText('')
+        self.sandsBestSub1.setText('')
+        self.sandsBestSub2.setText('')
+        self.sandsBestSub3.setText('')
+        self.sandsBestSub4.setText('')
+        self.sandsReshapeMain.setText('')
+        self.sandsReshapeSub1.setText('')
+        self.sandsReshapeSub2.setText('')
+        self.sandsReshapeSub3.setText('')
+        self.sandsReshapeSub4.setText('')
+        self.gobletBestSub1.setText('')
+        self.gobletBestSub2.setText('')
+        self.gobletBestSub3.setText('')
+        self.gobletBestSub4.setText('')
+        self.gobletReshapeMain.setText('')
+        self.gobletReshapeSub1.setText('')
+        self.gobletReshapeSub2.setText('')
+        self.gobletReshapeSub3.setText('')
+        self.gobletReshapeSub4.setText('')
+        self.circletBestSub1.setText('')
+        self.circletBestSub2.setText('')
+        self.circletBestSub3.setText('')
+        self.circletBestSub4.setText('')
+        self.circletReshapeMain.setText('')
+        self.circletReshapeSub1.setText('')
+        self.circletReshapeSub2.setText('')
+        self.circletReshapeSub3.setText('')
+        self.circletReshapeSub4.setText('')
+        
         (
             self.artifact_dicts, 
             self.artifacts, 
@@ -242,84 +315,165 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         )
         
         flower_points = range_resin(*range_params, 'flower')
+        if flower_points[0] == -1:
+            self.flowerBestMain.setText('No maxed 5* flower')
+            self.flowerBestSub1.setText('')
+            self.flowerBestSub2.setText('')
+            self.flowerBestSub3.setText('')
+            self.flowerBestSub4.setText('')
+            self.flowerReshapeMain.setText('')
+            self.flowerReshapeSub1.setText('')
+            self.flowerReshapeSub2.setText('')
+            self.flowerReshapeSub3.setText('')
+            self.flowerReshapeSub4.setText('')
+        else:
+            best_flower = self.artifact_dicts[flower_points[0]]
+            reshape_flower = self.artifact_dicts[flower_points[3][0][1]] # temp. For now display the best for 0%
+            self.flowerBestMain.setText(best_flower['mainStatKey'])
+            self.flowerBestSub1.setText(_substat_text(best_flower, 0))
+            self.flowerBestSub2.setText(_substat_text(best_flower, 1))
+            self.flowerBestSub3.setText(_substat_text(best_flower, 2))
+            self.flowerBestSub4.setText(_substat_text(best_flower, 3))
+            self.flowerReshapeMain.setText(reshape_flower['mainStatKey'])
+            self.flowerReshapeSub1.setText(_substat_text(reshape_flower, 0))
+            self.flowerReshapeSub2.setText(_substat_text(reshape_flower, 1))
+            self.flowerReshapeSub3.setText(_substat_text(reshape_flower, 2))
+            self.flowerReshapeSub4.setText(_substat_text(reshape_flower, 3))
+        
         plume_points = range_resin(*range_params, 'plume')
+        if plume_points[0] == -1:
+            self.plumeBestMain.setText('No maxed 5* plume')
+            self.plumeBestSub1.setText('')
+            self.plumeBestSub2.setText('')
+            self.plumeBestSub3.setText('')
+            self.plumeBestSub4.setText('')
+            self.plumeReshapeMain.setText('')
+            self.plumeReshapeSub1.setText('')
+            self.plumeReshapeSub2.setText('')
+            self.plumeReshapeSub3.setText('')
+            self.plumeReshapeSub4.setText('')
+        else:
+            best_plume = self.artifact_dicts[plume_points[0]]
+            reshape_plume = self.artifact_dicts[plume_points[3][0][1]]
+            self.plumeBestMain.setText(best_plume['mainStatKey'])
+            self.plumeBestSub1.setText(_substat_text(best_plume, 0))
+            self.plumeBestSub2.setText(_substat_text(best_plume, 1))
+            self.plumeBestSub3.setText(_substat_text(best_plume, 2))
+            self.plumeBestSub4.setText(_substat_text(best_plume, 3))
+            self.plumeReshapeMain.setText(reshape_plume['mainStatKey'])
+            self.plumeReshapeSub1.setText(_substat_text(reshape_plume, 0))
+            self.plumeReshapeSub2.setText(_substat_text(reshape_plume, 1))
+            self.plumeReshapeSub3.setText(_substat_text(reshape_plume, 2))
+            self.plumeReshapeSub4.setText(_substat_text(reshape_plume, 3))
+        
         sands_points = range_resin(*range_params, 'sands')
+        if sands_points[0] == -1:
+            self.sandsBestMain.setText('No maxed 5* sands')
+            self.sandsBestSub1.setText('')
+            self.sandsBestSub2.setText('')
+            self.sandsBestSub3.setText('')
+            self.sandsBestSub4.setText('')
+            self.sandsReshapeMain.setText('')
+            self.sandsReshapeSub1.setText('')
+            self.sandsReshapeSub2.setText('')
+            self.sandsReshapeSub3.setText('')
+            self.sandsReshapeSub4.setText('')
+        else:
+            best_sands = self.artifact_dicts[sands_points[0]]
+            reshape_sands = self.artifact_dicts[sands_points[3][0][1]]
+            self.sandsBestMain.setText(best_sands['mainStatKey'])
+            self.sandsBestSub1.setText(_substat_text(best_sands, 0))
+            self.sandsBestSub2.setText(_substat_text(best_sands, 1))
+            self.sandsBestSub3.setText(_substat_text(best_sands, 2))
+            self.sandsBestSub4.setText(_substat_text(best_sands, 3))
+            self.sandsReshapeMain.setText(reshape_sands['mainStatKey'])
+            self.sandsReshapeSub1.setText(_substat_text(reshape_sands, 0))
+            self.sandsReshapeSub2.setText(_substat_text(reshape_sands, 1))
+            self.sandsReshapeSub3.setText(_substat_text(reshape_sands, 2))
+            self.sandsReshapeSub4.setText(_substat_text(reshape_sands, 3))
+        
         goblet_points = range_resin(*range_params, 'goblet')
+        if goblet_points[0] == -1:
+            self.gobletBestMain.setText('No maxed 5* goblet')
+            self.gobletBestSub1.setText('')
+            self.gobletBestSub2.setText('')
+            self.gobletBestSub3.setText('')
+            self.gobletBestSub4.setText('')
+            self.gobletReshapeMain.setText('')
+            self.gobletReshapeSub1.setText('')
+            self.gobletReshapeSub2.setText('')
+            self.gobletReshapeSub3.setText('')
+            self.gobletReshapeSub4.setText('')
+        else:
+            best_goblet = self.artifact_dicts[goblet_points[0]]
+            reshape_goblet = self.artifact_dicts[goblet_points[3][0][1]]
+            self.gobletBestMain.setText(best_goblet['mainStatKey'])
+            self.gobletBestSub1.setText(_substat_text(best_goblet, 0))
+            self.gobletBestSub2.setText(_substat_text(best_goblet, 1))
+            self.gobletBestSub3.setText(_substat_text(best_goblet, 2))
+            self.gobletBestSub4.setText(_substat_text(best_goblet, 3))
+            self.gobletReshapeMain.setText(reshape_goblet['mainStatKey'])
+            self.gobletReshapeSub1.setText(_substat_text(reshape_goblet, 0))
+            self.gobletReshapeSub2.setText(_substat_text(reshape_goblet, 1))
+            self.gobletReshapeSub3.setText(_substat_text(reshape_goblet, 2))
+            self.gobletReshapeSub4.setText(_substat_text(reshape_goblet, 3))
+        
         circlet_points = range_resin(*range_params, 'circlet')
+        if circlet_points[0] == -1:
+            self.circletBestMain.setText('No maxed 5* circlet')
+            self.circletBestSub1.setText('')
+            self.circletBestSub2.setText('')
+            self.circletBestSub3.setText('')
+            self.circletBestSub4.setText('')
+            self.circletReshapeMain.setText('')
+            self.circletReshapeSub1.setText('')
+            self.circletReshapeSub2.setText('')
+            self.circletReshapeSub3.setText('')
+            self.circletReshapeSub4.setText('')
+        else:
+            best_circlet = self.artifact_dicts[circlet_points[0]]
+            reshape_circlet = self.artifact_dicts[circlet_points[3][0][1]]
+            self.circletBestMain.setText(best_circlet['mainStatKey'])
+            self.circletBestSub1.setText(_substat_text(best_circlet, 0))
+            self.circletBestSub2.setText(_substat_text(best_circlet, 1))
+            self.circletBestSub3.setText(_substat_text(best_circlet, 2))
+            self.circletBestSub4.setText(_substat_text(best_circlet, 3))
+            self.circletReshapeMain.setText(reshape_circlet['mainStatKey'])
+            self.circletReshapeSub1.setText(_substat_text(reshape_circlet, 0))
+            self.circletReshapeSub2.setText(_substat_text(reshape_circlet, 1))
+            self.circletReshapeSub3.setText(_substat_text(reshape_circlet, 2))
+            self.circletReshapeSub4.setText(_substat_text(reshape_circlet, 3))
+            
         points = (flower_points, plume_points, sands_points, goblet_points, circlet_points)
-        resin_max = max([points[1][-1] for points in points])
+        points = [point for point in (points) if point[0] != -1]
+        
+        if not points:
+            flower_layout = self.flowerContainer.layout()
+            plume_layout = self.plumeContainer.layout()
+            sands_layout = self.sandsContainer.layout()
+            goblet_layout = self.gobletContainer.layout()
+            circlet_layout = self.circletContainer.layout()
+            
+            assert flower_layout is not None
+            assert plume_layout is not None
+            assert sands_layout is not None
+            assert goblet_layout is not None
+            assert circlet_layout is not None
+            
+            _clear_layout(flower_layout)
+            _clear_layout(plume_layout)
+            _clear_layout(sands_layout)
+            _clear_layout(goblet_layout)
+            _clear_layout(circlet_layout)
+            
+            return
+                    
+        resin_max = max([points[1][-1] for points in points if points[0] != -1])
         
         # TODO: you can def make a function that dynamically creates
         # labels and assigns text for them instead of manually doing
         # this like an idiot. But I'm too lazy to figure that out with
         # PySide. This is comically stupid
-        
-        best_flower = self.artifact_dicts[flower_points[0]]
-        best_plume = self.artifact_dicts[plume_points[0]]
-        best_sands = self.artifact_dicts[sands_points[0]]
-        best_goblet = self.artifact_dicts[goblet_points[0]]
-        best_circlet = self.artifact_dicts[circlet_points[0]]
-        
-        reshape_flower = self.artifact_dicts[flower_points[3][0][1]] # temp. For now display the best for 0%
-        reshape_plume = self.artifact_dicts[plume_points[3][0][1]]
-        reshape_sands = self.artifact_dicts[sands_points[3][0][1]]
-        reshape_goblet = self.artifact_dicts[goblet_points[3][0][1]]
-        reshape_circlet = self.artifact_dicts[circlet_points[3][0][1]]
-        
-        self.flowerBestMain.setText(best_flower['mainStatKey'])
-        self.flowerBestSub1.setText(_substat_text(best_flower, 0))
-        self.flowerBestSub2.setText(_substat_text(best_flower, 1))
-        self.flowerBestSub3.setText(_substat_text(best_flower, 2))
-        self.flowerBestSub4.setText(_substat_text(best_flower, 3))
-        self.flowerReshapeMain.setText(reshape_flower['mainStatKey'])
-        self.flowerReshapeSub1.setText(_substat_text(reshape_flower, 0))
-        self.flowerReshapeSub2.setText(_substat_text(reshape_flower, 1))
-        self.flowerReshapeSub3.setText(_substat_text(reshape_flower, 2))
-        self.flowerReshapeSub4.setText(_substat_text(reshape_flower, 3))
-        
-        self.plumeBestMain.setText(best_plume['mainStatKey'])
-        self.plumeBestSub1.setText(_substat_text(best_plume, 0))
-        self.plumeBestSub2.setText(_substat_text(best_plume, 1))
-        self.plumeBestSub3.setText(_substat_text(best_plume, 2))
-        self.plumeBestSub4.setText(_substat_text(best_plume, 3))
-        self.plumeReshapeMain.setText(reshape_plume['mainStatKey'])
-        self.plumeReshapeSub1.setText(_substat_text(reshape_plume, 0))
-        self.plumeReshapeSub2.setText(_substat_text(reshape_plume, 1))
-        self.plumeReshapeSub3.setText(_substat_text(reshape_plume, 2))
-        self.plumeReshapeSub4.setText(_substat_text(reshape_plume, 3))
-        
-        self.sandsBestMain.setText(best_sands['mainStatKey'])
-        self.sandsBestSub1.setText(_substat_text(best_sands, 0))
-        self.sandsBestSub2.setText(_substat_text(best_sands, 1))
-        self.sandsBestSub3.setText(_substat_text(best_sands, 2))
-        self.sandsBestSub4.setText(_substat_text(best_sands, 3))
-        self.sandsReshapeMain.setText(reshape_sands['mainStatKey'])
-        self.sandsReshapeSub1.setText(_substat_text(reshape_sands, 0))
-        self.sandsReshapeSub2.setText(_substat_text(reshape_sands, 1))
-        self.sandsReshapeSub3.setText(_substat_text(reshape_sands, 2))
-        self.sandsReshapeSub4.setText(_substat_text(reshape_sands, 3))
-        
-        self.gobletBestMain.setText(best_goblet['mainStatKey'])
-        self.gobletBestSub1.setText(_substat_text(best_goblet, 0))
-        self.gobletBestSub2.setText(_substat_text(best_goblet, 1))
-        self.gobletBestSub3.setText(_substat_text(best_goblet, 2))
-        self.gobletBestSub4.setText(_substat_text(best_goblet, 3))
-        self.gobletReshapeMain.setText(reshape_goblet['mainStatKey'])
-        self.gobletReshapeSub1.setText(_substat_text(reshape_goblet, 0))
-        self.gobletReshapeSub2.setText(_substat_text(reshape_goblet, 1))
-        self.gobletReshapeSub3.setText(_substat_text(reshape_goblet, 2))
-        self.gobletReshapeSub4.setText(_substat_text(reshape_goblet, 3))
-        
-        self.circletBestMain.setText(best_circlet['mainStatKey'])
-        self.circletBestSub1.setText(_substat_text(best_circlet, 0))
-        self.circletBestSub2.setText(_substat_text(best_circlet, 1))
-        self.circletBestSub3.setText(_substat_text(best_circlet, 2))
-        self.circletBestSub4.setText(_substat_text(best_circlet, 3))
-        self.circletReshapeMain.setText(reshape_circlet['mainStatKey'])
-        self.circletReshapeSub1.setText(_substat_text(reshape_circlet, 0))
-        self.circletReshapeSub2.setText(_substat_text(reshape_circlet, 1))
-        self.circletReshapeSub3.setText(_substat_text(reshape_circlet, 2))
-        self.circletReshapeSub4.setText(_substat_text(reshape_circlet, 3))
         
         '''
         asdf = [points[3] for points in (flower_points, plume_points, sands_points, goblet_points, circlet_points)]

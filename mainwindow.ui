@@ -638,7 +638,7 @@ DOESN'T REPORT: Any OCR-based scanner</string>
        </attribute>
        <layout class="QVBoxLayout" name="verticalLayout" stretch="0,0">
         <item>
-         <layout class="QHBoxLayout" name="defineInput" stretch="0,1,0">
+         <layout class="QHBoxLayout" name="defineInput" stretch="0,0,1,0">
           <item>
            <widget class="QComboBox" name="setCombo">
             <property name="sizePolicy">
@@ -954,7 +954,18 @@ DOESN'T REPORT: Any OCR-based scanner</string>
            </widget>
           </item>
           <item>
-           <widget class="QLineEdit" name="targetLine"/>
+           <widget class="QPushButton" name="targetButton">
+            <property name="text">
+             <string>Edit</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLineEdit" name="targetLine">
+            <property name="text">
+             <string>Enter optimization target</string>
+            </property>
+           </widget>
           </item>
           <item>
            <widget class="QPushButton" name="calcTargetButton">

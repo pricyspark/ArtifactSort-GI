@@ -3,6 +3,7 @@ __pycache__
 *.ipynb
 scans/
 MainWindow.py
+TargetDialog.py
 *.autosave
 *.TMP
 resources.py

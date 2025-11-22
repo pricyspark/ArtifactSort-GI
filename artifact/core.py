@@ -1,7 +1,7 @@
 import numpy as np
 from numpy.typing import NDArray
 from collections.abc import Collection
-from .constants import ARTIFACT_DTYPE, TARGET_DTYPE, STAT_2_NUM, STAT_DTYPE
+from .constants import ARTIFACT_DTYPE, TARGET_DTYPE, STAT_2_NUM, STAT_DTYPE, STATS
 
 def find_main(artifact: NDArray[ARTIFACT_DTYPE]) -> int:
     mask = artifact == 160
@@ -42,6 +42,15 @@ def multi_vectorize(
     output = np.zeros((len(targets), 19), dtype=TARGET_DTYPE)
     for i, target in enumerate(targets):
         output[i] = vectorize(target)
+    return output
+
+def unvectorize(target: Collection[int]) -> dict[str, int]:
+    output: dict[str, int] = {}
+    for i, value in enumerate(target):
+        if value == 0:
+            continue
+        
+        output[STATS[i]] = value
     return output
 
 def score(

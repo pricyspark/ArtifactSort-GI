@@ -25,12 +25,16 @@ relevant to you?
 If so, then Artifact Sort can help you!
 
 ## Installation
+
 1. Clone the repo
+
    ```sh
    git clone https://github.com/pricyspark/ArtifactSort.git
    cd ArtifactSort
    ```
-2. <p>Set up environment using:<br>
+
+2. <p>
+   Set up environment using:<br>
    venv + pip (Windows)</p>
 
    ```sh
@@ -38,7 +42,9 @@ If so, then Artifact Sort can help you!
    .venv\Scripts\activate
    pip install -r requirements.txt
    ```
+
    venv + pip (macOS/Linus)
+
    ```sh
    python -m venv .venv
    source .venv/bin/activate
@@ -46,28 +52,36 @@ If so, then Artifact Sort can help you!
    ```
 
    mamba
+
    ```sh
    mamba env create -f environment.yml
    mamba activate artifact_sort
    ```
 
    conda
+
    ```sh
    conda env create -f environment.yml
    conda activate artifact_sort
    ```
+
 3. Compile GUI elements
+
    ```sh
    pyside6-uic mainwindow.ui -o MainWindow.py
+   pyside6-uic targetdialog.ui -o TargetDialog.py
    pyside6-rcc resources.qrc -o resources.py
    ```
+
 ## Usage
+
 Disclaimer: This project is in active development. There are guaranteed
 to be bugs and unaccounted for edge cases. Improper usage will likely
 crash the program or cause en error. This is fine, simply close the
 window and relaunch.
+
 1. Export in-game artifacts using a scanner.
-   
+
    For best results, scan with Irminsul and Inventory Kamera. Irminsul
    captures extra data to ensure maximum accuracy. Inventory Kamera
    keeps track of scan order, so artifacts can be presented in the same
@@ -80,11 +94,13 @@ window and relaunch.
    doesn't change. To guarantee order correctness, analyze immediately after
    scanning. Sorting by order obtained gives consistent ordering every
    time, but Inventory Kamera automatically disables this.
+
 2. <p>Run:<br>
 
    ```sh
    python gui.py
    ```
+
 3. In the opened window, select your scan(s). If you only have one scan
    (Irminsul), select it as the main scan. If you have two scans, select
    the ordered scan as the main scan, and the second one as the
@@ -115,28 +131,36 @@ window and relaunch.
    Select a set and optimization target, and it will return expected
    resin requirements to farm improvements of at least 0%, 1%, and 5%.
    It also returns how much resin you save on average if you instead
-   define or reshape an artifact. Optimization targets are defined by a
-   dictionary with a weighted sum of the considered stats. The current
-   input formatting isn't user friendly, and a better input method is in
-   progress. For more examples of properly formatted optimization
+   define or reshape an artifact. Scoring is performed using a weighted
+   sum of an artifact's stats. Optimization targets define the weights.
+   Currently, if you use a target that isn't cached, this will run very
+   slowly. For examples of cached properly formatted optimization
    targets, look in targets.py. (Warning: it's a mess in there)
 
    Example optimization target:
+
    ```
    {'atk_': 6, 'atk': 2, 'crit_': 8}
    ```
+
 ## Cleanup
+
 venv + pip
+
 ```sh
 deactivate
 rm -rf .venv
 ```
+
 conda
+
 ```sh
 conda deactivate
 conda env remove -n artifact_sort
 ```
+
 ## Roadmap
+
 - [X] GUI
 - [X] Analysis for defining
 - [X] Analysis for reshaping

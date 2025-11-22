@@ -4,7 +4,7 @@ import ast
 import re
 import time
 from artifact import *
-from PySide6.QtWidgets import (QMainWindow, QApplication, QFileDialog, QLabel)
+from PySide6.QtWidgets import (QMainWindow, QApplication, QFileDialog, QLabel, QDialog, QSpinBox)
 from PySide6.QtGui import (QIcon, QPixmap, QFont) # TODO: Pretty sure this is bad practice, and should instead subclass MainWindow
 from PySide6.QtCharts import QChart, QChartView, QLineSeries, QValueAxis, QLogValueAxis
 #from PySide6 import QtCore
@@ -13,6 +13,7 @@ from PySide6.QtCharts import QChart, QChartView, QLineSeries, QValueAxis, QLogVa
 from PySide6.QtCore import Qt
 
 from MainWindow import Ui_MainWindow
+from TargetDialog import Ui_Dialog
 from square_widget import SquareToolButton, SquareLabel
 from chart import HoverChartView
 import resources
@@ -24,21 +25,48 @@ def _substat_text(artifact_dict: dict, index: int) -> str:
     substats = artifact_dict['substats']
     return f'{substats[index]['key']}+{substats[index]['value']}'
 
-def _clear_layout(layout):
+def _clear_layout(layout) -> None:
     while layout.count() > 0:
         widget = layout.takeAt(0).widget()
         if widget is not None:
             widget.deleteLater()
 
-class MainWindow(QMainWindow, Ui_MainWindow):
-    def __init__(self):
+class TargetDialog(QDialog, Ui_Dialog):
+    def __init__(self, weights = None) -> None:
         super().__init__()
         self.setupUi(self)
         
-        self.targetLine.setText('Enter optimization target')
+        for row in range(self.tableWidget.rowCount()):
+            spin = QSpinBox()
+            spin.setMinimum(0)
+            spin.setMaximum(100) # WARNING: I think this is big enough to overflow score if everything is set to 100
+            self.tableWidget.setCellWidget(row, 0, spin)
+        
+        if weights is None:
+            return
+        
+        for i, weight in enumerate(weights):
+            cell = self.tableWidget.cellWidget(i, 0)
+            assert isinstance(cell, QSpinBox)
+            cell.setValue(weight)
+        
+    def get_values(self) -> list[int]:
+        values = []
+        for row in range(self.tableWidget.rowCount()):
+            cell = self.tableWidget.cellWidget(row, 0)
+            assert isinstance(cell, QSpinBox)
+            values.append(cell.value())
+            
+        return values
 
+class MainWindow(QMainWindow, Ui_MainWindow):
+    def __init__(self) -> None:
+        super().__init__()
+        self.setupUi(self)
+        
         # Define and Reshape
         self.calcTargetButton.clicked.connect(self.resinCalculate)
+        self.targetButton.clicked.connect(self.openTargetDialog)
 
         # Scan
         self.mainBrowseButton.clicked.connect(self.getMainFileName)
@@ -209,7 +237,25 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.populate_upgrade()
         self.populate_lock()
         
+    def openTargetDialog(self):
+        try:
+            target = vectorize(ast.literal_eval(self.targetLine.text()))
+            # TODO: make sure input weight is a natural number and they
+            # sum to <=400. This makes sure score fits in uint16. Maybe
+            # use uint32 and the range becomes <=26000000
+            
+        except:
+            self.statusbar.showMessage('Improperly formatted optimization target', 10000)
+            target = None
+        dialog = TargetDialog(target)
+        if dialog.exec():
+            self.targetLine.setText(str(unvectorize(dialog.get_values())))
+        
     def resinCalculate(self):
+        # TODO: if the selected target isn't cached, this runs REAAALLY
+        # slowly. Fix that. I dont remember what's happening and didn't
+        # check, but I'm pretty sure it isn't cached, and doesn't become
+        # cached either.
         if self.artifacts is None:
             self.statusbar.showMessage('Process a scan first', 10000)
             return
@@ -221,9 +267,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         assert self.lvls is not None
         assert self.unactivated is not None
         assert self.sets is not None
-        #assert self. is not None
-        
         raw_set = self.setCombo.currentText()
+        # TODO: reorder sets to match combobox and use currentIndex()
         if raw_set == 'Set':
             self.statusbar.showMessage('Choose a set first', 10000)
             return
@@ -328,17 +373,24 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.flowerReshapeSub4.setText('')
         else:
             best_flower = self.artifact_dicts[flower_points[0]]
-            reshape_flower = self.artifact_dicts[flower_points[3][0][1]] # temp. For now display the best for 0%
             self.flowerBestMain.setText(best_flower['mainStatKey'])
             self.flowerBestSub1.setText(_substat_text(best_flower, 0))
             self.flowerBestSub2.setText(_substat_text(best_flower, 1))
             self.flowerBestSub3.setText(_substat_text(best_flower, 2))
             self.flowerBestSub4.setText(_substat_text(best_flower, 3))
-            self.flowerReshapeMain.setText(reshape_flower['mainStatKey'])
-            self.flowerReshapeSub1.setText(_substat_text(reshape_flower, 0))
-            self.flowerReshapeSub2.setText(_substat_text(reshape_flower, 1))
-            self.flowerReshapeSub3.setText(_substat_text(reshape_flower, 2))
-            self.flowerReshapeSub4.setText(_substat_text(reshape_flower, 3))
+            try:
+                reshape_flower = self.artifact_dicts[flower_points[3][0][1]] # temp. For now display the best for 0%
+                self.flowerReshapeMain.setText(reshape_flower['mainStatKey'])
+                self.flowerReshapeSub1.setText(_substat_text(reshape_flower, 0))
+                self.flowerReshapeSub2.setText(_substat_text(reshape_flower, 1))
+                self.flowerReshapeSub3.setText(_substat_text(reshape_flower, 2))
+                self.flowerReshapeSub4.setText(_substat_text(reshape_flower, 3))
+            except IndexError:
+                self.flowerReshapeMain.setText('')
+                self.flowerReshapeSub1.setText('Reshaping cannot improve flower')
+                self.flowerReshapeSub2.setText('')
+                self.flowerReshapeSub3.setText('')
+                self.flowerReshapeSub4.setText('')
         
         plume_points = range_resin(*range_params, 'plume')
         if plume_points[0] == -1:
@@ -354,17 +406,24 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.plumeReshapeSub4.setText('')
         else:
             best_plume = self.artifact_dicts[plume_points[0]]
-            reshape_plume = self.artifact_dicts[plume_points[3][0][1]]
             self.plumeBestMain.setText(best_plume['mainStatKey'])
             self.plumeBestSub1.setText(_substat_text(best_plume, 0))
             self.plumeBestSub2.setText(_substat_text(best_plume, 1))
             self.plumeBestSub3.setText(_substat_text(best_plume, 2))
             self.plumeBestSub4.setText(_substat_text(best_plume, 3))
-            self.plumeReshapeMain.setText(reshape_plume['mainStatKey'])
-            self.plumeReshapeSub1.setText(_substat_text(reshape_plume, 0))
-            self.plumeReshapeSub2.setText(_substat_text(reshape_plume, 1))
-            self.plumeReshapeSub3.setText(_substat_text(reshape_plume, 2))
-            self.plumeReshapeSub4.setText(_substat_text(reshape_plume, 3))
+            try:
+                reshape_plume = self.artifact_dicts[plume_points[3][0][1]]
+                self.plumeReshapeMain.setText(reshape_plume['mainStatKey'])
+                self.plumeReshapeSub1.setText(_substat_text(reshape_plume, 0))
+                self.plumeReshapeSub2.setText(_substat_text(reshape_plume, 1))
+                self.plumeReshapeSub3.setText(_substat_text(reshape_plume, 2))
+                self.plumeReshapeSub4.setText(_substat_text(reshape_plume, 3))
+            except IndexError:
+                self.plumeReshapeMain.setText('')
+                self.plumeReshapeSub1.setText('Reshaping cannot improve plume')
+                self.plumeReshapeSub2.setText('')
+                self.plumeReshapeSub3.setText('')
+                self.plumeReshapeSub4.setText('')
         
         sands_points = range_resin(*range_params, 'sands')
         if sands_points[0] == -1:
@@ -380,17 +439,24 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.sandsReshapeSub4.setText('')
         else:
             best_sands = self.artifact_dicts[sands_points[0]]
-            reshape_sands = self.artifact_dicts[sands_points[3][0][1]]
             self.sandsBestMain.setText(best_sands['mainStatKey'])
             self.sandsBestSub1.setText(_substat_text(best_sands, 0))
             self.sandsBestSub2.setText(_substat_text(best_sands, 1))
             self.sandsBestSub3.setText(_substat_text(best_sands, 2))
             self.sandsBestSub4.setText(_substat_text(best_sands, 3))
-            self.sandsReshapeMain.setText(reshape_sands['mainStatKey'])
-            self.sandsReshapeSub1.setText(_substat_text(reshape_sands, 0))
-            self.sandsReshapeSub2.setText(_substat_text(reshape_sands, 1))
-            self.sandsReshapeSub3.setText(_substat_text(reshape_sands, 2))
-            self.sandsReshapeSub4.setText(_substat_text(reshape_sands, 3))
+            try:
+                reshape_sands = self.artifact_dicts[sands_points[3][0][1]]
+                self.sandsReshapeMain.setText(reshape_sands['mainStatKey'])
+                self.sandsReshapeSub1.setText(_substat_text(reshape_sands, 0))
+                self.sandsReshapeSub2.setText(_substat_text(reshape_sands, 1))
+                self.sandsReshapeSub3.setText(_substat_text(reshape_sands, 2))
+                self.sandsReshapeSub4.setText(_substat_text(reshape_sands, 3))
+            except IndexError:
+                self.sandsReshapeMain.setText('')
+                self.sandsReshapeSub1.setText('Reshaping cannot improve sands')
+                self.sandsReshapeSub2.setText('')
+                self.sandsReshapeSub3.setText('')
+                self.sandsReshapeSub4.setText('')
         
         goblet_points = range_resin(*range_params, 'goblet')
         if goblet_points[0] == -1:
@@ -406,17 +472,25 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.gobletReshapeSub4.setText('')
         else:
             best_goblet = self.artifact_dicts[goblet_points[0]]
-            reshape_goblet = self.artifact_dicts[goblet_points[3][0][1]]
             self.gobletBestMain.setText(best_goblet['mainStatKey'])
             self.gobletBestSub1.setText(_substat_text(best_goblet, 0))
             self.gobletBestSub2.setText(_substat_text(best_goblet, 1))
             self.gobletBestSub3.setText(_substat_text(best_goblet, 2))
             self.gobletBestSub4.setText(_substat_text(best_goblet, 3))
-            self.gobletReshapeMain.setText(reshape_goblet['mainStatKey'])
-            self.gobletReshapeSub1.setText(_substat_text(reshape_goblet, 0))
-            self.gobletReshapeSub2.setText(_substat_text(reshape_goblet, 1))
-            self.gobletReshapeSub3.setText(_substat_text(reshape_goblet, 2))
-            self.gobletReshapeSub4.setText(_substat_text(reshape_goblet, 3))
+            try:
+                reshape_goblet = self.artifact_dicts[goblet_points[3][0][1]]
+                self.gobletReshapeMain.setText(reshape_goblet['mainStatKey'])
+                self.gobletReshapeSub1.setText(_substat_text(reshape_goblet, 0))
+                self.gobletReshapeSub2.setText(_substat_text(reshape_goblet, 1))
+                self.gobletReshapeSub3.setText(_substat_text(reshape_goblet, 2))
+                self.gobletReshapeSub4.setText(_substat_text(reshape_goblet, 3))
+            except IndexError:
+                self.gobletReshapeMain.setText('')
+                self.gobletReshapeSub1.setText('Reshaping cannot improve goblet')
+                self.gobletReshapeSub2.setText('')
+                self.gobletReshapeSub3.setText('')
+                self.gobletReshapeSub4.setText('')
+                
         
         circlet_points = range_resin(*range_params, 'circlet')
         if circlet_points[0] == -1:
@@ -432,17 +506,24 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.circletReshapeSub4.setText('')
         else:
             best_circlet = self.artifact_dicts[circlet_points[0]]
-            reshape_circlet = self.artifact_dicts[circlet_points[3][0][1]]
             self.circletBestMain.setText(best_circlet['mainStatKey'])
             self.circletBestSub1.setText(_substat_text(best_circlet, 0))
             self.circletBestSub2.setText(_substat_text(best_circlet, 1))
             self.circletBestSub3.setText(_substat_text(best_circlet, 2))
             self.circletBestSub4.setText(_substat_text(best_circlet, 3))
-            self.circletReshapeMain.setText(reshape_circlet['mainStatKey'])
-            self.circletReshapeSub1.setText(_substat_text(reshape_circlet, 0))
-            self.circletReshapeSub2.setText(_substat_text(reshape_circlet, 1))
-            self.circletReshapeSub3.setText(_substat_text(reshape_circlet, 2))
-            self.circletReshapeSub4.setText(_substat_text(reshape_circlet, 3))
+            try:
+                reshape_circlet = self.artifact_dicts[circlet_points[3][0][1]]
+                self.circletReshapeMain.setText(reshape_circlet['mainStatKey'])
+                self.circletReshapeSub1.setText(_substat_text(reshape_circlet, 0))
+                self.circletReshapeSub2.setText(_substat_text(reshape_circlet, 1))
+                self.circletReshapeSub3.setText(_substat_text(reshape_circlet, 2))
+                self.circletReshapeSub4.setText(_substat_text(reshape_circlet, 3))
+            except IndexError:
+                self.circletReshapeMain.setText('')
+                self.circletReshapeSub1.setText('Reshaping cannot improve circlet')
+                self.circletReshapeSub2.setText('')
+                self.circletReshapeSub3.setText('')
+                self.circletReshapeSub4.setText('')
             
         points = (flower_points, plume_points, sands_points, goblet_points, circlet_points)
         points = [point for point in (points) if point[0] != -1]

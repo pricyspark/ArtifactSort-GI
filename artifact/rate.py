@@ -5,7 +5,7 @@ import sys
 import pickle
 from functools import lru_cache
 from typing import Callable
-from .constants import CACHE_PATH, SLVL_DTYPE, SLOTS, SETS, ARTIFACT_DTYPE, CACHE_SIZE, TARGET_DTYPE
+from .constants import CACHE_PATH, SLVL_DTYPE, SLOTS, SETS, ARTIFACT_DTYPE, CACHE_SIZE, TARGET_DTYPE, TOP_CACHE_PATH
 from .targets import ALL_TARGETS, SET_TARGETS
 from .core import find_main, find_sub, score, multi_vectorize
 from .distributions import trim_distro
@@ -13,12 +13,28 @@ from .probs import base_artifact_probs, base_artifact_useful_probs
 from .percentiles import iterative_artifact_percentile
 
 try:
+    with open(TOP_CACHE_PATH, 'rb') as f:
+        top_cache: dict[tuple[str, int, bytes], float] = pickle.load(f)
+    print('Top cache loaded')
+except:
+    top_cache: dict[tuple[str, int, bytes], float] = {}
+    print('No top cache found')
+
+try:
     with open(CACHE_PATH, 'rb') as f:
         helper_cache: dict[tuple[str, int, bytes], float] = pickle.load(f)
-    print('Cache loaded')
+    print('Helper cache loaded')
 except:
     helper_cache: dict[tuple[str, int, bytes], float] = {}
-    print('No cache found')
+    print('No helper cache found')
+
+def top_key(
+    slot: str, 
+    target: NDArray[TARGET_DTYPE], 
+    artifact: NDArray[ARTIFACT_DTYPE], 
+    slvl: int
+) -> tuple:
+    return (slot, target.tobytes(), artifact.tobytes(), slvl)
 
 class CachePercentile:
     distros = [[trim_distro(j, i) for i in range(5)] for j in range(6)]
@@ -37,8 +53,8 @@ class CachePercentile:
         self.num_useless = 4 - self.num_useful
         self.weights_all = np.sort(self.useful_target[subs], axis=1)
         
-    # Double caching is memory inefficient, but lru_cache is still
-    # significantly faster.
+    # Double caching is memory inefficient, but lru_cache uses native
+    # C-caching, so it's way faster than dict caching
     # TODO: make this more elegant
     @lru_cache(maxsize=CACHE_SIZE)
     def helper(self, threshold: int) -> float:
@@ -61,6 +77,9 @@ class CachePercentile:
         return asdf
     
     def percent(self, artifact: NDArray[ARTIFACT_DTYPE], slvl: int) -> float:
+        key = top_key(self.slot, self.target, artifact, slvl)
+        if key in top_cache:
+            return top_cache[key]
         # TODO: maybe njit
         if slvl < 0:
             num_upgrades = 4
@@ -80,7 +99,9 @@ class CachePercentile:
         values, inverse = np.unique(scores, return_inverse=True) # Cannot njit this
         probs = np.bincount(inverse, weights=p)
         rarities = [self.helper(x) for x in values]
-        return np.sum(probs / rarities)
+        output = np.sum(probs / rarities)
+        top_cache[key] = output
+        return output
 
 def rate(
     artifacts: NDArray[ARTIFACT_DTYPE], 
@@ -219,7 +240,10 @@ def delete_rate(
             
     with open(CACHE_PATH, 'wb') as f:
         pickle.dump(helper_cache, f)
+    with open('top_cache.pkl', 'wb') as f:
+        pickle.dump(top_cache, f)
     return relevance, counts
+
 
 def delete_analyze(
     relevance: NDArray, 

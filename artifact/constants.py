@@ -174,3 +174,4 @@ MAX_REQ_EXP = np.array(
 CACHE_SIZE = 200000
 
 CACHE_PATH = 'cache.pkl'
+TOP_CACHE_PATH = 'top_cache.pkl'

@@ -14,19 +14,21 @@ from .percentiles import iterative_artifact_percentile
 
 try:
     with open(TOP_CACHE_PATH, 'rb') as f:
-        top_cache: dict[tuple[str, int, bytes], float] = pickle.load(f)
+        top_cache: dict[tuple[str, int, bytes] | None, float] = pickle.load(f)
     print('Top cache loaded')
 except:
-    top_cache: dict[tuple[str, int, bytes], float] = {}
+    top_cache: dict[tuple[str, int, bytes] | None, float] = {}
     print('No top cache found')
+top_cache[None] = False
 
 try:
     with open(CACHE_PATH, 'rb') as f:
-        helper_cache: dict[tuple[str, int, bytes], float] = pickle.load(f)
+        helper_cache: dict[tuple[str, int, bytes] | None, float] = pickle.load(f)
     print('Helper cache loaded')
 except:
-    helper_cache: dict[tuple[str, int, bytes], float] = {}
+    helper_cache: dict[tuple[str, int, bytes] | None, float] = {}
     print('No helper cache found')
+helper_cache[None] = False
 
 def top_key(
     slot: str, 
@@ -65,15 +67,18 @@ class CachePercentile:
             self.useful_target, 
             threshold, 
             20, 
-            info=(
+            info = (
                 self.mains, 
                 self.subs, 
                 self.probs, 
                 self.base_scores, 
                 self.num_useful, 
                 self.num_useless, 
-                self.weights_all))
+                self.weights_all
+            )
+        )
         helper_cache[target_key] = asdf
+        helper_cache[None] = True
         return asdf
     
     def percent(self, artifact: NDArray[ARTIFACT_DTYPE], slvl: int) -> float:
@@ -101,6 +106,7 @@ class CachePercentile:
         rarities = [self.helper(x) for x in values]
         output = np.sum(probs / rarities)
         top_cache[key] = output
+        top_cache[None] = True
         return output
 
 def rate(
@@ -238,10 +244,12 @@ def delete_rate(
             
     print() # TODO: get rid of this
             
-    with open(CACHE_PATH, 'wb') as f:
-        pickle.dump(helper_cache, f)
-    with open('top_cache.pkl', 'wb') as f:
-        pickle.dump(top_cache, f)
+    if top_cache[None]:
+        with open('top_cache.pkl', 'wb') as f:
+            pickle.dump(top_cache, f)
+    if helper_cache[None]:
+        with open(CACHE_PATH, 'wb') as f:
+            pickle.dump(helper_cache, f)
     return relevance, counts
 
 

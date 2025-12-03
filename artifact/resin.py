@@ -4,7 +4,8 @@ from typing import cast
 import math
 from .constants import ARTIFACT_DTYPE, LVL_DTYPE, TARGET_DTYPE, SLOTS, SLOT_2_NUM
 from .core import score
-from .percentiles import artifact_percentile, reshape_percentile, define_percentile
+from .probs import base_artifact_probs, base_artifact_useful_probs
+from .percentiles import artifact_percentile, reshape_percentile, define_percentile, iterative_artifact_percentile
 
 def estimate_resin(percentile: float) -> float:
     if percentile == 0:
@@ -32,10 +33,21 @@ def range_resin(
     if np.count_nonzero(slot_mask) == 0:
         return (-1, [], [], [])
     
+    useful_target = np.append(target, 0)
+    mains, subs, probs = base_artifact_probs(slot)
+    mains, subs, probs = base_artifact_useful_probs(mains, subs, probs, target)
+    hundred_sixty_mask = (-1 < mains) & (mains < 3)
+    base_scores = useful_target[mains] * np.where(hundred_sixty_mask, 160, 80)
+    num_useful = np.count_nonzero(subs != -1, axis=1)
+    num_useless = 4 - num_useful
+    weights_all = np.sort(useful_target[subs], axis=1)
+    
     scores = cast(NDArray, score(artifacts[slot_mask], target))
     slot_idx = np.argmax(scores)
     idx = np.flatnonzero(slot_mask)[slot_idx]
     best_score = scores[slot_idx]
+    if best_score == 0:
+        return (-2, [], [], [])
     
     resins: tuple[int, list[float], list[float], list[tuple[float, int]]] = (idx, [], [], [])
         
@@ -47,8 +59,21 @@ def range_resin(
     while True:
         threshold = math.floor(best_score * improvement)
         improvement += 0.01
-        
-        percentile = artifact_percentile(slot, target, threshold, 20)
+        percentile = iterative_artifact_percentile(
+            useful_target, 
+            threshold, 
+            20, 
+            slot, 
+            info = (
+                mains, 
+                subs, 
+                probs, 
+                base_scores, 
+                num_useful, 
+                num_useless, 
+                weights_all
+            )
+        )
         d_percentile = define_percentile(slot, target, threshold)
         
         if percentile == 0:

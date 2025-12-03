@@ -73,7 +73,7 @@ def dict_to_artifact(
         if 'totalRolls' in d:
             unactivated = d['totalRolls'] == 8 # This is only used for max artifacts, so for now this is enough
         else:
-            assert rarity == 1, f'Incompatible scan or data. Please contact pricyspark or open a PR. Include the scanner used and this snippet: \n{d}'
+            assert rarity == 1, f'Incompatible scan or data. If you believe this is an issue on our end, please contact pricyspark or open a PR. Include the scanner used and this snippet: \n{d}'
             unactivated = False
             
     return artifact, base_artifact, slot, rarity, lvl, slvl, unactivated, setKey

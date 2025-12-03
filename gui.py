@@ -252,10 +252,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.targetLine.setText(str(unvectorize(dialog.get_values())))
         
     def resinCalculate(self):
-        # TODO: if the selected target isn't cached, this runs REAAALLY
-        # slowly. Fix that. I dont remember what's happening and didn't
-        # check, but I'm pretty sure it isn't cached, and doesn't become
-        # cached either.
         if self.artifacts is None:
             self.statusbar.showMessage('Process a scan first', 10000)
             return
@@ -338,13 +334,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             )
             layout = container.layout()
             assert layout is not None
-            
-            while layout.count() > 0:
-                item = layout.takeAt(0)
-                widget = item.widget()
-                if widget is not None:
-                    widget.deleteLater()
-            
+            _clear_layout(layout)            
             layout.addWidget(view)
             
         range_params = (
@@ -360,9 +350,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         )
         
         flower_points = range_resin(*range_params, 'flower')
-        if flower_points[0] == -1:
-            self.flowerBestMain.setText('No maxed 5* flower')
-            self.flowerBestSub1.setText('')
+        if flower_points[0] < 0:
+            self.flowerBestMain.setText('')
+            if flower_points[0] == -1:
+                self.flowerBestSub1.setText('No maxed 5* flower')
+            else:
+                self.flowerBestSub1.setText('All maxed 5* flowers have 0 score')
             self.flowerBestSub2.setText('')
             self.flowerBestSub3.setText('')
             self.flowerBestSub4.setText('')
@@ -393,9 +386,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 self.flowerReshapeSub4.setText('')
         
         plume_points = range_resin(*range_params, 'plume')
-        if plume_points[0] == -1:
-            self.plumeBestMain.setText('No maxed 5* plume')
-            self.plumeBestSub1.setText('')
+        if plume_points[0] < 0:
+            self.plumeBestMain.setText('')
+            if plume_points[0] == -1:
+                self.plumeBestSub1.setText('No maxed 5* plume')
+            else:
+                self.plumeBestSub1.setText('All maxed 5* plumes have 0 score')
             self.plumeBestSub2.setText('')
             self.plumeBestSub3.setText('')
             self.plumeBestSub4.setText('')
@@ -426,9 +422,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 self.plumeReshapeSub4.setText('')
         
         sands_points = range_resin(*range_params, 'sands')
-        if sands_points[0] == -1:
-            self.sandsBestMain.setText('No maxed 5* sands')
-            self.sandsBestSub1.setText('')
+        if sands_points[0] < 0:
+            self.sandsBestMain.setText('')
+            if sands_points[0] == -1:
+                self.sandsBestSub1.setText('No maxed 5* sands')
+            else:
+                self.sandsBestSub1.setText('All maxed 5* sands have 0 score')
             self.sandsBestSub2.setText('')
             self.sandsBestSub3.setText('')
             self.sandsBestSub4.setText('')
@@ -459,9 +458,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 self.sandsReshapeSub4.setText('')
         
         goblet_points = range_resin(*range_params, 'goblet')
-        if goblet_points[0] == -1:
-            self.gobletBestMain.setText('No maxed 5* goblet')
-            self.gobletBestSub1.setText('')
+        if goblet_points[0] < 0:
+            self.gobletBestMain.setText('')
+            if goblet_points[0] == -1:
+                self.gobletBestSub1.setText('No maxed 5* goblet')
+            else:
+                self.gobletBestSub1.setText('All maxed 5* goblets have 0 score')
             self.gobletBestSub2.setText('')
             self.gobletBestSub3.setText('')
             self.gobletBestSub4.setText('')
@@ -493,9 +495,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 
         
         circlet_points = range_resin(*range_params, 'circlet')
-        if circlet_points[0] == -1:
-            self.circletBestMain.setText('No maxed 5* circlet')
-            self.circletBestSub1.setText('')
+        if circlet_points[0] < 0:
+            self.circletBestMain.setText('')
+            if circlet_points[0] == -1:
+                self.circletBestSub1.setText('No maxed 5* circlet')
+            else:
+                self.circletBestSub1.setText('All maxed 5* circlets have 0 score')
             self.circletBestSub2.setText('')
             self.circletBestSub3.setText('')
             self.circletBestSub4.setText('')
@@ -526,52 +531,43 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 self.circletReshapeSub4.setText('')
             
         points = (flower_points, plume_points, sands_points, goblet_points, circlet_points)
-        points = [point for point in (points) if point[0] != -1]
+        non_empty_points = [point for point in points if point[0] != -1]
         
-        if not points:
-            flower_layout = self.flowerContainer.layout()
-            plume_layout = self.plumeContainer.layout()
-            sands_layout = self.sandsContainer.layout()
-            goblet_layout = self.gobletContainer.layout()
-            circlet_layout = self.circletContainer.layout()
-            
-            assert flower_layout is not None
-            assert plume_layout is not None
-            assert sands_layout is not None
-            assert goblet_layout is not None
-            assert circlet_layout is not None
-            
-            _clear_layout(flower_layout)
-            _clear_layout(plume_layout)
-            _clear_layout(sands_layout)
-            _clear_layout(goblet_layout)
-            _clear_layout(circlet_layout)
-            
+        chart_containers = (
+            self.flowerContainer, 
+            self.plumeContainer, 
+            self.sandsContainer, 
+            self.gobletContainer, 
+            self.circletContainer
+        )
+        
+        # Handle this first to prevent max() from erroring
+        if not non_empty_points: # If everything is empty
+            for chart_container in chart_containers:
+                _clear_layout(chart_container.layout())
             return
                     
-        resin_max = max([points[1][-1] for points in points if points[0] != -1])
+        resin_max = max([point[1][-1] for point in non_empty_points if len(point[1])])
         
         # TODO: you can def make a function that dynamically creates
         # labels and assigns text for them instead of manually doing
         # this like an idiot. But I'm too lazy to figure that out with
         # PySide. This is comically stupid
         
-        '''
-        asdf = [points[3] for points in (flower_points, plume_points, sands_points, goblet_points, circlet_points)]
-        
-        for i in asdf:
-            idk = set()
-            for _ in i:
-                idk.add(_[1])
-            if len(idk) != 1:
-                print('Warning: It happened')
-        '''
+        for chart_container, point in zip(chart_containers, points):
+            if point[0] == -1 or len(points[1]) == 0:
+                _clear_layout(chart_container.layout())
+                continue
+            if len(point[1]) == 0:
+                continue
             
-        resin_chart(self.flowerContainer, flower_points, resin_max)
-        resin_chart(self.plumeContainer, plume_points, resin_max)
-        resin_chart(self.sandsContainer, sands_points, resin_max)
-        resin_chart(self.gobletContainer, goblet_points, resin_max)
-        resin_chart(self.circletContainer, circlet_points, resin_max)
+            resin_chart(chart_container, point, resin_max)
+            
+        #resin_chart(self.flowerContainer, flower_points, resin_max)
+        #resin_chart(self.plumeContainer, plume_points, resin_max)
+        #resin_chart(self.sandsContainer, sands_points, resin_max)
+        #resin_chart(self.gobletContainer, goblet_points, resin_max)
+        #resin_chart(self.circletContainer, circlet_points, resin_max)
         
     def populate_upgrade(self):
         grid = self.upgradeGrid

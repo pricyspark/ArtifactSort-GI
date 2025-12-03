@@ -16,6 +16,7 @@ from MainWindow import Ui_MainWindow
 from TargetDialog import Ui_Dialog
 from square_widget import SquareToolButton, SquareLabel
 from chart import HoverChartView
+from artifact_widget import ArtifactLiteWidget
 import resources
 
 # TODO: handling each stat as a seperate QLabel is super verbose and
@@ -103,7 +104,27 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         
         self.lockArtifactImage = SquareLabel()
         self.lockArtifactInfo.insertWidget(0, self.lockArtifactImage)
-        #self.artifactInfo.setStretch()
+        
+        self.flowerBest = ArtifactLiteWidget()
+        self.flowerReshape = ArtifactLiteWidget()
+        self.plumeBest = ArtifactLiteWidget()
+        self.plumeReshape = ArtifactLiteWidget()
+        self.sandsBest = ArtifactLiteWidget()
+        self.sandsReshape = ArtifactLiteWidget()
+        self.gobletBest = ArtifactLiteWidget()
+        self.gobletReshape = ArtifactLiteWidget()
+        self.circletBest = ArtifactLiteWidget()
+        self.circletReshape = ArtifactLiteWidget()
+        self.flowerArtifacts.insertLayout(1, self.flowerBest)
+        self.flowerArtifacts.insertLayout(4, self.flowerReshape)
+        self.plumeArtifacts.insertLayout(1, self.plumeBest)
+        self.plumeArtifacts.insertLayout(4, self.plumeReshape)
+        self.sandsArtifacts.insertLayout(1, self.sandsBest)
+        self.sandsArtifacts.insertLayout(4, self.sandsReshape)
+        self.gobletArtifacts.insertLayout(1, self.gobletBest)
+        self.gobletArtifacts.insertLayout(4, self.gobletReshape)
+        self.circletArtifacts.insertLayout(1, self.circletBest)
+        self.circletArtifacts.insertLayout(4, self.circletReshape)
 
     def getMainFileName(self):
         file_filter = 'GOOD JSON File (*.json)'
@@ -160,51 +181,16 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         _clear_layout(circlet_layout)
         
         # Clear artifacts
-        self.flowerBestSub1.setText('')
-        self.flowerBestSub2.setText('')
-        self.flowerBestSub3.setText('')
-        self.flowerBestSub4.setText('')
-        self.flowerReshapeMain.setText('')
-        self.flowerReshapeSub1.setText('')
-        self.flowerReshapeSub2.setText('')
-        self.flowerReshapeSub3.setText('')
-        self.flowerReshapeSub4.setText('')
-        self.plumeBestSub1.setText('')
-        self.plumeBestSub2.setText('')
-        self.plumeBestSub3.setText('')
-        self.plumeBestSub4.setText('')
-        self.plumeReshapeMain.setText('')
-        self.plumeReshapeSub1.setText('')
-        self.plumeReshapeSub2.setText('')
-        self.plumeReshapeSub3.setText('')
-        self.plumeReshapeSub4.setText('')
-        self.sandsBestSub1.setText('')
-        self.sandsBestSub2.setText('')
-        self.sandsBestSub3.setText('')
-        self.sandsBestSub4.setText('')
-        self.sandsReshapeMain.setText('')
-        self.sandsReshapeSub1.setText('')
-        self.sandsReshapeSub2.setText('')
-        self.sandsReshapeSub3.setText('')
-        self.sandsReshapeSub4.setText('')
-        self.gobletBestSub1.setText('')
-        self.gobletBestSub2.setText('')
-        self.gobletBestSub3.setText('')
-        self.gobletBestSub4.setText('')
-        self.gobletReshapeMain.setText('')
-        self.gobletReshapeSub1.setText('')
-        self.gobletReshapeSub2.setText('')
-        self.gobletReshapeSub3.setText('')
-        self.gobletReshapeSub4.setText('')
-        self.circletBestSub1.setText('')
-        self.circletBestSub2.setText('')
-        self.circletBestSub3.setText('')
-        self.circletBestSub4.setText('')
-        self.circletReshapeMain.setText('')
-        self.circletReshapeSub1.setText('')
-        self.circletReshapeSub2.setText('')
-        self.circletReshapeSub3.setText('')
-        self.circletReshapeSub4.setText('')
+        self.flowerBest.clear()
+        self.flowerReshape.clear()
+        self.plumeBest.clear()
+        self.plumeReshape.clear()
+        self.sandsBest.clear()
+        self.sandsReshape.clear()
+        self.gobletBest.clear()
+        self.gobletReshape.clear()
+        self.circletBest.clear()
+        self.circletReshape.clear()
         
         (
             self.artifact_dicts, 
@@ -349,186 +335,111 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.target
         )
         
+        # Hacky but works
+        
+        # lmao this is stupid
+        singular = {
+            'flower': 'flower',
+            'plume': 'plume',
+            'sands': 'sand',
+            'goblet': 'goblet',
+            'circlet': 'circlet'
+        }
+        
+        no_maxed: dict[str, Any] = {slot: None for slot in ('flower', 'plume', 'sands', 'goblet', 'circlet')}
+        all_zero: dict[str, Any] = {slot: None for slot in ('flower', 'plume', 'sands', 'goblet', 'circlet')}
+        no_improve: dict[str, Any] = {slot: None for slot in ('flower', 'plume', 'sands', 'goblet', 'circlet')}
+        for slot in SLOTS:
+            no_maxed[slot] = {
+                'mainStatKey': '', 
+                'substats': [{'key': f'No maxed 5* {singular[slot]}s', 'value': ''}],
+                'unactivatedSubstats': []
+            }
+            all_zero[slot] = {
+                'mainStatKey': '', 
+                'substats': [{'key': f'All maxed 5* {singular[slot]}s have 0 score', 'value': ''}],
+                'unactivatedSubstats': []
+            }
+            no_improve[slot] = {
+                'mainStatKey': '', 
+                'substats': [{'key': f'Reshaping cannot improve {singular[slot]}', 'value': ''}],
+                'unactivatedSubstats': []
+            }
+        
         flower_points = range_resin(*range_params, 'flower')
         if flower_points[0] < 0:
-            self.flowerBestMain.setText('')
-            if flower_points[0] == -1:
-                self.flowerBestSub1.setText('No maxed 5* flower')
-            else:
-                self.flowerBestSub1.setText('All maxed 5* flowers have 0 score')
-            self.flowerBestSub2.setText('')
-            self.flowerBestSub3.setText('')
-            self.flowerBestSub4.setText('')
-            self.flowerReshapeMain.setText('')
-            self.flowerReshapeSub1.setText('')
-            self.flowerReshapeSub2.setText('')
-            self.flowerReshapeSub3.setText('')
-            self.flowerReshapeSub4.setText('')
+            self.flowerBest.clear()
+            self.flowerBest.setText(no_maxed['flower'] if flower_points[0] == -1 else all_zero['flower'])
+            self.flowerReshape.clear()
         else:
             best_flower = self.artifact_dicts[flower_points[0]]
-            self.flowerBestMain.setText(best_flower['mainStatKey'])
-            self.flowerBestSub1.setText(_substat_text(best_flower, 0))
-            self.flowerBestSub2.setText(_substat_text(best_flower, 1))
-            self.flowerBestSub3.setText(_substat_text(best_flower, 2))
-            self.flowerBestSub4.setText(_substat_text(best_flower, 3))
+            self.flowerBest.setText(best_flower)
             try:
                 reshape_flower = self.artifact_dicts[flower_points[3][0][1]] # temp. For now display the best for 0%
-                self.flowerReshapeMain.setText(reshape_flower['mainStatKey'])
-                self.flowerReshapeSub1.setText(_substat_text(reshape_flower, 0))
-                self.flowerReshapeSub2.setText(_substat_text(reshape_flower, 1))
-                self.flowerReshapeSub3.setText(_substat_text(reshape_flower, 2))
-                self.flowerReshapeSub4.setText(_substat_text(reshape_flower, 3))
+                self.flowerReshape.setText(reshape_flower)
             except IndexError:
-                self.flowerReshapeMain.setText('')
-                self.flowerReshapeSub1.setText('Reshaping cannot improve flower')
-                self.flowerReshapeSub2.setText('')
-                self.flowerReshapeSub3.setText('')
-                self.flowerReshapeSub4.setText('')
+                self.flowerReshape.clear()
+                self.flowerReshape.setText(no_improve['flower'])
         
         plume_points = range_resin(*range_params, 'plume')
         if plume_points[0] < 0:
-            self.plumeBestMain.setText('')
-            if plume_points[0] == -1:
-                self.plumeBestSub1.setText('No maxed 5* plume')
-            else:
-                self.plumeBestSub1.setText('All maxed 5* plumes have 0 score')
-            self.plumeBestSub2.setText('')
-            self.plumeBestSub3.setText('')
-            self.plumeBestSub4.setText('')
-            self.plumeReshapeMain.setText('')
-            self.plumeReshapeSub1.setText('')
-            self.plumeReshapeSub2.setText('')
-            self.plumeReshapeSub3.setText('')
-            self.plumeReshapeSub4.setText('')
+            self.plumeBest.clear()
+            self.plumeBest.setText(no_maxed['plume'] if plume_points[0] == -1 else all_zero['plume'])
+            self.plumeReshape.clear()
         else:
             best_plume = self.artifact_dicts[plume_points[0]]
-            self.plumeBestMain.setText(best_plume['mainStatKey'])
-            self.plumeBestSub1.setText(_substat_text(best_plume, 0))
-            self.plumeBestSub2.setText(_substat_text(best_plume, 1))
-            self.plumeBestSub3.setText(_substat_text(best_plume, 2))
-            self.plumeBestSub4.setText(_substat_text(best_plume, 3))
+            self.plumeBest.setText(best_plume)
             try:
-                reshape_plume = self.artifact_dicts[plume_points[3][0][1]]
-                self.plumeReshapeMain.setText(reshape_plume['mainStatKey'])
-                self.plumeReshapeSub1.setText(_substat_text(reshape_plume, 0))
-                self.plumeReshapeSub2.setText(_substat_text(reshape_plume, 1))
-                self.plumeReshapeSub3.setText(_substat_text(reshape_plume, 2))
-                self.plumeReshapeSub4.setText(_substat_text(reshape_plume, 3))
+                reshape_plume = self.artifact_dicts[plume_points[3][0][1]] # temp. For now display the best for 0%
+                self.plumeReshape.setText(reshape_plume)
             except IndexError:
-                self.plumeReshapeMain.setText('')
-                self.plumeReshapeSub1.setText('Reshaping cannot improve plume')
-                self.plumeReshapeSub2.setText('')
-                self.plumeReshapeSub3.setText('')
-                self.plumeReshapeSub4.setText('')
-        
+                self.plumeReshape.clear()
+                self.plumeReshape.setText(no_improve['plume'])
+                
         sands_points = range_resin(*range_params, 'sands')
         if sands_points[0] < 0:
-            self.sandsBestMain.setText('')
-            if sands_points[0] == -1:
-                self.sandsBestSub1.setText('No maxed 5* sands')
-            else:
-                self.sandsBestSub1.setText('All maxed 5* sands have 0 score')
-            self.sandsBestSub2.setText('')
-            self.sandsBestSub3.setText('')
-            self.sandsBestSub4.setText('')
-            self.sandsReshapeMain.setText('')
-            self.sandsReshapeSub1.setText('')
-            self.sandsReshapeSub2.setText('')
-            self.sandsReshapeSub3.setText('')
-            self.sandsReshapeSub4.setText('')
+            self.sandsBest.clear()
+            self.sandsBest.setText(no_maxed['sands'] if sands_points[0] == -1 else all_zero['sands'])
+            self.sandsReshape.clear()
         else:
             best_sands = self.artifact_dicts[sands_points[0]]
-            self.sandsBestMain.setText(best_sands['mainStatKey'])
-            self.sandsBestSub1.setText(_substat_text(best_sands, 0))
-            self.sandsBestSub2.setText(_substat_text(best_sands, 1))
-            self.sandsBestSub3.setText(_substat_text(best_sands, 2))
-            self.sandsBestSub4.setText(_substat_text(best_sands, 3))
+            self.sandsBest.setText(best_sands)
             try:
-                reshape_sands = self.artifact_dicts[sands_points[3][0][1]]
-                self.sandsReshapeMain.setText(reshape_sands['mainStatKey'])
-                self.sandsReshapeSub1.setText(_substat_text(reshape_sands, 0))
-                self.sandsReshapeSub2.setText(_substat_text(reshape_sands, 1))
-                self.sandsReshapeSub3.setText(_substat_text(reshape_sands, 2))
-                self.sandsReshapeSub4.setText(_substat_text(reshape_sands, 3))
+                reshape_sands = self.artifact_dicts[sands_points[3][0][1]] # temp. For now display the best for 0%
+                self.sandsReshape.setText(reshape_sands)
             except IndexError:
-                self.sandsReshapeMain.setText('')
-                self.sandsReshapeSub1.setText('Reshaping cannot improve sands')
-                self.sandsReshapeSub2.setText('')
-                self.sandsReshapeSub3.setText('')
-                self.sandsReshapeSub4.setText('')
+                self.sandsReshape.clear()
+                self.sandsReshape.setText(no_improve['sands'])
         
         goblet_points = range_resin(*range_params, 'goblet')
         if goblet_points[0] < 0:
-            self.gobletBestMain.setText('')
-            if goblet_points[0] == -1:
-                self.gobletBestSub1.setText('No maxed 5* goblet')
-            else:
-                self.gobletBestSub1.setText('All maxed 5* goblets have 0 score')
-            self.gobletBestSub2.setText('')
-            self.gobletBestSub3.setText('')
-            self.gobletBestSub4.setText('')
-            self.gobletReshapeMain.setText('')
-            self.gobletReshapeSub1.setText('')
-            self.gobletReshapeSub2.setText('')
-            self.gobletReshapeSub3.setText('')
-            self.gobletReshapeSub4.setText('')
+            self.gobletBest.clear()
+            self.gobletBest.setText(no_maxed['goblet'] if goblet_points[0] == -1 else all_zero['goblet'])
+            self.gobletReshape.clear()
         else:
             best_goblet = self.artifact_dicts[goblet_points[0]]
-            self.gobletBestMain.setText(best_goblet['mainStatKey'])
-            self.gobletBestSub1.setText(_substat_text(best_goblet, 0))
-            self.gobletBestSub2.setText(_substat_text(best_goblet, 1))
-            self.gobletBestSub3.setText(_substat_text(best_goblet, 2))
-            self.gobletBestSub4.setText(_substat_text(best_goblet, 3))
+            self.gobletBest.setText(best_goblet)
             try:
-                reshape_goblet = self.artifact_dicts[goblet_points[3][0][1]]
-                self.gobletReshapeMain.setText(reshape_goblet['mainStatKey'])
-                self.gobletReshapeSub1.setText(_substat_text(reshape_goblet, 0))
-                self.gobletReshapeSub2.setText(_substat_text(reshape_goblet, 1))
-                self.gobletReshapeSub3.setText(_substat_text(reshape_goblet, 2))
-                self.gobletReshapeSub4.setText(_substat_text(reshape_goblet, 3))
+                reshape_goblet = self.artifact_dicts[goblet_points[3][0][1]] # temp. For now display the best for 0%
+                self.gobletReshape.setText(reshape_goblet)
             except IndexError:
-                self.gobletReshapeMain.setText('')
-                self.gobletReshapeSub1.setText('Reshaping cannot improve goblet')
-                self.gobletReshapeSub2.setText('')
-                self.gobletReshapeSub3.setText('')
-                self.gobletReshapeSub4.setText('')
-                
+                self.gobletReshape.clear()
+                self.gobletReshape.setText(no_improve['goblet'])
         
         circlet_points = range_resin(*range_params, 'circlet')
         if circlet_points[0] < 0:
-            self.circletBestMain.setText('')
-            if circlet_points[0] == -1:
-                self.circletBestSub1.setText('No maxed 5* circlet')
-            else:
-                self.circletBestSub1.setText('All maxed 5* circlets have 0 score')
-            self.circletBestSub2.setText('')
-            self.circletBestSub3.setText('')
-            self.circletBestSub4.setText('')
-            self.circletReshapeMain.setText('')
-            self.circletReshapeSub1.setText('')
-            self.circletReshapeSub2.setText('')
-            self.circletReshapeSub3.setText('')
-            self.circletReshapeSub4.setText('')
+            self.circletBest.clear()
+            self.circletBest.setText(no_maxed['circlet'] if circlet_points[0] == -1 else all_zero['circlet'])
+            self.circletReshape.clear()
         else:
             best_circlet = self.artifact_dicts[circlet_points[0]]
-            self.circletBestMain.setText(best_circlet['mainStatKey'])
-            self.circletBestSub1.setText(_substat_text(best_circlet, 0))
-            self.circletBestSub2.setText(_substat_text(best_circlet, 1))
-            self.circletBestSub3.setText(_substat_text(best_circlet, 2))
-            self.circletBestSub4.setText(_substat_text(best_circlet, 3))
+            self.circletBest.setText(best_circlet)
             try:
-                reshape_circlet = self.artifact_dicts[circlet_points[3][0][1]]
-                self.circletReshapeMain.setText(reshape_circlet['mainStatKey'])
-                self.circletReshapeSub1.setText(_substat_text(reshape_circlet, 0))
-                self.circletReshapeSub2.setText(_substat_text(reshape_circlet, 1))
-                self.circletReshapeSub3.setText(_substat_text(reshape_circlet, 2))
-                self.circletReshapeSub4.setText(_substat_text(reshape_circlet, 3))
+                reshape_circlet = self.artifact_dicts[circlet_points[3][0][1]] # temp. For now display the best for 0%
+                self.circletReshape.setText(reshape_circlet)
             except IndexError:
-                self.circletReshapeMain.setText('')
-                self.circletReshapeSub1.setText('Reshaping cannot improve circlet')
-                self.circletReshapeSub2.setText('')
-                self.circletReshapeSub3.setText('')
-                self.circletReshapeSub4.setText('')
+                self.circletReshape.clear()
+                self.circletReshape.setText(no_improve['circlet'])
             
         points = (flower_points, plume_points, sands_points, goblet_points, circlet_points)
         non_empty_points = [point for point in points if point[0] != -1]
@@ -549,11 +460,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                     
         resin_max = max([point[1][-1] for point in non_empty_points if len(point[1])])
         
-        # TODO: you can def make a function that dynamically creates
-        # labels and assigns text for them instead of manually doing
-        # this like an idiot. But I'm too lazy to figure that out with
-        # PySide. This is comically stupid
-        
         for chart_container, point in zip(chart_containers, points):
             if point[0] == -1 or len(points[1]) == 0:
                 _clear_layout(chart_container.layout())
@@ -562,12 +468,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 continue
             
             resin_chart(chart_container, point, resin_max)
-            
-        #resin_chart(self.flowerContainer, flower_points, resin_max)
-        #resin_chart(self.plumeContainer, plume_points, resin_max)
-        #resin_chart(self.sandsContainer, sands_points, resin_max)
-        #resin_chart(self.gobletContainer, goblet_points, resin_max)
-        #resin_chart(self.circletContainer, circlet_points, resin_max)
         
     def populate_upgrade(self):
         grid = self.upgradeGrid

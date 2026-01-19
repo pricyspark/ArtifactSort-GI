@@ -1,6 +1,6 @@
 import numpy as np
 
-# TODO: This isn't the order they appear in-game for some reason
+# Order given in wiki. Not in-game order
 SETS = (
     'Initiate',                             # 0
     'Adventurer',                           # 1
@@ -59,7 +59,9 @@ SETS = (
     'FinaleOfTheDeepGalleries',             # 54
     'LongNightsOath',                       # 55
     'NightOfTheSkysUnveiling',              # 56
-    'SilkenMoonsSerenade'                   # 57
+    'SilkenMoonsSerenade',                  # 57
+    'ADayCarvedFromRisingWinds',            # 58
+    'AubadeOfMorningstarAndMoon'            # 59
 )
 
 SET_2_NUM = {artifact_set: index for index, artifact_set in enumerate(SETS)}

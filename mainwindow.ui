@@ -663,12 +663,22 @@ DOESN'T REPORT: Any OCR-based scanner</string>
             </item>
             <item>
              <property name="text">
+              <string>A Day Carved From Rising Winds</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
               <string>Adventurer</string>
              </property>
             </item>
             <item>
              <property name="text">
               <string>Archaic Petra</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Aubade of Morningstar and Moon</string>
              </property>
             </item>
             <item>

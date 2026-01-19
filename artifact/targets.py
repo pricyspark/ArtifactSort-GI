@@ -802,8 +802,176 @@ SUPPORT_TARGETS: dict[str, tuple[dict[str, int], ...]] = {
 }
 
 SET_TARGETS: dict[str, dict[str, tuple[dict[str, int], ...]]] = {
+    # ATK DPS set
+    'ADayCarvedFromRisingWinds': {
+        'flower': (
+            {'atk_': 6, 'atk': 2, 'crit_': 8},
+            {'atk_': 6, 'atk': 2, 'crit_': 8, 'enerRech_': 10},
+            {'atk_': 6, 'atk': 2, 'crit_': 8, 'eleMas': 7},
+            {'atk_': 6, 'atk': 2, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7}
+        ),
+        'plume': (
+            {'atk_': 6, 'atk': 2, 'crit_': 8},
+            {'atk_': 6, 'atk': 2, 'crit_': 8, 'enerRech_': 10},
+            {'atk_': 6, 'atk': 2, 'crit_': 8, 'eleMas': 7},
+            {'atk_': 6, 'atk': 2, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7}
+        ),
+        'sands': (
+            {'atk_': 6, 'atk': 2, 'crit_': 8},
+            {'atk_': 6, 'atk': 2, 'crit_': 8, 'enerRech_': 10},
+            {'atk_': 6, 'atk': 2, 'crit_': 8, 'eleMas': 7},
+            {'atk_': 6, 'atk': 2, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7}
+        ),
+        'goblet': (
+            {'atk_': 6, 'atk': 2, 'crit_': 8},
+            {'atk_': 6, 'atk': 2, 'crit_': 8, 'enerRech_': 10},
+            {'atk_': 6, 'atk': 2, 'crit_': 8, 'eleMas': 7},
+            {'atk_': 6, 'atk': 2, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7},
+            {'atk_': 6, 'atk': 2, 'pyro_dmg_': 8, 'crit_': 8},
+            {'atk_': 6, 'atk': 2, 'pyro_dmg_': 8, 'crit_': 8, 'enerRech_': 10},
+            {'atk_': 6, 'atk': 2, 'pyro_dmg_': 8, 'crit_': 8, 'eleMas': 7},
+            {'atk_': 6, 'atk': 2, 'pyro_dmg_': 8, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7},
+            {'atk_': 6, 'atk': 2, 'electro_dmg_': 8, 'crit_': 8},
+            {'atk_': 6, 'atk': 2, 'electro_dmg_': 8, 'crit_': 8, 'enerRech_': 10},
+            {'atk_': 6, 'atk': 2, 'electro_dmg_': 8, 'crit_': 8, 'eleMas': 7},
+            {'atk_': 6, 'atk': 2, 'electro_dmg_': 8, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7},
+            {'atk_': 6, 'atk': 2, 'cryo_dmg_': 8, 'crit_': 8},
+            {'atk_': 6, 'atk': 2, 'cryo_dmg_': 8, 'crit_': 8, 'enerRech_': 10},
+            {'atk_': 6, 'atk': 2, 'cryo_dmg_': 8, 'crit_': 8, 'eleMas': 7},
+            {'atk_': 6, 'atk': 2, 'cryo_dmg_': 8, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7},
+            {'atk_': 6, 'atk': 2, 'hydro_dmg_': 8, 'crit_': 8},
+            {'atk_': 6, 'atk': 2, 'hydro_dmg_': 8, 'crit_': 8, 'enerRech_': 10},
+            {'atk_': 6, 'atk': 2, 'hydro_dmg_': 8, 'crit_': 8, 'eleMas': 7},
+            {'atk_': 6, 'atk': 2, 'hydro_dmg_': 8, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7},
+            {'atk_': 6, 'atk': 2, 'dendro_dmg_': 8, 'crit_': 8},
+            {'atk_': 6, 'atk': 2, 'dendro_dmg_': 8, 'crit_': 8, 'enerRech_': 10},
+            {'atk_': 6, 'atk': 2, 'dendro_dmg_': 8, 'crit_': 8, 'eleMas': 7},
+            {'atk_': 6, 'atk': 2, 'dendro_dmg_': 8, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7},
+            {'atk_': 6, 'atk': 2, 'anemo_dmg_': 8, 'crit_': 8},
+            {'atk_': 6, 'atk': 2, 'anemo_dmg_': 8, 'crit_': 8, 'enerRech_': 10},
+            {'atk_': 6, 'atk': 2, 'anemo_dmg_': 8, 'crit_': 8, 'eleMas': 7},
+            {'atk_': 6, 'atk': 2, 'anemo_dmg_': 8, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7},
+            {'atk_': 6, 'atk': 2, 'geo_dmg_': 8, 'crit_': 8},
+            {'atk_': 6, 'atk': 2, 'geo_dmg_': 8, 'crit_': 8, 'enerRech_': 10},
+            {'atk_': 6, 'atk': 2, 'geo_dmg_': 8, 'crit_': 8, 'eleMas': 7},
+            {'atk_': 6, 'atk': 2, 'geo_dmg_': 8, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7},
+            {'atk_': 6, 'atk': 2, 'physical_dmg_': 8, 'crit_': 8},
+            {'atk_': 6, 'atk': 2, 'physical_dmg_': 8, 'crit_': 8, 'enerRech_': 10},
+            {'atk_': 6, 'atk': 2, 'physical_dmg_': 8, 'crit_': 8, 'eleMas': 7},
+            {'atk_': 6, 'atk': 2, 'physical_dmg_': 8, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7}
+        ),
+        'circlet': (
+            {'atk_': 6, 'atk': 2, 'crit_': 8},
+            {'atk_': 6, 'atk': 2, 'crit_': 8, 'enerRech_': 10},
+            {'atk_': 6, 'atk': 2, 'crit_': 8, 'eleMas': 7},
+            {'atk_': 6, 'atk': 2, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7}
+        )
+    },
+    
     # Some niche supports use 4p to teamwide buff, making this universal
     'ArchaicPetra': ALL_TARGETS,
+
+    # EM DPS set
+    'AubadeOfMorningstarAndMoon': {
+        'flower': (
+            {'hp_': 6, 'hp': 2, 'crit_': 8, 'eleMas': 7},
+            {'hp_': 6, 'hp': 2, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7},
+
+            {'atk_': 6, 'atk': 2, 'crit_': 8, 'eleMas': 7},
+            {'atk_': 6, 'atk': 2, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7},
+
+            {'def_': 6, 'def': 2, 'crit_': 8, 'eleMas': 7},
+            {'def_': 6, 'def': 2, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7}
+        ),
+        'plume': (
+            {'hp_': 6, 'hp': 2, 'crit_': 8, 'eleMas': 7},
+            {'hp_': 6, 'hp': 2, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7},
+
+            {'atk_': 6, 'atk': 2, 'crit_': 8, 'eleMas': 7},
+            {'atk_': 6, 'atk': 2, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7},
+
+            {'def_': 6, 'def': 2, 'crit_': 8, 'eleMas': 7},
+            {'def_': 6, 'def': 2, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7}
+        ),
+        'sands': (
+            {'hp_': 6, 'hp': 2, 'crit_': 8, 'eleMas': 7},
+            {'hp_': 6, 'hp': 2, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7},
+
+            {'atk_': 6, 'atk': 2, 'crit_': 8, 'eleMas': 7},
+            {'atk_': 6, 'atk': 2, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7},
+
+            {'def_': 6, 'def': 2, 'crit_': 8, 'eleMas': 7},
+            {'def_': 6, 'def': 2, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7}
+        ),
+        'goblet': (
+            {'hp_': 6, 'hp': 2, 'crit_': 8, 'eleMas': 7},
+            {'hp_': 6, 'hp': 2, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7},
+            {'hp_': 6, 'hp': 2, 'pyro_dmg_': 8, 'crit_': 8, 'eleMas': 7},
+            {'hp_': 6, 'hp': 2, 'pyro_dmg_': 8, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7},
+            {'hp_': 6, 'hp': 2, 'electro_dmg_': 8, 'crit_': 8, 'eleMas': 7},
+            {'hp_': 6, 'hp': 2, 'electro_dmg_': 8, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7},
+            {'hp_': 6, 'hp': 2, 'cryo_dmg_': 8, 'crit_': 8, 'eleMas': 7},
+            {'hp_': 6, 'hp': 2, 'cryo_dmg_': 8, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7},
+            {'hp_': 6, 'hp': 2, 'hydro_dmg_': 8, 'crit_': 8, 'eleMas': 7},
+            {'hp_': 6, 'hp': 2, 'hydro_dmg_': 8, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7},
+            {'hp_': 6, 'hp': 2, 'dendro_dmg_': 8, 'crit_': 8, 'eleMas': 7},
+            {'hp_': 6, 'hp': 2, 'dendro_dmg_': 8, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7},
+            {'hp_': 6, 'hp': 2, 'anemo_dmg_': 8, 'crit_': 8, 'eleMas': 7},
+            {'hp_': 6, 'hp': 2, 'anemo_dmg_': 8, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7},
+            {'hp_': 6, 'hp': 2, 'geo_dmg_': 8, 'crit_': 8, 'eleMas': 7},
+            {'hp_': 6, 'hp': 2, 'geo_dmg_': 8, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7},
+            {'hp_': 6, 'hp': 2, 'physical_dmg_': 8, 'crit_': 8, 'eleMas': 7},
+            {'hp_': 6, 'hp': 2, 'physical_dmg_': 8, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7},
+            
+            {'atk_': 6, 'atk': 2, 'crit_': 8, 'eleMas': 7},
+            {'atk_': 6, 'atk': 2, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7},
+            {'atk_': 6, 'atk': 2, 'pyro_dmg_': 8, 'crit_': 8, 'eleMas': 7},
+            {'atk_': 6, 'atk': 2, 'pyro_dmg_': 8, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7},
+            {'atk_': 6, 'atk': 2, 'electro_dmg_': 8, 'crit_': 8, 'eleMas': 7},
+            {'atk_': 6, 'atk': 2, 'electro_dmg_': 8, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7},
+            {'atk_': 6, 'atk': 2, 'cryo_dmg_': 8, 'crit_': 8, 'eleMas': 7},
+            {'atk_': 6, 'atk': 2, 'cryo_dmg_': 8, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7},
+            {'atk_': 6, 'atk': 2, 'hydro_dmg_': 8, 'crit_': 8, 'eleMas': 7},
+            {'atk_': 6, 'atk': 2, 'hydro_dmg_': 8, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7},
+            {'atk_': 6, 'atk': 2, 'dendro_dmg_': 8, 'crit_': 8, 'eleMas': 7},
+            {'atk_': 6, 'atk': 2, 'dendro_dmg_': 8, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7},
+            {'atk_': 6, 'atk': 2, 'anemo_dmg_': 8, 'crit_': 8, 'eleMas': 7},
+            {'atk_': 6, 'atk': 2, 'anemo_dmg_': 8, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7},
+            {'atk_': 6, 'atk': 2, 'geo_dmg_': 8, 'crit_': 8, 'eleMas': 7},
+            {'atk_': 6, 'atk': 2, 'geo_dmg_': 8, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7},
+            {'atk_': 6, 'atk': 2, 'physical_dmg_': 8, 'crit_': 8, 'eleMas': 7},
+            {'atk_': 6, 'atk': 2, 'physical_dmg_': 8, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7},
+            
+            {'def_': 6, 'def': 2, 'crit_': 8, 'eleMas': 7},
+            {'def_': 6, 'def': 2, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7},
+            {'def_': 6, 'def': 2, 'pyro_dmg_': 8, 'crit_': 8, 'eleMas': 7},
+            {'def_': 6, 'def': 2, 'pyro_dmg_': 8, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7},
+            {'def_': 6, 'def': 2, 'electro_dmg_': 8, 'crit_': 8, 'eleMas': 7},
+            {'def_': 6, 'def': 2, 'electro_dmg_': 8, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7},
+            {'def_': 6, 'def': 2, 'cryo_dmg_': 8, 'crit_': 8, 'eleMas': 7},
+            {'def_': 6, 'def': 2, 'cryo_dmg_': 8, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7},
+            {'def_': 6, 'def': 2, 'hydro_dmg_': 8, 'crit_': 8, 'eleMas': 7},
+            {'def_': 6, 'def': 2, 'hydro_dmg_': 8, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7},
+            {'def_': 6, 'def': 2, 'dendro_dmg_': 8, 'crit_': 8, 'eleMas': 7},
+            {'def_': 6, 'def': 2, 'dendro_dmg_': 8, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7},
+            {'def_': 6, 'def': 2, 'anemo_dmg_': 8, 'crit_': 8, 'eleMas': 7},
+            {'def_': 6, 'def': 2, 'anemo_dmg_': 8, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7},
+            {'def_': 6, 'def': 2, 'geo_dmg_': 8, 'crit_': 8, 'eleMas': 7},
+            {'def_': 6, 'def': 2, 'geo_dmg_': 8, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7},
+            {'def_': 6, 'def': 2, 'physical_dmg_': 8, 'crit_': 8, 'eleMas': 7},
+            {'def_': 6, 'def': 2, 'physical_dmg_': 8, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7},
+        ),
+        'circlet': (
+            {'hp_': 6, 'hp': 2, 'crit_': 8, 'eleMas': 7},
+            {'hp_': 6, 'hp': 2, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7},
+
+            {'atk_': 6, 'atk': 2, 'crit_': 8, 'eleMas': 7},
+            {'atk_': 6, 'atk': 2, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7},
+
+            {'def_': 6, 'def': 2, 'crit_': 8, 'eleMas': 7},
+            {'def_': 6, 'def': 2, 'crit_': 8, 'enerRech_': 10, 'eleMas': 7}
+        )
+    },
 
     # Cryo and CRIT DPS set 
     'BlizzardStrayer': {

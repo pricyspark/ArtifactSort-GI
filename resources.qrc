@@ -55,6 +55,8 @@
         <file alias="LongNightsOath.webp">icons/flowers/Item_Lightkeeper's_Pledge.webp</file>
         <file alias="NightOfTheSkysUnveiling.webp">icons/flowers/Item_Bloom_of_the_Mind's_Desire.webp</file>
         <file alias="SilkenMoonsSerenade.webp">icons/flowers/Item_Crystal_Tear_of_the_Wanderer.webp</file>
+        <file alias="ADayCarvedFromRisingWinds.webp">icons/flowers/Item_Windborne_Flower's_Spruchdichtung.webp</file>
+        <file alias="AubadeOfMorningstarAndMoon.webp">icons/flowers/Item_Moonlit_Offering's_Opulent_Dream.webp</file>
     </qresource>
     <qresource prefix="/plume_icons">
         <file alias="default.webp">icons/plumes/Icon_Plume_of_Death.webp</file>
@@ -112,6 +114,8 @@
         <file alias="LongNightsOath.webp">icons/plumes/Item_Nightingale's_Tail_Feather.webp</file>
         <file alias="NightOfTheSkysUnveiling.webp">icons/plumes/Item_Feather_of_Indelible_Sin.webp</file>
         <file alias="SilkenMoonsSerenade.webp">icons/plumes/Item_Pristine_Plume_of_the_Blessed.webp</file>
+        <file alias="ADayCarvedFromRisingWinds.webp">icons/plumes/Item_Dawn's_Brilliant_Oath.webp</file>
+        <file alias="AubadeOfMorningstarAndMoon.webp">icons/plumes/Item_Moonlit_Offering's_Parting_Light.webp</file>
     </qresource>
     <qresource prefix="/sands_icons">
         <file alias="default.webp">icons/sands/Icon_Sands_of_Eon.webp</file>
@@ -168,6 +172,8 @@
         <file alias="LongNightsOath.webp">icons/sands/Item_Undying_One's_Mourning_Bell.webp</file>
         <file alias="NightOfTheSkysUnveiling.webp">icons/sands/Item_Revelation's_Toll.webp</file>
         <file alias="SilkenMoonsSerenade.webp">icons/sands/Item_Frost_Devotee's_Delirium.webp</file>
+        <file alias="ADayCarvedFromRisingWinds.webp">icons/sands/Item_A_Note_in_Spring's_Leich.webp</file>
+        <file alias="AubadeOfMorningstarAndMoon.webp">icons/sands/Item_Moonlit_Offering's_Final_Hour.webp</file>
     </qresource>
     <qresource prefix="/goblet_icons">
         <file alias="default.webp">icons/goblets/Icon_Goblet_of_Eonothem.webp</file>
@@ -224,6 +230,8 @@
         <file alias="LongNightsOath.webp">icons/goblets/Item_A_Horn_Unwinded.webp</file>
         <file alias="NightOfTheSkysUnveiling.webp">icons/goblets/Item_Vessel_of_Plenty.webp</file>
         <file alias="SilkenMoonsSerenade.webp">icons/goblets/Item_Joyous_Glory_of_the_Pure.webp</file>
+        <file alias="ADayCarvedFromRisingWinds.webp">icons/goblets/Item_Heldenepos's_Unspoken_Tale.webp</file>
+        <file alias="AubadeOfMorningstarAndMoon.webp">icons/goblets/Item_Moonlit_Offering's_Libation.webp</file>
     </qresource>
     <qresource prefix="/circlet_icons">
         <file alias="default.webp">icons/circlets/Icon_Circlet_of_Logos.webp</file>
@@ -284,6 +292,8 @@
         <file alias="LongNightsOath.webp">icons/circlets/Item_Dyed_Tassel.webp</file>
         <file alias="NightOfTheSkysUnveiling.webp">icons/circlets/Item_Crown_of_the_Befallen.webp</file>
         <file alias="SilkenMoonsSerenade.webp">icons/circlets/Item_Holy_Crown_of_the_Believer.webp</file>
+        <file alias="ADayCarvedFromRisingWinds.webp">icons/circlets/Item_Minnesang_of_Love_and_Lament.webp</file>
+        <file alias="AubadeOfMorningstarAndMoon.webp">icons/circlets/Item_Moonlit_Offering's_Silver_Crown.webp</file>
     </qresource>
     <qresource prefix="/menu">
         <file>icons/locked.svg</file>

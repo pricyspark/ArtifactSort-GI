@@ -703,6 +703,11 @@ DOESN'T REPORT: Any OCR-based scanner</string>
             </item>
             <item>
              <property name="text">
+              <string>Celestial Gift</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
               <string>Crimson Witch of Flames</string>
              </property>
             </item>
@@ -719,6 +724,11 @@ DOESN'T REPORT: Any OCR-based scanner</string>
             <item>
              <property name="text">
               <string>Desert Pavilion Chronicle</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Disenchantment in Deep Shadow</string>
              </property>
             </item>
             <item>

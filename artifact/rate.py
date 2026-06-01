@@ -3,6 +3,8 @@ from numpy.typing import NDArray
 from typing import cast
 import sys
 import pickle
+import heapq
+import time
 from functools import lru_cache
 from typing import Callable
 from .constants import CACHE_PATH, SLVL_DTYPE, SLOTS, SETS, ARTIFACT_DTYPE, CACHE_SIZE, TARGET_DTYPE, TOP_CACHE_PATH
@@ -177,32 +179,19 @@ def upgrade_analyze(
         
     return scaled_relevance >= threshold
 
-def _temp_bar(i, n):
-    BAR_LENGTH = 50
-    progress = i / n
-    filled_length = int(progress * BAR_LENGTH)
-    bar = '█' * filled_length + '░' * (BAR_LENGTH - filled_length)
-    sys.stdout.write(f'\r|{bar}| {round(progress * 100, 1)}%')
-    sys.stdout.flush()
-
 def delete_rate(
     artifacts: NDArray[ARTIFACT_DTYPE], 
     slots: NDArray[np.unsignedinteger], 
     mask: NDArray[np.bool], 
     slvls: NDArray[SLVL_DTYPE], 
     sets: NDArray[np.unsignedinteger]
-) -> tuple[NDArray, NDArray[np.unsignedinteger]]:
+) -> tuple[list, NDArray[np.unsignedinteger]]:
     caches = {}
-    relevance = np.zeros((len(artifacts), 2), dtype=float)
+    #relevance = np.zeros((len(artifacts), 2), dtype=float)
+    relevance = [[None] * 2 for _ in range(len(artifacts))]
     counts = np.zeros((len(artifacts), 2), dtype=int)
-    # TODO: get rid of these these are temp for the progress bar
-    total_num = 5 * (1 + len(SETS))
-    count = 0
     
-    for slot in range(5):
-        count += 1
-        _temp_bar(count, total_num)
-        
+    for slot in range(5):        
         slot_mask = mask & (slots == slot)
         slot_original_idxs = np.flatnonzero(slot_mask)
         slot_artifacts = artifacts[slot_mask]
@@ -216,13 +205,13 @@ def delete_rate(
                 caches[cache_key] = CachePercentile(SLOTS[slot], target)
             for i, (artifact, slvl) in enumerate(zip(slot_artifacts, slot_lvls)):
                 temp[i, j] = caches[cache_key].percent(artifact, slvl)
-        relevance[slot_mask, 0] = np.max(temp, axis=1)
+        
+        for j, idx in enumerate(slot_original_idxs):
+            relevance[idx][0] = temp[j]
+        #relevance[slot_mask, 0] = np.max(temp, axis=1)
         counts[slot_mask, 0] = len(slot_artifacts)
         
         for setKey in range(len(SETS)):
-            count += 1
-            _temp_bar(count, total_num)
-            
             set_mask = sets[slot_mask] == setKey
             if np.all(set_mask == 0):
                 continue
@@ -239,33 +228,93 @@ def delete_rate(
                     caches[cache_key] = CachePercentile(SLOTS[slot], target)
                 for i, (artifact, slvl) in enumerate(zip(set_artifacts, set_lvls)):
                     temp[i, j] = caches[cache_key].percent(artifact, slvl)
-            relevance[set_original_idxs, 1] = np.max(temp, axis=1)
+            for j, idx in enumerate(set_original_idxs):
+                relevance[idx][1] = temp[j]
+            #relevance[set_original_idxs, 1] = np.max(temp, axis=1)
             counts[set_original_idxs, 1] = len(set_artifacts)
-            
-    print() # TODO: get rid of this
             
     if top_cache[None]:
         with open('top_cache.pkl', 'wb') as f:
             pickle.dump(top_cache, f)
-    if helper_cache[None]:
         with open(CACHE_PATH, 'wb') as f:
             pickle.dump(helper_cache, f)
     return relevance, counts
 
-
 def delete_analyze(
-    relevance: NDArray, 
+    relevance: list, 
+    slots: NDArray[np.unsignedinteger], 
     counts: NDArray[np.unsignedinteger], 
     mask: NDArray[np.bool], 
+    sets: NDArray[np.unsignedinteger],
     num: int | None = None, 
     threshold: int | float | None = None
 ) -> NDArray[np.bool]:
-    counts[~mask] = -1
-    scaled_relevance = np.max(relevance / counts, axis=1)
+    asdf = np.zeros((len(relevance), 2), dtype=float)
+    for i in range(len(relevance)):
+        asdf[i, 0] = np.max(relevance[i][0])
+        asdf[i, 1] = np.max(relevance[i][1])
+    relevance = asdf
+    
+    counts_copy = counts.copy()
+    counts_copy[~mask] = -1 # Wraps around on purpose, makes scaled relevance ~0
+    
+    if threshold is not None:
+        scaled_relevance = np.max(relevance / counts_copy, axis=1)
+        return scaled_relevance <= threshold
     #relevance = np.max(relevance, axis=1)
     
-    if threshold is None:
-        assert num is not None
-        threshold = np.partition(scaled_relevance[mask], num)[num]
+    assert num is not None
+    groups = slots * len(SETS) + sets
+    
+    slot_ver = np.zeros(len(SLOTS))
+    group_ver = np.zeros(len(SLOTS) * len(SETS)) # Need a seperate entry for set per slot
+    
+    remove = np.zeros(len(relevance), dtype=bool)
+    
+    def key(i: int) -> float:
+        return np.max(relevance[i] / counts_copy[i])
+    
+    heap = [(key(i), i, 0, 0) for i in range(len(relevance))]
+    heapq.heapify(heap)
+    
+    removed = 0
+    while removed < num:
+        _, i, slot_v, group_v = heapq.heappop(heap)
         
-    return scaled_relevance <= threshold
+        assert not remove[i]
+        
+        slot = slots[i]
+        group = groups[i]
+        
+        if slot_v != slot_ver[slot] or group_v != group_ver[group]:
+            heapq.heappush(heap, (key(i), i, int(slot_ver[slot]), int(group_ver[group])))
+            continue
+        
+        remove[i] = True
+        removed += 1
+        
+        counts_copy[i] -= 1
+        slot_ver[slot] += 1
+        group_ver[group] += 1
+        
+    return remove
+    
+'''
+You have two functions that get called sequentially, foo and bar. Within
+bar, some data is needed which can be calculated in O(n) time. Within
+foo, the same data can be calculated in O(1) time, but it isn't used.
+Would you use a cleaner function signature and accept a linear slowdown,
+or cache the info. Speed is not an issue and there is no practical
+difference, but which would be better practice?
+
+In Python, which would you pick:
+
+x = foo(a, b)
+y = bar(a, c)
+
+vs.
+
+x, info = foo(a, b)
+y = bar(a, c, info)
+
+'''

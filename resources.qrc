@@ -57,6 +57,8 @@
         <file alias="SilkenMoonsSerenade.webp">icons/flowers/Item_Crystal_Tear_of_the_Wanderer.webp</file>
         <file alias="ADayCarvedFromRisingWinds.webp">icons/flowers/Item_Windborne_Flower's_Spruchdichtung.webp</file>
         <file alias="AubadeOfMorningstarAndMoon.webp">icons/flowers/Item_Moonlit_Offering's_Opulent_Dream.webp</file>
+        <file alias="CelestialGift.webp">icons/flowers/Item_Heavensent_Fragrance.webp</file>
+        <file alias="DisenchantmentInDeepShadow.webp">icons/flowers/Item_Iridescence_That_Ceased_Amidst_Glory.webp</file>
     </qresource>
     <qresource prefix="/plume_icons">
         <file alias="default.webp">icons/plumes/Icon_Plume_of_Death.webp</file>
@@ -116,6 +118,8 @@
         <file alias="SilkenMoonsSerenade.webp">icons/plumes/Item_Pristine_Plume_of_the_Blessed.webp</file>
         <file alias="ADayCarvedFromRisingWinds.webp">icons/plumes/Item_Dawn's_Brilliant_Oath.webp</file>
         <file alias="AubadeOfMorningstarAndMoon.webp">icons/plumes/Item_Moonlit_Offering's_Parting_Light.webp</file>
+        <file alias="CelestialGift.webp">icons/plumes/Item_Heavensent_Demise.webp</file>
+        <file alias="DisenchantmentInDeepShadow.webp">icons/plumes/Item_Sharpness_That_Ceased_Upon_Wondrous_Creation.webp</file>
     </qresource>
     <qresource prefix="/sands_icons">
         <file alias="default.webp">icons/sands/Icon_Sands_of_Eon.webp</file>
@@ -174,6 +178,8 @@
         <file alias="SilkenMoonsSerenade.webp">icons/sands/Item_Frost_Devotee's_Delirium.webp</file>
         <file alias="ADayCarvedFromRisingWinds.webp">icons/sands/Item_A_Note_in_Spring's_Leich.webp</file>
         <file alias="AubadeOfMorningstarAndMoon.webp">icons/sands/Item_Moonlit_Offering's_Final_Hour.webp</file>
+        <file alias="CelestialGift.webp">icons/sands/Item_Heavensent_Decree.webp</file>
+        <file alias="DisenchantmentInDeepShadow.webp">icons/sands/Item_Moment_That_Ceased_Upon_Waking_From_Grand_Dreams.webp</file>
     </qresource>
     <qresource prefix="/goblet_icons">
         <file alias="default.webp">icons/goblets/Icon_Goblet_of_Eonothem.webp</file>
@@ -232,6 +238,8 @@
         <file alias="SilkenMoonsSerenade.webp">icons/goblets/Item_Joyous_Glory_of_the_Pure.webp</file>
         <file alias="ADayCarvedFromRisingWinds.webp">icons/goblets/Item_Heldenepos's_Unspoken_Tale.webp</file>
         <file alias="AubadeOfMorningstarAndMoon.webp">icons/goblets/Item_Moonlit_Offering's_Libation.webp</file>
+        <file alias="CelestialGift.webp">icons/goblets/Item_Heavensent_Reward.webp</file>
+        <file alias="DisenchantmentInDeepShadow.webp">icons/goblets/Item_Ovations_That_Ceased_Upon_Festivity.webp</file>
     </qresource>
     <qresource prefix="/circlet_icons">
         <file alias="default.webp">icons/circlets/Icon_Circlet_of_Logos.webp</file>
@@ -294,6 +302,8 @@
         <file alias="SilkenMoonsSerenade.webp">icons/circlets/Item_Holy_Crown_of_the_Believer.webp</file>
         <file alias="ADayCarvedFromRisingWinds.webp">icons/circlets/Item_Minnesang_of_Love_and_Lament.webp</file>
         <file alias="AubadeOfMorningstarAndMoon.webp">icons/circlets/Item_Moonlit_Offering's_Silver_Crown.webp</file>
+        <file alias="CelestialGift.webp">icons/circlets/Item_Heavensent_Crown.webp</file>
+        <file alias="DisenchantmentInDeepShadow.webp">icons/circlets/Item_Pendulum_That_Ceased_Amidst_a_Great_Fall.webp</file>
     </qresource>
     <qresource prefix="/menu">
         <file>icons/locked.svg</file>

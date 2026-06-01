@@ -61,7 +61,9 @@ SETS = (
     'NightOfTheSkysUnveiling',              # 56
     'SilkenMoonsSerenade',                  # 57
     'ADayCarvedFromRisingWinds',            # 58
-    'AubadeOfMorningstarAndMoon'            # 59
+    'AubadeOfMorningstarAndMoon',           # 59
+    'CelestialGift',                        # 60
+    'DisenchantmentInDeepShadow',           # 61
 )
 
 SET_2_NUM = {artifact_set: index for index, artifact_set in enumerate(SETS)}

@@ -216,7 +216,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.upgrade_mask = upgrade_analyze(relevance, counts, self.artifact_mask, self.slvls, num=20)
         start = time.perf_counter()
         relevance, counts = delete_rate(self.artifacts, self.slots, self.artifact_mask, self.slvls, self.sets)
-        self.delete_mask = delete_analyze(relevance, counts, self.artifact_mask, num=100)
+        #self.delete_mask = delete_analyze(relevance, counts, self.artifact_mask, num=100)
+        self.delete_mask = delete_analyze(relevance, self.slots, counts, self.artifact_mask, self.sets, num=100)
         end = time.perf_counter()
         print(end - start)
         self.statusbar.showMessage('Done', 10000)
@@ -341,7 +342,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         singular = {
             'flower': 'flower',
             'plume': 'plume',
-            'sands': 'sand',
+            'sands': 'sand', # This is NOT identity
             'goblet': 'goblet',
             'circlet': 'circlet'
         }

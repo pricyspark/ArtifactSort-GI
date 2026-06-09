@@ -67,10 +67,16 @@ If so, then Artifact Sort can help you!
 
 3. Compile GUI elements
 
-   ```sh
-   pyside6-uic mainwindow.ui -o MainWindow.py
-   pyside6-uic targetdialog.ui -o TargetDialog.py
-   pyside6-rcc resources.qrc -o resources.py
+   ```bash
+   bash install.sh
+   ```
+
+   Alternatively, you can make the script executable and run it
+   directly:
+
+   ```bash
+   chmod +x install.sh
+   ./install.sh
    ```
 
 ## Usage

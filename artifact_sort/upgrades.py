@@ -1,14 +1,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from hashlib import sha256
 from typing import Sequence
 
 import numpy as np
 from numpy.typing import NDArray
 
+from .cache import cache_key
 from .model import ArtifactBatch, SUBSTAT_MAX, cumulative_artifact_exp
 from .optimizer import BuildOptimizer, BuildResult
-from .outcomes import final_outcomes
+from .outcomes import cached_final_outcomes
 from .scenarios import Scenario
 
 
@@ -43,10 +45,15 @@ def _next_checkpoint(level: int) -> int:
 
 
 def _outcome_stats(
-    current: NDArray[np.float64], sub_rolls: NDArray[np.uint8]
+    current: NDArray[np.float64],
+    current_sub_rolls: NDArray[np.uint8],
+    outcome_sub_rolls: NDArray[np.uint8],
 ) -> NDArray[np.float64]:
-    result = np.repeat(current[None, :], len(sub_rolls), axis=0)
-    result[:, :10] = sub_rolls.astype(np.float64) * (SUBSTAT_MAX / 10.0)
+    result = np.repeat(current[None, :], len(outcome_sub_rolls), axis=0)
+    roll_delta = outcome_sub_rolls.astype(np.float64) - current_sub_rolls.astype(
+        np.float64
+    )
+    result[:, :10] += roll_delta * (SUBSTAT_MAX / 10.0)
     return result
 
 
@@ -54,7 +61,6 @@ def _forced_utility(
     optimizer: BuildOptimizer,
     scenario: Scenario,
     pools: Sequence[BuildResult],
-    index: int,
     old_stats: NDArray[np.float64],
     outcomes: NDArray[np.float64],
 ) -> NDArray[np.float64]:
@@ -94,6 +100,115 @@ class UpgradeAnalyzer:
         self.probability_floor = probability_floor
         self.complement_pool_size = complement_pool_size
 
+    def _potential_key(
+        self,
+        scenario: Scenario,
+        pools: Sequence[BuildResult],
+        baseline: float,
+        old_stats: NDArray[np.float64],
+        outcome_stats: NDArray[np.float64],
+        probabilities: NDArray[np.float64],
+    ) -> str:
+        digest = sha256()
+        digest.update(np.asarray((baseline,), dtype=np.float64).tobytes())
+        for array in (old_stats, outcome_stats, probabilities):
+            contiguous = np.ascontiguousarray(array)
+            digest.update(str(contiguous.shape).encode())
+            digest.update(contiguous.dtype.str.encode())
+            digest.update(contiguous.tobytes())
+        pool_states = sorted(
+            {np.ascontiguousarray(build.stats, dtype=np.float64).tobytes() for build in pools}
+        )
+        digest.update(len(pool_states).to_bytes(8, "little"))
+        for state in pool_states:
+            digest.update(state)
+        return cache_key(
+            artifact_fingerprint=digest.hexdigest(),
+            scenario_hash=self.optimizer.scenario_fingerprint(scenario),
+            evaluator_version=self.optimizer.evaluator.version,
+            parameters={"kind": "upgrade-potential", "epsilon": self.epsilon},
+        )
+
+    def _scenario_potential(
+        self,
+        scenario: Scenario,
+        pools: Sequence[BuildResult],
+        baseline: float,
+        old_stats: NDArray[np.float64],
+        outcome_stats: NDArray[np.float64],
+        probabilities: NDArray[np.float64],
+    ) -> ScenarioPotential:
+        cache = self.optimizer.cache
+        key = (
+            self._potential_key(
+                scenario,
+                pools,
+                baseline,
+                old_stats,
+                outcome_stats,
+                probabilities,
+            )
+            if cache is not None
+            else None
+        )
+        if cache is not None:
+            assert key is not None
+            found = cache.get("upgrade-potential", key)
+            if isinstance(found, dict) and all(
+                isinstance(found.get(name), (int, float))
+                for name in (
+                    "expected_utility",
+                    "expected_relative_gain",
+                    "useful_probability",
+                )
+            ):
+                return ScenarioPotential(
+                    scenario.id,
+                    scenario.tier,
+                    baseline,
+                    float(found["expected_utility"]),
+                    float(found["expected_relative_gain"]),
+                    float(found["useful_probability"]),
+                )
+
+        utilities = _forced_utility(
+            self.optimizer,
+            scenario,
+            pools,
+            old_stats,
+            outcome_stats,
+        )
+        portfolio = np.maximum(utilities, baseline)
+        if baseline > 0 and np.isfinite(baseline):
+            relative = np.maximum(0.0, portfolio / baseline - 1.0)
+            expected_gain = float(probabilities @ relative)
+            useful = float(
+                probabilities[utilities >= (1.0 - self.epsilon) * baseline].sum()
+            )
+        else:
+            expected_gain = 0.0
+            useful = 0.0
+        potential = ScenarioPotential(
+            scenario.id,
+            scenario.tier,
+            baseline,
+            float(probabilities @ portfolio),
+            expected_gain,
+            useful,
+        )
+        if cache is not None:
+            assert key is not None
+            cache.put(
+                "upgrade-potential",
+                key,
+                {
+                    "expected_utility": potential.expected_utility,
+                    "expected_relative_gain": potential.expected_relative_gain,
+                    "useful_probability": potential.useful_probability,
+                },
+            )
+        return potential
+
     def _screen(self, max_candidates: int | None) -> NDArray[np.int64]:
         batch = self.optimizer.batch
         candidates = np.flatnonzero(
@@ -124,8 +239,14 @@ class UpgradeAnalyzer:
 
         recommendations: list[UpgradeRecommendation] = []
         for index in self._screen(max_candidates):
-            distribution = final_outcomes(batch, int(index))
-            outcome_stats = _outcome_stats(current_stats[index], distribution.sub_rolls)
+            distribution = cached_final_outcomes(
+                batch, int(index), self.optimizer.cache
+            )
+            outcome_stats = _outcome_stats(
+                current_stats[index],
+                batch.sub_rolls[index],
+                distribution.sub_rolls,
+            )
             scenario_results: list[ScenarioPotential] = []
             gains: list[float] = []
             usefulness: list[float] = []
@@ -137,39 +258,18 @@ class UpgradeAnalyzer:
                     forced_index=int(index),
                     top_k=self.complement_pool_size,
                 )
-                utilities = _forced_utility(
-                    self.optimizer,
+                baseline = baselines[scenario.id]
+                potential = self._scenario_potential(
                     scenario,
                     pools,
-                    int(index),
+                    baseline,
                     current_stats[index],
                     outcome_stats,
+                    distribution.probabilities,
                 )
-                baseline = baselines[scenario.id]
-                portfolio = np.maximum(utilities, baseline)
-                if baseline > 0 and np.isfinite(baseline):
-                    relative = np.maximum(0.0, portfolio / baseline - 1.0)
-                    expected_gain = float(distribution.probabilities @ relative)
-                    useful = float(
-                        distribution.probabilities[
-                            utilities >= (1.0 - self.epsilon) * baseline
-                        ].sum()
-                    )
-                else:
-                    expected_gain = 0.0
-                    useful = 0.0
-                scenario_results.append(
-                    ScenarioPotential(
-                        scenario.id,
-                        scenario.tier,
-                        baseline,
-                        float(distribution.probabilities @ portfolio),
-                        expected_gain,
-                        useful,
-                    )
-                )
-                gains.append(expected_gain)
-                usefulness.append(useful)
+                scenario_results.append(potential)
+                gains.append(potential.expected_relative_gain)
+                usefulness.append(potential.useful_probability)
 
             level = int(batch.levels[index])
             checkpoint = _next_checkpoint(level)

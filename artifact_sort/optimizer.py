@@ -1,15 +1,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from hashlib import sha256
 import heapq
 from itertools import product
+import json
 from typing import Iterable, Sequence
 
 import numpy as np
 from numpy.typing import NDArray
 
+from .cache import ResultCache, cache_key
 from .model import ArtifactBatch, STAT_INDEX
-from .scenarios import BuiltinEvaluator, Evaluator, Scenario
+from .scenarios import BuiltinEvaluator, Evaluator, Scenario, scenario_to_mapping
 from .screening import screen_scores, screening_directions
 
 
@@ -76,6 +79,8 @@ class BuildOptimizer:
         per_set_limit: int = 3,
         beam_width: int = 6000,
         exact_product_limit: int = 1_500_000,
+        cache: ResultCache | None = None,
+        evaluation_cache_limit: int = 100_000,
     ) -> None:
         self.batch = batch
         self.evaluator = evaluator or BuiltinEvaluator()
@@ -83,6 +88,126 @@ class BuildOptimizer:
         self.per_set_limit = per_set_limit
         self.beam_width = beam_width
         self.exact_product_limit = exact_product_limit
+        self.cache = cache
+        self.evaluation_cache_limit = evaluation_cache_limit
+        self._loadout_memory: dict[str, tuple[int, list[BuildResult]]] = {}
+        self._scenario_fingerprints: dict[int, str] = {}
+
+    def scenario_fingerprint(self, scenario: Scenario) -> str:
+        identity = id(scenario)
+        found = self._scenario_fingerprints.get(identity)
+        if found is not None:
+            return found
+        payload = scenario_to_mapping(scenario)
+        fingerprint = sha256(
+            json.dumps(payload, sort_keys=True, default=str).encode()
+        ).hexdigest()
+        self._scenario_fingerprints[identity] = fingerprint
+        return fingerprint
+
+    def _search_key(
+        self,
+        scenario: Scenario,
+        stats: NDArray[np.float64],
+        available: NDArray[np.bool_],
+        include_unfinished: bool,
+        forced_index: int | None,
+    ) -> str | None:
+        if len(set(self.batch.ids.tolist())) != len(self.batch):
+            return None
+        digest = sha256()
+        indices = np.flatnonzero(available)
+        order = indices[np.argsort(self.batch.ids[indices])]
+        for index in order:
+            digest.update(str(self.batch.ids[index]).encode())
+            digest.update(b"\0")
+            digest.update(str(self.batch.set_keys[index]).encode())
+            digest.update(bytes((int(self.batch.slots[index]),)))
+            digest.update(bytes((int(self.batch.main_stats[index]),)))
+            digest.update(bytes((int(self.batch.rarities[index]),)))
+            digest.update(np.ascontiguousarray(stats[index], dtype=np.float64).tobytes())
+        forced_id = str(self.batch.ids[forced_index]) if forced_index is not None else None
+        return cache_key(
+            artifact_fingerprint=digest.hexdigest(),
+            scenario_hash=self.scenario_fingerprint(scenario),
+            evaluator_version=self.evaluator.version,
+            parameters={
+                "kind": "loadout-pool",
+                "candidate_limit": self.candidate_limit,
+                "per_set_limit": self.per_set_limit,
+                "beam_width": self.beam_width,
+                "exact_product_limit": self.exact_product_limit,
+                "include_unfinished": include_unfinished,
+                "forced_id": forced_id,
+            },
+        )
+
+    def _restore_loadouts(
+        self, value: object, requested: int
+    ) -> list[BuildResult] | None:
+        if not isinstance(value, dict):
+            return None
+        cached_depth = value.get("requested_top_k")
+        if not isinstance(cached_depth, int) or cached_depth < requested:
+            return None
+        raw_builds = value.get("builds")
+        if not isinstance(raw_builds, list):
+            return None
+        id_to_index = {str(artifact_id): index for index, artifact_id in enumerate(self.batch.ids)}
+        results: list[BuildResult] = []
+        try:
+            for raw in raw_builds[:requested]:
+                if not isinstance(raw, dict):
+                    return None
+                artifact_ids = raw["artifact_ids"]
+                if not isinstance(artifact_ids, list) or len(artifact_ids) != 5:
+                    return None
+                indices = tuple(id_to_index[str(artifact_id)] for artifact_id in artifact_ids)
+                stats = np.asarray(raw["stats"], dtype=np.float64)
+                if stats.shape != (19,):
+                    return None
+                stats.setflags(write=False)
+                results.append(BuildResult(indices, float(raw["utility"]), stats))
+        except (KeyError, TypeError, ValueError):
+            return None
+        return results
+
+    def _cached_loadouts(self, key: str, requested: int) -> list[BuildResult] | None:
+        memory = self._loadout_memory.get(key)
+        if memory is not None and memory[0] >= requested:
+            return memory[1][:requested]
+        if self.cache is None:
+            return None
+        value = self.cache.get("loadout-pool", key, track=False)
+        restored = self._restore_loadouts(value, requested)
+        self.cache.record_lookup("loadout-pool", hit=restored is not None)
+        if restored is not None:
+            self._loadout_memory[key] = (requested, restored)
+        return restored
+
+    def _store_loadouts(
+        self, key: str | None, requested: int, results: list[BuildResult]
+    ) -> None:
+        if key is None:
+            return
+        self._loadout_memory[key] = (requested, results)
+        if self.cache is None:
+            return
+        self.cache.put(
+            "loadout-pool",
+            key,
+            {
+                "requested_top_k": requested,
+                "builds": [
+                    {
+                        "artifact_ids": [str(self.batch.ids[index]) for index in result.indices],
+                        "utility": result.utility,
+                        "stats": result.stats.tolist(),
+                    }
+                    for result in results
+                ],
+            },
+        )
 
     def _candidate_lists(
         self,
@@ -172,6 +297,21 @@ class BuildOptimizer:
     ) -> list[BuildResult]:
         sizes = [len(values) for values in lists]
         combinations = int(np.prod(sizes, dtype=np.int64))
+        bounded_candidates = (
+            combinations
+            if combinations <= self.exact_product_limit
+            else self.beam_width
+        )
+        cache_evaluations = (
+            self.cache is not None
+            and bounded_candidates <= self.evaluation_cache_limit
+        )
+        evaluation_scope = cache_key(
+            artifact_fingerprint="",
+            scenario_hash=self.scenario_fingerprint(scenario),
+            evaluator_version=self.evaluator.version,
+            parameters={"kind": "build-evaluation"},
+        )
         representative = np.median(stats[np.concatenate(lists)], axis=0)
         directions = screening_directions(self.evaluator, scenario, representative)
         screen = screen_scores(stats, directions)
@@ -225,7 +365,34 @@ class BuildOptimizer:
             if not pending_indices:
                 return
             totals_array = np.vstack(pending_totals)
-            utilities = self.evaluator.evaluate_batch(totals_array, scenario)
+            if cache_evaluations and self.cache is not None:
+                keys = [
+                    sha256(evaluation_scope.encode() + total.tobytes()).hexdigest()
+                    for total in totals_array
+                ]
+                cached = self.cache.get_many("build-evaluation", keys)
+                values: dict[str, float] = {}
+                for key, value in cached.items():
+                    if isinstance(value, (int, float)):
+                        values[key] = float(value)
+                missing: dict[str, NDArray[np.float64]] = {}
+                for key, total in zip(keys, totals_array):
+                    if key not in values:
+                        missing.setdefault(key, total)
+                if missing:
+                    missing_keys = list(missing)
+                    evaluated = self.evaluator.evaluate_batch(
+                        np.vstack([missing[key] for key in missing_keys]), scenario
+                    )
+                    writes = {
+                        key: float(utility)
+                        for key, utility in zip(missing_keys, evaluated)
+                    }
+                    self.cache.put_many("build-evaluation", writes)
+                    values.update(writes)
+                utilities = np.asarray([values[key] for key in keys], dtype=np.float64)
+            else:
+                utilities = self.evaluator.evaluate_batch(totals_array, scenario)
             for utility, indices, total in zip(
                 utilities, pending_indices, pending_totals
             ):
@@ -279,12 +446,24 @@ class BuildOptimizer:
         if forced_index is not None:
             available[forced_index] = True
 
+        requested = max(1, top_k)
+        search_key = self._search_key(
+            scenario, stats, available, include_unfinished, forced_index
+        )
+        if search_key is not None:
+            cached = self._cached_loadouts(search_key, requested)
+            if cached is not None:
+                return cached
+
         lists = self._candidate_lists(
             scenario, stats, available, forced_index=forced_index
         )
         if len(lists) != 5:
+            self._store_loadouts(search_key, requested, [])
             return []
-        return self._candidate_builds(lists, stats, scenario, max(1, top_k))
+        results = self._candidate_builds(lists, stats, scenario, requested)
+        self._store_loadouts(search_key, requested, results)
+        return results
 
 
 def _regret(baseline: float, retained: float) -> float:

@@ -1,16 +1,19 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
+from hashlib import sha256
+import json
 from pathlib import Path
-from typing import Protocol, Sequence
+from typing import Callable, Mapping, Protocol, Sequence
 
 import numpy as np
 from numpy.typing import NDArray
 
+from .cache import ResultCache, cache_key
 from .model import ArtifactBatch, SUBSTAT_MAX, cumulative_artifact_exp, load_good
 from .optimizer import BuildOptimizer, DeletionAnalyzer
 from .outcomes import sample_upgrade_tapes
-from .scenarios import BuiltinEvaluator, Scenario
+from .scenarios import BuiltinEvaluator, Scenario, scenario_to_mapping
 from .upgrades import UpgradeAnalyzer
 
 
@@ -24,12 +27,16 @@ class Policy(Protocol):
 
 
 class DeletionPolicy(Policy, Protocol):
+    stochastic: bool
+
     def delete(
         self,
         batch: ArtifactBatch,
         scenarios: Sequence[Scenario],
         free: int,
         rng: np.random.Generator,
+        *,
+        cache: ResultCache | None = None,
     ) -> DeletionDecision:
         ...
 
@@ -51,6 +58,7 @@ def _lowest_unprotected(
 
 class RandomDeletionPolicy:
     name = "random"
+    stochastic = True
 
     def delete(
         self,
@@ -58,6 +66,8 @@ class RandomDeletionPolicy:
         scenarios: Sequence[Scenario],
         free: int,
         rng: np.random.Generator,
+        *,
+        cache: ResultCache | None = None,
     ) -> DeletionDecision:
         scores = rng.random(len(batch))
         return DeletionDecision(_lowest_unprotected(batch, scores, free))
@@ -65,6 +75,7 @@ class RandomDeletionPolicy:
 
 class CritValuePolicy:
     name = "crit-value"
+    stochastic = False
 
     def delete(
         self,
@@ -72,6 +83,8 @@ class CritValuePolicy:
         scenarios: Sequence[Scenario],
         free: int,
         rng: np.random.Generator,
+        *,
+        cache: ResultCache | None = None,
     ) -> DeletionDecision:
         scores = batch.sub_rolls[:, 8].astype(float) * 2.0 + batch.sub_rolls[:, 9]
         scores += np.count_nonzero(batch.sub_rolls, axis=1) * 1e-3
@@ -82,6 +95,7 @@ class StaticWeightPolicy:
     """The prior row-scoring family, using scenario-local linear weights."""
 
     name = "greedy-linearized-score"
+    stochastic = False
 
     def delete(
         self,
@@ -89,6 +103,8 @@ class StaticWeightPolicy:
         scenarios: Sequence[Scenario],
         free: int,
         rng: np.random.Generator,
+        *,
+        cache: ResultCache | None = None,
     ) -> DeletionDecision:
         evaluator = BuiltinEvaluator()
         stats = batch.final_stats()
@@ -104,6 +120,7 @@ class ArchetypeWeightPolicy:
     """Conservative max over common build archetypes."""
 
     name = "archetype-weight"
+    stochastic = False
 
     def delete(
         self,
@@ -111,6 +128,8 @@ class ArchetypeWeightPolicy:
         scenarios: Sequence[Scenario],
         free: int,
         rng: np.random.Generator,
+        *,
+        cache: ResultCache | None = None,
     ) -> DeletionDecision:
         # These are screening weights in roll-coefficient space, matching the
         # family of ATK/HP/DEF/EM, crit, and ER targets used by the old backend.
@@ -130,6 +149,7 @@ class RecordedDeletionPolicy:
     """Replay an externally recorded deletion ordering as a benchmark."""
 
     name = "recorded-policy"
+    stochastic = False
 
     def __init__(self, artifact_ids: Sequence[str]) -> None:
         self.artifact_ids = tuple(artifact_ids)
@@ -140,6 +160,8 @@ class RecordedDeletionPolicy:
         scenarios: Sequence[Scenario],
         free: int,
         rng: np.random.Generator,
+        *,
+        cache: ResultCache | None = None,
     ) -> DeletionDecision:
         index = {str(key): i for i, key in enumerate(batch.ids)}
         ordered = [index[key] for key in self.artifact_ids if key in index]
@@ -150,6 +172,8 @@ class RecordedDeletionPolicy:
 
 
 class PortfolioDeletionPolicy:
+    stochastic = False
+
     def __init__(
         self,
         *,
@@ -170,8 +194,12 @@ class PortfolioDeletionPolicy:
         scenarios: Sequence[Scenario],
         free: int,
         rng: np.random.Generator,
+        *,
+        cache: ResultCache | None = None,
     ) -> DeletionDecision:
-        optimizer = BuildOptimizer(batch, candidate_limit=self.candidate_limit)
+        optimizer = BuildOptimizer(
+            batch, candidate_limit=self.candidate_limit, cache=cache
+        )
         option_values = UpgradeAnalyzer(
             optimizer,
             scenarios,
@@ -182,6 +210,80 @@ class PortfolioDeletionPolicy:
             optimizer, scenarios, loadouts_per_scenario=self.loadouts
         ).analyze(free, option_values=option_values)
         return DeletionDecision(result.deleted_indices)
+
+
+def _scenario_hash(scenarios: Sequence[Scenario]) -> str:
+    payload = [scenario_to_mapping(scenario) for scenario in scenarios]
+    return sha256(json.dumps(payload, sort_keys=True, default=str).encode()).hexdigest()
+
+
+def _deletion_policy_spec(policy: DeletionPolicy) -> dict[str, object] | None:
+    policy_type = type(policy)
+    if policy_type is RandomDeletionPolicy:
+        return {"type": "random"}
+    if policy_type is CritValuePolicy:
+        return {"type": "crit-value"}
+    if policy_type is ArchetypeWeightPolicy:
+        return {"type": "archetype-weight"}
+    if policy_type is StaticWeightPolicy:
+        return {"type": "greedy-linearized-score"}
+    if policy_type is RecordedDeletionPolicy:
+        return {
+            "type": "recorded-policy",
+            "artifact_ids": list(policy.artifact_ids),
+        }
+    if policy_type is PortfolioDeletionPolicy:
+        return {
+            "type": "portfolio",
+            "candidate_limit": policy.candidate_limit,
+            "loadouts": policy.loadouts,
+            "probability_floor": policy.probability_floor,
+            "upgrade_candidates": policy.upgrade_candidates,
+        }
+    return None
+
+
+def _cached_deletion_decision(
+    policy: DeletionPolicy,
+    batch: ArtifactBatch,
+    scenarios: Sequence[Scenario],
+    free: int,
+    rng: np.random.Generator,
+    cache: ResultCache | None,
+) -> tuple[DeletionDecision, bool]:
+    spec = _deletion_policy_spec(policy)
+    key = None
+    if cache is not None and spec is not None:
+        key = cache_key(
+            artifact_fingerprint=batch.fingerprint(),
+            scenario_hash=_scenario_hash(scenarios),
+            evaluator_version=BuiltinEvaluator.version,
+            parameters={
+                "kind": "benchmark-deletion-decision",
+                "benchmark_version": 2,
+                "free": free,
+                "policy": spec,
+            },
+        )
+        found = cache.get("benchmark-deletion-decision", key)
+        if isinstance(found, Mapping):
+            indices = found.get("indices")
+            if isinstance(indices, list) and len(indices) == free:
+                try:
+                    decision = DeletionDecision(tuple(int(index) for index in indices))
+                except (TypeError, ValueError):
+                    pass
+                else:
+                    return decision, True
+
+    decision = policy.delete(batch, scenarios, free, rng, cache=cache)
+    if cache is not None and key is not None:
+        cache.put(
+            "benchmark-deletion-decision",
+            key,
+            {"indices": list(decision.indices)},
+        )
+    return decision, False
 
 
 @dataclass(frozen=True, slots=True)
@@ -213,6 +315,222 @@ class DeletionBenchmark:
     trials: tuple[PolicyDeletionTrial, ...]
     confidence: dict[str, dict[str, ConfidenceInterval]]
     seeds: tuple[int, ...]
+
+
+def _rounded(value: float, digits: int = 6) -> float:
+    return round(float(value), digits)
+
+
+def _percent(value: float) -> float:
+    return _rounded(100.0 * value)
+
+
+def _percent_interval(interval: ConfidenceInterval) -> dict[str, float]:
+    return {
+        "estimate": _percent(interval.estimate),
+        "low": _percent(interval.low),
+        "high": _percent(interval.high),
+    }
+
+
+def summarize_deletion_benchmark(
+    benchmark: DeletionBenchmark,
+    calibration_scenarios: Sequence[Scenario] = (),
+    heldout_scenarios: Sequence[Scenario] = (),
+) -> dict[str, object]:
+    """Create a compact, human-oriented view of a deletion benchmark."""
+
+    grouped = {
+        policy: [trial for trial in benchmark.trials if trial.policy == policy]
+        for policy in benchmark.confidence
+    }
+    summaries: list[dict[str, object]] = []
+    ranking_values: dict[str, tuple[float, ...]] = {}
+    for policy, trials in grouped.items():
+        if not trials:
+            continue
+        punished = [
+            trial.first_punished_deletion
+            for trial in trials
+            if trial.first_punished_deletion is not None
+        ]
+        confidence = benchmark.confidence[policy]
+        punished_rate = len(punished) / len(trials)
+        current_regret = float(np.mean([trial.current_regret for trial in trials]))
+        speculative_regret = float(
+            np.mean([trial.speculative_regret for trial in trials])
+        )
+        worst_regret = float(np.mean([trial.worst_regret for trial in trials]))
+        near_best_fraction = float(
+            np.mean([trial.oracle_build_deletion_fraction for trial in trials])
+        )
+        summaries.append(
+            {
+                "policy": policy,
+                "rank": None,
+                "trials": len(trials),
+                "mean_current_regret_pct": _percent(current_regret),
+                "mean_speculative_regret_pct": _percent(speculative_regret),
+                "mean_worst_regret_pct": _percent(worst_regret),
+                "max_observed_worst_regret_pct": _percent(
+                    max(trial.worst_regret for trial in trials)
+                ),
+                "worst_regret_mean_95_ci_pct": _percent_interval(
+                    confidence["worst_regret"]
+                ),
+                "punished_trials": len(punished),
+                "punished_trial_rate_pct": _percent(punished_rate),
+                "earliest_punished_deletion": min(punished) if punished else None,
+                "median_first_punished_deletion": (
+                    _rounded(float(np.median(punished)), 1) if punished else None
+                ),
+                "mean_near_best_artifacts_deleted_pct": _percent(
+                    near_best_fraction
+                ),
+                "near_best_deletion_mean_95_ci_pct": _percent_interval(
+                    confidence["oracle_build_deletion_fraction"]
+                ),
+                "trials_deleting_any_near_best_artifact": sum(
+                    trial.oracle_build_deletion_fraction > 0 for trial in trials
+                ),
+                "mean_lost_set_options": _rounded(
+                    float(np.mean([trial.lost_set_options for trial in trials]))
+                ),
+                "max_lost_set_options": max(
+                    trial.lost_set_options for trial in trials
+                ),
+                "mean_replacement_depth": _rounded(
+                    float(np.mean([trial.replacement_depth for trial in trials]))
+                ),
+            }
+        )
+        ranking_values[policy] = (
+            current_regret,
+            speculative_regret,
+            confidence["worst_regret"].high,
+            near_best_fraction,
+            punished_rate,
+        )
+
+    ranked = sorted(
+        (
+            summary
+            for summary in summaries
+            if summary["policy"] != "clairvoyant-oracle"
+        ),
+        key=lambda summary: (
+            ranking_values[str(summary["policy"])],
+            str(summary["policy"]),
+        ),
+    )
+    for rank, summary in enumerate(ranked, start=1):
+        summary["rank"] = rank
+    summaries.sort(
+        key=lambda summary: (
+            summary["rank"] is None,
+            summary["rank"] if summary["rank"] is not None else 0,
+        )
+    )
+    portfolio = next(
+        (
+            summary
+            for summary in ranked
+            if str(summary["policy"]).startswith("portfolio-")
+        ),
+        None,
+    )
+    slots_freed = benchmark.trials[0].slots_freed if benchmark.trials else 0
+    return {
+        "benchmark": "deletion",
+        "status": "descriptive-only",
+        "trials": len(benchmark.seeds),
+        "slots_freed": slots_freed,
+        "calibration_scenarios": [
+            scenario.id for scenario in calibration_scenarios
+        ],
+        "heldout_scenarios": [scenario.id for scenario in heldout_scenarios],
+        "lowest_observed_risk_policy": (
+            str(ranked[0]["policy"]) if ranked else None
+        ),
+        "lowest_observed_risk_portfolio_policy": (
+            str(portfolio["policy"]) if portfolio is not None else None
+        ),
+        "ranking_basis": [
+            "mean current-scenario regret",
+            "mean speculative-scenario regret",
+            "upper 95% confidence bound for mean worst regret",
+            "fraction of deleted artifacts belonging to near-best oracle builds",
+            "fraction of trials with a punished deletion",
+        ],
+        "policies": summaries,
+        "notes": [
+            "All regret values are percentages; lower is better.",
+            "A punished deletion removes an artifact from an oracle-best or 1%-near-best build.",
+            "Ranks describe only these scenarios and sampled trials; they are not proof of universal policy superiority.",
+            "The clairvoyant oracle is an unattainable reference and is not ranked.",
+        ],
+    }
+
+
+def _deletion_trial_from_mapping(value: object) -> PolicyDeletionTrial | None:
+    if not isinstance(value, Mapping):
+        return None
+    try:
+        curve = tuple(
+            (int(point[0]), float(point[1])) for point in value["regret_curve"]
+        )
+        first = value["first_punished_deletion"]
+        return PolicyDeletionTrial(
+            policy=str(value["policy"]),
+            seed=int(value["seed"]),
+            slots_freed=int(value["slots_freed"]),
+            first_punished_deletion=None if first is None else int(first),
+            oracle_build_deletion_fraction=float(
+                value["oracle_build_deletion_fraction"]
+            ),
+            median_regret=float(value["median_regret"]),
+            p95_regret=float(value["p95_regret"]),
+            worst_regret=float(value["worst_regret"]),
+            current_regret=float(value["current_regret"]),
+            speculative_regret=float(value["speculative_regret"]),
+            lost_set_options=int(value["lost_set_options"]),
+            replacement_depth=float(value["replacement_depth"]),
+            regret_curve=curve,
+        )
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def _deletion_trial_key(
+    batch: ArtifactBatch,
+    calibration_scenarios: Sequence[Scenario],
+    heldout_scenarios: Sequence[Scenario],
+    policies: Sequence[DeletionPolicy],
+    *,
+    free: int,
+    curve_points: int,
+    seed_state: Mapping[str, object],
+) -> str | None:
+    specs = [_deletion_policy_spec(policy) for policy in policies]
+    if any(spec is None for spec in specs):
+        return None
+    return cache_key(
+        artifact_fingerprint=batch.fingerprint(),
+        scenario_hash=_scenario_hash(
+            tuple(calibration_scenarios) + tuple(heldout_scenarios)
+        ),
+        evaluator_version=BuiltinEvaluator.version,
+        parameters={
+            "kind": "benchmark-deletion-trial",
+            "benchmark_version": 2,
+            "calibration_scenarios": _scenario_hash(calibration_scenarios),
+            "heldout_scenarios": _scenario_hash(heldout_scenarios),
+            "policies": specs,
+            "free": free,
+            "curve_points": curve_points,
+            "seed_state": dict(seed_state),
+        },
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -287,10 +605,13 @@ def replay_historical_deletions(
     return tuple(events)
 
 
-def _hidden_stats(batch: ArtifactBatch, tapes: Sequence[Sequence[tuple[int, int]]]) -> NDArray[np.float64]:
+def _hidden_stats(
+    batch: ArtifactBatch, tapes: Sequence[Sequence[tuple[int, int]]]
+) -> NDArray[np.float64]:
     rolls = _hidden_rolls(batch, tapes)
     stats = batch.final_stats()
-    stats[:, :10] = rolls.astype(np.float64) * (SUBSTAT_MAX / 10.0)
+    roll_delta = rolls.astype(np.float64) - batch.sub_rolls.astype(np.float64)
+    stats[:, :10] += roll_delta * (SUBSTAT_MAX / 10.0)
     return stats
 
 
@@ -326,6 +647,8 @@ def benchmark_deletion(
     trials: int = 20,
     seed: int = 0,
     curve_points: int = 12,
+    cache: ResultCache | None = None,
+    progress: Callable[[str], None] | None = None,
 ) -> DeletionBenchmark:
     scenarios = tuple(calibration_scenarios) + tuple(heldout_scenarios)
     if not scenarios:
@@ -334,20 +657,93 @@ def benchmark_deletion(
         raise ValueError("trials must be positive")
     if free < 0:
         raise ValueError("free must be non-negative")
+    if curve_points <= 0:
+        raise ValueError("curve_points must be positive")
     seed_sequence = np.random.SeedSequence(seed)
     child_seeds = seed_sequence.spawn(trials)
     output: list[PolicyDeletionTrial] = []
 
-    for child in child_seeds:
+    expected_policies = [policy.name for policy in policies] + ["clairvoyant-oracle"]
+    trial_keys = [
+        _deletion_trial_key(
+            batch,
+            calibration_scenarios,
+            heldout_scenarios,
+            policies,
+            free=free,
+            curve_points=curve_points,
+            seed_state=child.state,
+        )
+        if cache is not None
+        else None
+        for child in child_seeds
+    ]
+    cached_trials: dict[int, tuple[PolicyDeletionTrial, ...]] = {}
+    if cache is not None:
+        for trial_index, (child, key) in enumerate(zip(child_seeds, trial_keys)):
+            if key is None:
+                continue
+            found = cache.get("benchmark-deletion-trial", key)
+            if not isinstance(found, Mapping) or not isinstance(found.get("rows"), list):
+                continue
+            restored = tuple(
+                row
+                for value in found["rows"]
+                if (row := _deletion_trial_from_mapping(value)) is not None
+            )
+            trial_seed = int(child.generate_state(1)[0])
+            if (
+                len(restored) == len(expected_policies)
+                and [row.policy for row in restored] == expected_policies
+                and all(row.seed == trial_seed for row in restored)
+            ):
+                cached_trials[trial_index] = restored
+
+    fixed_decisions: dict[int, DeletionDecision] = {}
+    if len(cached_trials) < trials:
+        first_seed = int(child_seeds[0].generate_state(1)[0])
+        for policy_index, policy in enumerate(policies):
+            if getattr(policy, "stochastic", True):
+                continue
+            if progress is not None:
+                progress(f"preparing deterministic policy {policy.name}")
+            policy_rng = np.random.default_rng(
+                first_seed + policy_index * 1_000_003
+            )
+            decision, found = _cached_deletion_decision(
+                policy,
+                batch,
+                calibration_scenarios,
+                free,
+                policy_rng,
+                cache,
+            )
+            fixed_decisions[policy_index] = decision
+            if progress is not None and found:
+                progress(f"reused cached decision for {policy.name}")
+
+    for trial_index, child in enumerate(child_seeds):
         trial_seed = int(child.generate_state(1)[0])
+        cached_trial = cached_trials.get(trial_index)
+        if cached_trial is not None:
+            output.extend(cached_trial)
+            if progress is not None:
+                progress(f"trial {trial_index + 1}/{trials}: reused cached result")
+            continue
+        if progress is not None:
+            progress(f"trial {trial_index + 1}/{trials}: simulating")
         tape_rng = np.random.default_rng(child)
         tapes = sample_upgrade_tapes(batch, tape_rng)
-        hidden = _hidden_stats(batch, tapes)
-        oracle_optimizer = BuildOptimizer(batch, candidate_limit=40)
+        hidden_rolls = _hidden_rolls(batch, tapes)
+        hidden_levels = np.where(batch.rarities == 5, 20, batch.levels).astype(
+            np.uint8
+        )
+        hidden_batch = batch.with_states(
+            sub_rolls=hidden_rolls, levels=hidden_levels
+        )
+        oracle_optimizer = BuildOptimizer(hidden_batch, candidate_limit=40)
         oracle_pools = [
-            oracle_optimizer.optimize(
-                scenario, stats=hidden, include_unfinished=True, top_k=20
-            )
+            oracle_optimizer.optimize(scenario, top_k=80)
             for scenario in scenarios
         ]
         if any(not pool for pool in oracle_pools):
@@ -357,32 +753,39 @@ def benchmark_deletion(
         oracle_members = {
             index
             for baseline, pool in zip(baselines, oracle_pools)
-            for build in pool
+            for build in pool[:20]
             if build.utility >= (1.0 - 0.01) * baseline
             for index in build.indices
         }
 
         # The unattainable upper bound sees every hidden tape and the held-out
         # scenarios. It still obeys the same protection and exact-size rules.
-        hidden_levels = np.where(batch.rarities == 5, 20, batch.levels).astype(np.uint8)
-        hidden_batch = batch.with_states(
-            sub_rolls=_hidden_rolls(batch, tapes), levels=hidden_levels
-        )
         clairvoyant = DeletionAnalyzer(
-            BuildOptimizer(hidden_batch, candidate_limit=40),
+            oracle_optimizer,
             scenarios,
             loadouts_per_scenario=80,
         ).analyze(free)
         trial_policies: list[tuple[str, DeletionDecision]] = []
 
         for policy_index, policy in enumerate(policies):
-            policy_rng = np.random.default_rng(trial_seed + policy_index * 1_000_003)
-            decision = policy.delete(batch, calibration_scenarios, free, policy_rng)
+            decision = fixed_decisions.get(policy_index)
+            if decision is None:
+                policy_rng = np.random.default_rng(
+                    trial_seed + policy_index * 1_000_003
+                )
+                decision = policy.delete(
+                    batch,
+                    calibration_scenarios,
+                    free,
+                    policy_rng,
+                    cache=cache,
+                )
             trial_policies.append((policy.name, decision))
         trial_policies.append(
             ("clairvoyant-oracle", DeletionDecision(clairvoyant.deleted_indices))
         )
 
+        trial_rows: list[PolicyDeletionTrial] = []
         for policy_name, decision in trial_policies:
             deleted = np.asarray(decision.indices, dtype=np.int64)
             if len(deleted) != free or len(np.unique(deleted)) != free:
@@ -409,15 +812,17 @@ def benchmark_deletion(
                 available = np.ones(len(batch), dtype=np.bool_)
                 available[deleted[:checkpoint]] = False
                 retained_values = []
-                for scenario in scenarios:
+                for scenario_index, scenario in enumerate(scenarios):
+                    best = oracle_pools[scenario_index][0]
+                    if np.all(available[np.asarray(best.indices, dtype=np.int64)]):
+                        retained_values.append(baselines[scenario_index])
+                        continue
                     retained = oracle_optimizer.optimize(
-                        scenario,
-                        stats=hidden,
-                        available=available,
-                        include_unfinished=True,
-                        top_k=1,
+                        scenario, available=available, top_k=1
                     )
-                    retained_values.append(retained[0].utility if retained else -np.inf)
+                    retained_values.append(
+                        retained[0].utility if retained else -np.inf
+                    )
                 retained_array = np.asarray(retained_values)
                 regrets = np.where(
                     baselines > 0,
@@ -444,7 +849,7 @@ def benchmark_deletion(
                 depth.append(int(np.count_nonzero(same)))
             current_mask = np.asarray([s.tier == "current" for s in scenarios])
             speculative_mask = ~current_mask
-            output.append(
+            trial_rows.append(
                 PolicyDeletionTrial(
                     policy_name,
                     trial_seed,
@@ -461,6 +866,17 @@ def benchmark_deletion(
                     tuple(curve),
                 )
             )
+
+        output.extend(trial_rows)
+        key = trial_keys[trial_index]
+        if cache is not None and key is not None:
+            cache.put(
+                "benchmark-deletion-trial",
+                key,
+                {"rows": [asdict(row) for row in trial_rows]},
+            )
+        if progress is not None:
+            progress(f"trial {trial_index + 1}/{trials}: complete")
 
     interval_rng = np.random.default_rng(seed ^ 0xA5A5A5A5)
     confidence: dict[str, dict[str, ConfidenceInterval]] = {}
@@ -572,6 +988,134 @@ class UpgradeCalibrationBin:
     count: int
     mean_predicted: float | None
     observed_frequency: float | None
+
+
+def summarize_upgrade_benchmark(
+    benchmark: UpgradeBenchmark,
+    scenarios: Sequence[Scenario] = (),
+) -> dict[str, object]:
+    """Create a compact, human-oriented view of an upgrade benchmark."""
+
+    policy_names = list(benchmark.confidence)
+    summaries: list[dict[str, object]] = []
+    for policy in policy_names:
+        trials = [trial for trial in benchmark.trials if trial.policy == policy]
+        if not trials:
+            continue
+        confidence = benchmark.confidence[policy]
+        progress_costs = [
+            trial.exp_to_progress
+            for trial in trials
+            if trial.exp_to_progress is not None
+        ]
+        perfect_costs = [
+            trial.exp_to_perfect
+            for trial in trials
+            if trial.exp_to_perfect is not None
+        ]
+        summaries.append(
+            {
+                "policy": policy,
+                "rank": None,
+                "trials": len(trials),
+                "mean_exp_cost": _rounded(
+                    float(np.mean([trial.exp_cost for trial in trials])), 1
+                ),
+                "mean_mora_cost": _rounded(
+                    float(np.mean([trial.mora_cost for trial in trials])), 1
+                ),
+                "mean_resin_cost": (
+                    _rounded(
+                        float(
+                            np.mean(
+                                [
+                                    trial.resin_cost
+                                    for trial in trials
+                                    if trial.resin_cost is not None
+                                ]
+                            )
+                        ),
+                        2,
+                    )
+                    if any(trial.resin_cost is not None for trial in trials)
+                    else None
+                ),
+                "progress_success_rate_pct": _percent(
+                    float(np.mean([trial.reached_progress for trial in trials]))
+                ),
+                "perfect_success_rate_pct": _percent(
+                    float(np.mean([trial.reached_perfect for trial in trials]))
+                ),
+                "mean_exp_to_progress_when_reached": (
+                    _rounded(float(np.mean(progress_costs)), 1)
+                    if progress_costs
+                    else None
+                ),
+                "mean_exp_to_perfect_when_reached": (
+                    _rounded(float(np.mean(perfect_costs)), 1)
+                    if perfect_costs
+                    else None
+                ),
+                "mean_oracle_utility_pct": _percent(
+                    float(np.mean([trial.oracle_fraction for trial in trials]))
+                ),
+                "exp_cost_mean_95_ci": {
+                    "estimate": _rounded(confidence["exp_cost"].estimate, 1),
+                    "low": _rounded(confidence["exp_cost"].low, 1),
+                    "high": _rounded(confidence["exp_cost"].high, 1),
+                },
+                "oracle_utility_mean_95_ci_pct": _percent_interval(
+                    confidence["oracle_fraction"]
+                ),
+            }
+        )
+
+    summaries.sort(
+        key=lambda summary: (
+            -float(summary["progress_success_rate_pct"]),
+            -float(summary["perfect_success_rate_pct"]),
+            -float(summary["mean_oracle_utility_pct"]),
+            float(summary["mean_exp_cost"]),
+            str(summary["policy"]),
+        )
+    )
+    for rank, summary in enumerate(summaries, start=1):
+        summary["rank"] = rank
+    calibration = [
+        {
+            "range": [calibration_bin.lower, calibration_bin.upper],
+            "count": calibration_bin.count,
+            "mean_predicted_pct": (
+                _percent(calibration_bin.mean_predicted)
+                if calibration_bin.mean_predicted is not None
+                else None
+            ),
+            "observed_frequency_pct": (
+                _percent(calibration_bin.observed_frequency)
+                if calibration_bin.observed_frequency is not None
+                else None
+            ),
+        }
+        for calibration_bin in benchmark.calibration
+        if calibration_bin.count
+    ]
+    return {
+        "benchmark": "upgrade",
+        "status": "descriptive-only",
+        "trials": len({trial.seed for trial in benchmark.trials}),
+        "progress_target_pct": _percent(benchmark.progress_target),
+        "scenarios": [scenario.id for scenario in scenarios],
+        "highest_observed_progress_policy": (
+            str(summaries[0]["policy"]) if summaries else None
+        ),
+        "policies": summaries,
+        "calibration": calibration,
+        "notes": [
+            "Higher success and oracle-utility percentages are better; lower resource costs are better.",
+            "Resource-cost averages include the full simulated stopping path.",
+            "Ranks describe only these scenarios and sampled trials.",
+        ],
+    }
 
 
 def _portfolio_utility(

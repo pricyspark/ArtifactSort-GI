@@ -3,9 +3,11 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass
 from functools import lru_cache
+from hashlib import sha256
 import numpy as np
 from numpy.typing import NDArray
 
+from .cache import ResultCache, cache_key
 from .model import ArtifactBatch
 
 
@@ -66,6 +68,42 @@ def final_outcomes(batch: ArtifactBatch, index: int) -> OutcomeDistribution:
     states.setflags(write=False)
     probabilities.setflags(write=False)
     return OutcomeDistribution(states, probabilities)
+
+
+def cached_final_outcomes(
+    batch: ArtifactBatch, index: int, cache: ResultCache | None
+) -> OutcomeDistribution:
+    if cache is None:
+        return final_outcomes(batch, index)
+    state = sha256()
+    state.update(batch.sub_rolls[index].tobytes())
+    state.update(bytes((int(batch.remaining_random_rolls()[index]),)))
+    key = cache_key(
+        artifact_fingerprint=state.hexdigest(),
+        scenario_hash="",
+        evaluator_version="",
+        parameters={"kind": "final-outcomes"},
+    )
+    found = cache.get("artifact-outcome", key)
+    if isinstance(found, dict):
+        sub_rolls = np.asarray(found.get("sub_rolls"), dtype=np.uint8)
+        probabilities = np.asarray(found.get("probabilities"), dtype=np.float64)
+        try:
+            sub_rolls.setflags(write=False)
+            probabilities.setflags(write=False)
+            return OutcomeDistribution(sub_rolls, probabilities)
+        except ValueError:
+            pass
+    result = final_outcomes(batch, index)
+    cache.put(
+        "artifact-outcome",
+        key,
+        {
+            "sub_rolls": result.sub_rolls.tolist(),
+            "probabilities": result.probabilities.tolist(),
+        },
+    )
+    return result
 
 
 def sample_final_rolls(

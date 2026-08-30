@@ -6,6 +6,7 @@ from hashlib import sha256
 import json
 from pathlib import Path
 import shlex
+import sys
 from typing import Any, Mapping, Sequence
 
 import numpy as np
@@ -39,8 +40,15 @@ from .simulation import (
     StaticWeightPolicy,
     benchmark_deletion,
     benchmark_upgrades,
+    summarize_deletion_benchmark,
+    summarize_upgrade_benchmark,
 )
-from .sources import GOEvaluator, akasha_scenarios, import_akasha, import_go
+from .sources import (
+    GOEvaluator,
+    akasha_scenarios,
+    import_akasha,
+    import_go_database,
+)
 from .upgrades import UpgradeAnalyzer
 
 
@@ -60,8 +68,10 @@ def _jsonable(value: object) -> object:
     return value
 
 
-def _emit(value: object, output: str | None = None) -> None:
-    payload = json.dumps(_jsonable(value), indent=2, sort_keys=True)
+def _emit(
+    value: object, output: str | None = None, *, sort_keys: bool = True
+) -> None:
+    payload = json.dumps(_jsonable(value), indent=2, sort_keys=sort_keys)
     if output:
         Path(output).write_text(payload + "\n", encoding="utf-8")
     else:
@@ -120,12 +130,11 @@ def _cached(
     scenarios: Sequence[Scenario],
     evaluator: BuiltinEvaluator | GOEvaluator,
     parameters: Mapping[str, object],
-    cache_path: str | None,
+    cache: ResultCache | None,
     compute: Any,
 ) -> object:
-    if cache_path is None:
+    if cache is None:
         return compute()
-    cache = ResultCache(cache_path)
     key = cache_key(
         artifact_fingerprint=batch_fingerprint,
         scenario_hash=_scenario_hash(scenarios),
@@ -141,12 +150,16 @@ def _cached(
 
 
 def _command_import_go(args: argparse.Namespace) -> None:
-    scenarios = import_go(args.team_export)
+    result = import_go_database(args.database_export)
     _emit(
         {
             "format": "artifact-sort-scenarios",
             "version": 1,
-            "scenarios": [scenario_to_mapping(scenario) for scenario in scenarios],
+            "source": result.database,
+            "skipped": result.skipped,
+            "scenarios": [
+                scenario_to_mapping(scenario) for scenario in result.scenarios
+            ],
         },
         args.output,
     )
@@ -178,11 +191,13 @@ def _analysis(args: argparse.Namespace) -> tuple[object, dict[str, Any], list[Sc
 
 def _command_delete(args: argparse.Namespace) -> None:
     batch, _, scenarios, evaluator, warnings = _analysis(args)
+    cache = ResultCache(args.cache) if args.cache else None
     optimizer = BuildOptimizer(
         batch,
         evaluator,
         candidate_limit=args.candidate_limit,
         beam_width=args.beam_width,
+        cache=cache,
     )
 
     def compute() -> object:
@@ -205,14 +220,17 @@ def _command_delete(args: argparse.Namespace) -> None:
         evaluator,
         {
             "free": args.free,
-            "pin": args.pin,
+            "pin": sorted(args.pin),
             "probability_floor": args.probability_floor,
             "protect_unfinished": not args.no_protect_unfinished,
+            "upgrade_candidates": args.upgrade_candidates,
+            "upgrade_pool": args.upgrade_pool,
+            "outcome_stats_version": 2,
             "candidate_limit": args.candidate_limit,
             "beam_width": args.beam_width,
             "loadouts": args.loadouts,
         },
-        args.cache,
+        cache,
         compute,
     )
     _emit(
@@ -225,6 +243,7 @@ def _command_delete(args: argparse.Namespace) -> None:
                     "before treating deletion analysis as a recommendation"
                 ),
             },
+            "cache": cache.summary() if cache is not None else {"enabled": False},
             "result": result,
         },
         args.output,
@@ -233,29 +252,29 @@ def _command_delete(args: argparse.Namespace) -> None:
 
 def _command_upgrades(args: argparse.Namespace) -> None:
     batch, _, scenarios, evaluator, warnings = _analysis(args)
+    cache = ResultCache(args.cache) if args.cache else None
     optimizer = BuildOptimizer(
-        batch, evaluator, candidate_limit=args.candidate_limit, beam_width=args.beam_width
-    )
-    result = _cached(
-        "upgrades",
-        batch.fingerprint(),
-        scenarios,
+        batch,
         evaluator,
-        {
-            "epsilon": args.epsilon,
-            "probability_floor": args.probability_floor,
-            "max_candidates": args.max_candidates,
-        },
-        args.cache,
-        lambda: UpgradeAnalyzer(
-            optimizer,
-            scenarios,
-            epsilon=args.epsilon,
-            probability_floor=args.probability_floor,
-            complement_pool_size=args.complement_pool,
-        ).analyze(max_candidates=args.max_candidates),
+        candidate_limit=args.candidate_limit,
+        beam_width=args.beam_width,
+        cache=cache,
     )
-    _emit({"warnings": warnings, "recommendations": result}, args.output)
+    result = UpgradeAnalyzer(
+        optimizer,
+        scenarios,
+        epsilon=args.epsilon,
+        probability_floor=args.probability_floor,
+        complement_pool_size=args.complement_pool,
+    ).analyze(max_candidates=args.max_candidates)
+    _emit(
+        {
+            "warnings": warnings,
+            "cache": cache.summary() if cache is not None else {"enabled": False},
+            "recommendations": result,
+        },
+        args.output,
+    )
 
 
 def _command_farm(args: argparse.Namespace) -> None:
@@ -306,6 +325,12 @@ def _command_benchmark(args: argparse.Namespace) -> None:
     batch, _, calibration, _, warnings = _analysis(args)
     heldout = _scenario_inputs(args.heldout) if args.heldout else []
     recorded = _load_recorded_order(args.recorded_order)
+    cache = ResultCache(args.cache) if args.cache else None
+
+    def report_progress(message: str) -> None:
+        print(message, file=sys.stderr, flush=True)
+
+    progress = None if args.no_progress else report_progress
     if args.kind == "deletion":
         policies = [
             RandomDeletionPolicy(),
@@ -327,11 +352,16 @@ def _command_benchmark(args: argparse.Namespace) -> None:
             free=args.free,
             trials=args.trials,
             seed=args.seed,
+            curve_points=args.curve_points,
+            cache=cache,
+            progress=progress,
         )
+        summary = summarize_deletion_benchmark(result, calibration, heldout)
     else:
+        scenarios = tuple(calibration) + tuple(heldout)
         result = benchmark_upgrades(
             batch,
-            tuple(calibration) + tuple(heldout),
+            scenarios,
             [RandomUpgradePolicy(), CritValueUpgradePolicy(), PortfolioUpgradePolicy()],
             trials=args.trials,
             seed=args.seed,
@@ -339,7 +369,19 @@ def _command_benchmark(args: argparse.Namespace) -> None:
             max_checkpoints=args.max_checkpoints,
             resin_per_exp=args.resin_per_exp,
         )
-    _emit({"warnings": warnings, "result": result}, args.output)
+        summary = summarize_upgrade_benchmark(result, scenarios)
+    payload: dict[str, object] = {
+        "summary": summary,
+        "warnings": warnings,
+        "cache": cache.summary() if cache is not None else {"enabled": False},
+    }
+    if not args.summary_only:
+        payload["result"] = result
+    _emit(
+        payload,
+        args.output,
+        sort_keys=False,
+    )
 
 
 def _add_scenarios(parser: argparse.ArgumentParser) -> None:
@@ -355,8 +397,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="artifact-sort")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    import_go_parser = subparsers.add_parser("import-go")
-    import_go_parser.add_argument("team_export")
+    import_go_parser = subparsers.add_parser(
+        "import-go",
+        help="create scenarios from a complete Genshin Optimizer database download",
+    )
+    import_go_parser.add_argument(
+        "database_export",
+        metavar="GO_DATABASE.json",
+        help="full database JSON downloaded from GO Settings",
+    )
     import_go_parser.add_argument("--output")
     import_go_parser.set_defaults(func=_command_import_go)
 
@@ -435,6 +484,27 @@ def build_parser() -> argparse.ArgumentParser:
     benchmark_parser.add_argument("--increase", type=float, default=0.05)
     benchmark_parser.add_argument("--trials", type=int, default=20)
     benchmark_parser.add_argument("--seed", type=int, default=0)
+    benchmark_parser.add_argument(
+        "--curve-points",
+        type=int,
+        default=12,
+        help="deletion counts sampled for each regret curve (default: 12)",
+    )
+    benchmark_parser.add_argument(
+        "--cache",
+        default=".artifact-sort/cache.sqlite",
+        help="SQLite cache for policy decisions and completed trials",
+    )
+    benchmark_parser.add_argument(
+        "--no-progress",
+        action="store_true",
+        help="suppress benchmark progress written to stderr",
+    )
+    benchmark_parser.add_argument(
+        "--summary-only",
+        action="store_true",
+        help="omit seeds and per-trial details from the JSON output",
+    )
     benchmark_parser.add_argument(
         "--recorded-order",
         help="JSON artifact-ID ordering from any external policy to replay",

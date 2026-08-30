@@ -38,13 +38,14 @@ artifact-sort upgrades scan.json \
 artifact-sort benchmark-policy scan.json \
   --scenarios scenarios/example.json \
   --free 100 \
-  --trials 20
+  --trials 20 \
+  --summary-only
 ```
 
 Other commands:
 
 ```sh
-artifact-sort import-go TEAM_EXPORT.json --output go-scenarios.json
+artifact-sort import-go GO_DATABASE.json --output go-scenarios.json
 artifact-sort import-akasha SNAPSHOT.json --output akasha-scenarios.json
 artifact-sort farm scan.json --scenarios scenarios/example.json --increase 0.05
 artifact-sort materials scan.json
@@ -66,8 +67,11 @@ has been benchmarked against relevant calibration and held-out scenarios.
   verify the retained inventory.
 - Upgrade analysis enumerates exact roll outcomes and reports expected
   portfolio gain plus 0.1%, 1%, and 5% usefulness sensitivity.
+- Layered SQLite caching reuses unchanged artifact outcomes and per-scenario
+  build evaluations across inventory scans; command output reports cache hits.
 - Policy benchmarks use shared hidden upgrade tapes, reproducible seeds,
-  bootstrap confidence intervals, and a clairvoyant upper bound.
+  bootstrap confidence intervals, resumable per-trial cache checkpoints, and a
+  clairvoyant upper bound.
 
 See [the backend guide](docs/backend.md) for scenario formats, GO adapter
 protocol, Akasha snapshot schema, simulation assumptions, and caching details.

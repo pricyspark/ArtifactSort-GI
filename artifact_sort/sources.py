@@ -8,7 +8,7 @@ from pathlib import Path
 import select
 import subprocess
 from threading import Lock
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any, Mapping, Sequence
 
 import numpy as np
 from numpy.typing import NDArray
@@ -17,18 +17,8 @@ from .model import SLOT_INDEX, STAT_INDEX, STAT_KEYS
 from .scenarios import Evaluator, Scenario, _stat_vector, scenario_from_mapping
 
 
-GO_IMPORT_VERSION = "go-export-v1"
+GO_IMPORT_VERSION = "go-database-v1"
 AKASHA_SNAPSHOT_VERSION = 1
-
-
-def _walk_mappings(value: object) -> Iterable[Mapping[str, Any]]:
-    if isinstance(value, Mapping):
-        yield value
-        for child in value.values():
-            yield from _walk_mappings(child)
-    elif isinstance(value, list):
-        for child in value:
-            yield from _walk_mappings(child)
 
 
 def _path_stat(value: object) -> str | None:
@@ -135,96 +125,445 @@ def _constraints(opt_config: Mapping[str, Any]) -> tuple[tuple[int, float], ...]
         if stat is None:
             continue
         values: list[float] = []
-        if isinstance(filter_value, Mapping):
-            enabled = filter_value.get("enabled", True)
-            if not enabled:
-                continue
-            for key in ("min", "minimum", "value"):
-                value = filter_value.get(key)
-                if isinstance(value, (int, float)):
-                    values.append(float(value))
-        elif isinstance(filter_value, (int, float)):
-            values.append(float(filter_value))
+        settings = filter_value if isinstance(filter_value, list) else [filter_value]
+        for setting in settings:
+            if isinstance(setting, Mapping):
+                if setting.get("disabled", False) or not setting.get("enabled", True):
+                    continue
+                for key in ("min", "minimum", "value"):
+                    value = setting.get(key)
+                    if isinstance(value, (int, float)):
+                        values.append(float(value))
+            elif isinstance(setting, (int, float)):
+                values.append(float(setting))
         if values:
             result[STAT_INDEX[stat]] = max(values)
     return tuple(sorted(result.items()))
 
 
-def import_go(path: str | Path) -> list[Scenario]:
-    """Translate user-supplied GO team/theorycraft exports into scenarios.
+def _record_index(
+    data: Mapping[str, Any], collection: str, *, id_key: str = "id"
+) -> dict[str, Mapping[str, Any]]:
+    raw = data.get(collection)
+    if not isinstance(raw, list):
+        raise ValueError(f"GO database export has no {collection!r} array")
+    result: dict[str, Mapping[str, Any]] = {}
+    for ordinal, record in enumerate(raw):
+        if not isinstance(record, Mapping):
+            raise ValueError(f"GO {collection}[{ordinal}] is not an object")
+        record_id = record.get(id_key)
+        if not isinstance(record_id, str) or not record_id:
+            raise ValueError(f"GO {collection}[{ordinal}] has no {id_key!r}")
+        if record_id in result:
+            raise ValueError(f"GO {collection} contains duplicate ID {record_id!r}")
+        result[record_id] = record
+    return result
 
-    The original GO fragments are retained in metadata for the optional exact
-    evaluator. Translation deliberately refuses to invent a formula: without
-    that adapter, the built-in evaluator is only a documented approximation.
-    """
+
+def _location_key(character: str) -> str:
+    return "Traveler" if character.startswith("Traveler") else character
+
+
+def _resolved_artifacts(
+    artifact_ids: object, artifacts: Mapping[str, Mapping[str, Any]]
+) -> list[Mapping[str, Any]]:
+    if not isinstance(artifact_ids, Mapping):
+        return []
+    result: list[Mapping[str, Any]] = []
+    for artifact_id in artifact_ids.values():
+        if not artifact_id:
+            continue
+        if not isinstance(artifact_id, str) or artifact_id not in artifacts:
+            raise ValueError(f"GO build references missing artifact {artifact_id!r}")
+        result.append(artifacts[artifact_id])
+    return result
+
+
+def _set_counts(artifacts: Sequence[Mapping[str, Any]]) -> dict[str, int]:
+    raw: dict[str, int] = {}
+    for artifact in artifacts:
+        set_key = artifact.get("setKey")
+        if isinstance(set_key, str) and set_key:
+            raw[set_key] = raw.get(set_key, 0) + 1
+    result: dict[str, int] = {}
+    for set_key, count in raw.items():
+        effective = 2 if count == 3 else 4 if count >= 5 else count
+        if effective >= 2 or (effective == 1 and set_key.startswith("PrayersFor")):
+            result[set_key] = effective
+    return result
+
+
+def _derived_theorycraft_build(
+    *,
+    name: str,
+    description: str,
+    character_key: str,
+    character: Mapping[str, Any] | None,
+    weapon: Mapping[str, Any] | None,
+    artifacts: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    slots: dict[str, dict[str, Any]] = {}
+    substats: dict[str, float] = {}
+    for artifact in artifacts:
+        slot = artifact.get("slotKey")
+        main_stat = artifact.get("mainStatKey")
+        if isinstance(slot, str) and isinstance(main_stat, str):
+            slots[slot] = {
+                "level": int(artifact.get("level", 0)),
+                "rarity": int(artifact.get("rarity", 5)),
+                "statKey": main_stat,
+            }
+        raw_substats = artifact.get("substats")
+        if not isinstance(raw_substats, list):
+            continue
+        for substat in raw_substats:
+            if not isinstance(substat, Mapping):
+                continue
+            key = substat.get("key")
+            value = substat.get("value")
+            if key in STAT_INDEX and isinstance(value, (int, float)):
+                substats[str(key)] = substats.get(str(key), 0.0) + float(value)
+
+    character_state = None
+    if character is not None:
+        character_state = {
+            key: value
+            for key, value in character.items()
+            if key in {"level", "ascension", "constellation", "talent"}
+        }
+    weapon_state = None
+    if weapon is not None:
+        weapon_state = {
+            key: value
+            for key, value in weapon.items()
+            if key in {"key", "level", "ascension", "refinement"}
+        }
+    return {
+        "name": name,
+        "description": description,
+        "characterKey": character_key,
+        "character": character_state,
+        "weapon": weapon_state,
+        "artifact": {
+            "slots": slots,
+            "substats": {"type": "max", "stats": substats, "rarity": 5},
+            "sets": _set_counts(artifacts),
+        },
+    }
+
+
+def _selected_build(
+    loadout: Mapping[str, Any],
+    team_character: Mapping[str, Any],
+    *,
+    characters: Mapping[str, Mapping[str, Any]],
+    weapons: Mapping[str, Mapping[str, Any]],
+    artifacts: Mapping[str, Mapping[str, Any]],
+    builds: Mapping[str, Mapping[str, Any]],
+    theorycraft_builds: Mapping[str, Mapping[str, Any]],
+) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+    character_key = str(team_character["key"])
+    character = characters.get(character_key)
+    build_type = str(loadout.get("buildType") or "equipped")
+    if build_type == "tc":
+        build_id = loadout.get("buildTcId")
+        if not isinstance(build_id, str) or build_id not in theorycraft_builds:
+            raise ValueError(
+                f"GO loadout {team_character.get('id')!r} references missing TC build {build_id!r}"
+            )
+        build = theorycraft_builds[build_id]
+        return build, {"type": "tc", "id": build_id, "definition": build}
+
+    if build_type == "real":
+        build_id = loadout.get("buildId")
+        if not isinstance(build_id, str) or build_id not in builds:
+            raise ValueError(
+                f"GO loadout {team_character.get('id')!r} references missing build {build_id!r}"
+            )
+        definition = builds[build_id]
+        selected_artifacts = _resolved_artifacts(definition.get("artifactIds"), artifacts)
+        weapon_id = definition.get("weaponId")
+        if weapon_id and (not isinstance(weapon_id, str) or weapon_id not in weapons):
+            raise ValueError(f"GO build {build_id!r} references missing weapon {weapon_id!r}")
+        weapon = weapons.get(str(weapon_id)) if weapon_id else None
+        build = _derived_theorycraft_build(
+            name=str(definition.get("name") or "Selected real build"),
+            description=str(definition.get("description") or ""),
+            character_key=character_key,
+            character=character,
+            weapon=weapon,
+            artifacts=selected_artifacts,
+        )
+        return build, {
+            "type": "real",
+            "id": build_id,
+            "definition": definition,
+            "weapon": weapon,
+            "artifacts": selected_artifacts,
+        }
+
+    if build_type != "equipped":
+        raise ValueError(f"GO loadout has unsupported build type {build_type!r}")
+    location = _location_key(character_key)
+    selected_artifacts = [
+        artifact for artifact in artifacts.values() if artifact.get("location") == location
+    ]
+    weapon = next(
+        (candidate for candidate in weapons.values() if candidate.get("location") == location),
+        None,
+    )
+    build = _derived_theorycraft_build(
+        name="Equipped",
+        description="Resolved from the equipped inventory in the GO database export",
+        character_key=character_key,
+        character=character,
+        weapon=weapon,
+        artifacts=selected_artifacts,
+    )
+    return build, {
+        "type": "equipped",
+        "id": None,
+        "character": character,
+        "weapon": weapon,
+        "artifacts": selected_artifacts,
+    }
+
+
+def _selected_targets(
+    team_character: Mapping[str, Any], opt_config: Mapping[str, Any]
+) -> tuple[list[Mapping[str, Any]], Mapping[str, Any] | None]:
+    path = opt_config.get("optimizationTarget")
+    if not isinstance(path, list) or not path or not all(
+        isinstance(part, str) for part in path
+    ):
+        return [], None
+    if path[0] != "custom":
+        target: dict[str, Any] = {
+            "weight": 1.0,
+            "path": path,
+            "hitMode": team_character.get("hitMode", "avgHit"),
+            "bonusStats": team_character.get("bonusStats", {}),
+        }
+        for key in ("reaction", "infusionAura"):
+            if team_character.get(key):
+                target[key] = team_character[key]
+        return [target], None
+
+    if len(path) < 2:
+        return [], None
+    try:
+        index = int(path[1])
+    except ValueError:
+        return [], None
+    custom_targets = team_character.get("customMultiTargets")
+    if not isinstance(custom_targets, list) or not 0 <= index < len(custom_targets):
+        return [], None
+    selected = custom_targets[index]
+    if not isinstance(selected, Mapping):
+        return [], None
+    raw_targets = selected.get("targets")
+    if not isinstance(raw_targets, list):
+        return [], selected
+    targets = [target for target in raw_targets if isinstance(target, Mapping)]
+    return targets, selected
+
+
+@dataclass(frozen=True, slots=True)
+class GOImportResult:
+    scenarios: tuple[Scenario, ...]
+    skipped: tuple[Mapping[str, Any], ...]
+    database: Mapping[str, Any]
+
+
+def import_go_database(path: str | Path) -> GOImportResult:
+    """Resolve a complete Genshin Optimizer database backup into scenarios."""
 
     source_path = Path(path)
     with source_path.open(encoding="utf-8") as handle:
-        data = json.load(handle)
-    builds = [node for node in _walk_mappings(data) if isinstance(node.get("artifact"), Mapping)]
-    if not builds:
-        raise ValueError("GO export contains no theorycraft builds")
+        raw = json.load(handle)
+    if not isinstance(raw, Mapping):
+        raise ValueError("GO database export must be a JSON object")
+    if raw.get("format") != "GOOD" or raw.get("source") != "Genshin Optimizer":
+        raise ValueError(
+            "import-go requires a full Genshin Optimizer database download, "
+            "not an individual team export or scanner-only GOOD file"
+        )
 
+    teams = _record_index(raw, "teams")
+    team_characters = _record_index(raw, "teamchars")
+    opt_configs = _record_index(raw, "optConfigs")
+    builds = _record_index(raw, "builds")
+    theorycraft_builds = _record_index(raw, "buildTcs")
+    artifacts = _record_index(raw, "artifacts")
+    weapons = _record_index(raw, "weapons")
+    characters = _record_index(raw, "characters", id_key="key")
+    if not teams:
+        raise ValueError("GO database export contains no teams")
+
+    database_meta = {
+        "format": raw.get("format"),
+        "source": raw.get("source"),
+        "version": raw.get("version"),
+        "dbVersion": raw.get("dbVersion"),
+        "dbMeta": raw.get("dbMeta", {}),
+        "counts": {
+            "teams": len(teams),
+            "teamchars": len(team_characters),
+            "builds": len(builds),
+            "buildTcs": len(theorycraft_builds),
+            "artifacts": len(artifacts),
+            "weapons": len(weapons),
+            "characters": len(characters),
+        },
+    }
     scenarios: list[Scenario] = []
-    seen: set[str] = set()
-    all_nodes = list(_walk_mappings(data))
-    for ordinal, build in enumerate(builds):
-        opt_config = build.get("optConfig")
-        if not isinstance(opt_config, Mapping):
-            opt_config = next(
-                (node.get("optConfig") for node in all_nodes if isinstance(node.get("optConfig"), Mapping)),
-                {},
-            )
-        targets = build.get("customMultiTargets")
-        if not isinstance(targets, list) or not targets:
-            targets = [
-                {
-                    "weight": 1.0,
-                    "path": opt_config.get("optimizationTarget", []),
-                    "name": "optimization-target",
-                }
-            ]
-        character = str(
-            build.get("characterKey")
-            or build.get("key")
-            or build.get("character")
-            or "unknown-character"
-        )
-        name = str(build.get("name") or f"build-{ordinal + 1}")
-        key_raw = f"{character}:{name}:{ordinal}"
-        scenario_id = "go-" + sha256(key_raw.encode()).hexdigest()[:12]
-        if scenario_id in seen:
-            continue
-        seen.add(scenario_id)
+    skipped: list[Mapping[str, Any]] = []
 
-        target = targets[0] if isinstance(targets[0], Mapping) else {}
-        objective = _target_objective(target, opt_config)
-        metadata = {
-            "adapter_required": True,
-            "adapter_reason": "GO formula paths require the pinned GO calculation engine",
-            "go_import_version": GO_IMPORT_VERSION,
-            "character": character,
-            "build_name": name,
-            "targets": targets,
-            "theorycraft_build": build,
-            "opt_config": opt_config,
-            "source_path": str(source_path),
-        }
-        scenarios.append(
-            Scenario(
-                id=scenario_id,
-                tier="current",
-                objective=objective,  # type: ignore[arg-type]
-                scaling_stat=_scaling_stat(build),  # type: ignore[arg-type]
-                damage_stat=_damage_stat(build),
-                constraints=_constraints(opt_config),
-                required_sets=_set_requirements(build),
-                allowed_main_stats=_allowed_mains(opt_config),
-                source="genshin-optimizer",
-                metadata=metadata,
+    for team_id, team in teams.items():
+        loadout_data = team.get("loadoutData")
+        if not isinstance(loadout_data, list):
+            raise ValueError(f"GO team {team_id!r} has invalid loadoutData")
+        resolved_loadouts: list[Mapping[str, Any] | None] = []
+        for slot, loadout in enumerate(loadout_data):
+            if loadout is None:
+                resolved_loadouts.append(None)
+                continue
+            if not isinstance(loadout, Mapping):
+                raise ValueError(f"GO team {team_id!r} loadout {slot} is not an object")
+            team_character_id = loadout.get("teamCharId")
+            if (
+                not isinstance(team_character_id, str)
+                or team_character_id not in team_characters
+            ):
+                raise ValueError(
+                    f"GO team {team_id!r} loadout {slot} references missing "
+                    f"team character {team_character_id!r}"
+                )
+            team_character = team_characters[team_character_id]
+            opt_config_id = team_character.get("optConfigId")
+            if not isinstance(opt_config_id, str) or opt_config_id not in opt_configs:
+                raise ValueError(
+                    f"GO team character {team_character_id!r} references missing "
+                    f"optimization config {opt_config_id!r}"
+                )
+            build, selected_build = _selected_build(
+                loadout,
+                team_character,
+                characters=characters,
+                weapons=weapons,
+                artifacts=artifacts,
+                builds=builds,
+                theorycraft_builds=theorycraft_builds,
             )
+            resolved_loadouts.append(
+                {
+                    "slot": slot,
+                    "loadout": loadout,
+                    "team_character_id": team_character_id,
+                    "team_character": team_character,
+                    "opt_config_id": opt_config_id,
+                    "opt_config": opt_configs[opt_config_id],
+                    "selected_build": selected_build,
+                    "theorycraft_build": build,
+                }
+            )
+
+        team_context = {
+            "team_id": team_id,
+            "team": team,
+            "loadouts": resolved_loadouts,
+        }
+        for resolved in resolved_loadouts:
+            if resolved is None:
+                continue
+            team_character = resolved["team_character"]
+            opt_config = resolved["opt_config"]
+            build = resolved["theorycraft_build"]
+            assert isinstance(team_character, Mapping)
+            assert isinstance(opt_config, Mapping)
+            assert isinstance(build, Mapping)
+            targets, custom_target = _selected_targets(team_character, opt_config)
+            if not targets:
+                skipped.append(
+                    {
+                        "team_id": team_id,
+                        "team_name": team.get("name", team_id),
+                        "slot": resolved["slot"],
+                        "team_character_id": resolved["team_character_id"],
+                        "character": team_character.get("key", ""),
+                        "reason": "no configured optimization target",
+                    }
+                )
+                continue
+
+            character = str(team_character.get("key") or "unknown-character")
+            target_name = (
+                str(custom_target.get("name"))
+                if custom_target and custom_target.get("name")
+                else "/".join(str(part) for part in opt_config["optimizationTarget"])
+            )
+            scenario_name = (
+                f"{team.get('name', team_id)} / "
+                f"{team_character.get('name', character)} / {target_name}"
+            )
+            identity = {
+                "database": raw.get("dbMeta", {}).get("name")
+                if isinstance(raw.get("dbMeta"), Mapping)
+                else None,
+                "team_id": team_id,
+                "team_character_id": resolved["team_character_id"],
+                "character": character,
+                "target": opt_config.get("optimizationTarget"),
+            }
+            scenario_id = "go-" + sha256(
+                json.dumps(identity, sort_keys=True).encode()
+            ).hexdigest()[:12]
+            objective_probe: Mapping[str, Any] = {"targets": targets}
+            metadata = {
+                "adapter_required": True,
+                "adapter_reason": "GO formula paths require the pinned GO calculation engine",
+                "go_import_version": GO_IMPORT_VERSION,
+                "database": database_meta,
+                "scenario_name": scenario_name,
+                "team_id": team_id,
+                "team_character_id": resolved["team_character_id"],
+                "character": character,
+                "build_name": build.get("name", "Selected build"),
+                "build_origin": resolved["selected_build"].get("type"),
+                "targets": targets,
+                "custom_multi_target": custom_target,
+                "theorycraft_build": build,
+                "opt_config": opt_config,
+                "focus_loadout": resolved,
+                "team_context": team_context,
+                "source_path": str(source_path),
+            }
+            scenarios.append(
+                Scenario(
+                    id=scenario_id,
+                    tier="current",
+                    objective=_target_objective(  # type: ignore[arg-type]
+                        objective_probe, opt_config
+                    ),
+                    scaling_stat=_scaling_stat(build),  # type: ignore[arg-type]
+                    damage_stat=_damage_stat(build),
+                    constraints=_constraints(opt_config),
+                    required_sets=_set_requirements(build),
+                    allowed_main_stats=_allowed_mains(opt_config),
+                    source="genshin-optimizer",
+                    metadata=metadata,
+                )
+            )
+
+    if not scenarios:
+        raise ValueError(
+            "GO database contains no team loadouts with configured optimization targets"
         )
-    return scenarios
+    return GOImportResult(tuple(scenarios), tuple(skipped), database_meta)
+
+
+def import_go(path: str | Path) -> list[Scenario]:
+    return list(import_go_database(path).scenarios)
 
 
 @dataclass(frozen=True, slots=True)

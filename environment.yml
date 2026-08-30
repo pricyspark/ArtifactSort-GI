@@ -1,7 +1,8 @@
-name: artifact_sort
+name: artifact-sort
 channels:
   - conda-forge
 dependencies:
-  - python=3.13.9
-  - numpy=2.3.5
-  - scipy=1.16.3
+  - python
+  - numpy
+  - scipy
+  - pytest

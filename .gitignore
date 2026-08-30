@@ -13,4 +13,6 @@ dist/
 *.TMP
 *.pkl
 *.npy
+*.json
 scans/
+outputs/

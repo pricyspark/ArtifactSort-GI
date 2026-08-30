@@ -1,178 +1,82 @@
 # Artifact Sort
 
-Sort Genshin Impact artifacts by considering a suite of configurable
-optimization targets, sets, and rankers. Are any of these problems
-relevant to you?
-
-- How long is it going to take to improve my current artifacts? Is it
-  even worth farming for this set anymore?
-- What artifact should I define with the Artifact Transmuter? If I do,
-  how much resin am I saving on average?
-- Is this artifact worth reshaping its substats? Which artifact is most
-  resin efficient to choose?
-- I need to get rid of some artifacts, but have no idea with is my
-  "worst", especially considering multiple possible builds and targets
-  at once.
-- There might be a future character that needs [insert super niche weird
-  build] and I'm too paranoid to get rid of anything.
-- Genshin Optimizer tells me my current best builds, and recommends
-  which artifacts to upgrade my greedily replacing single artifacts, but
-  that is too fine-grained. I want something that generalizes "good"
-  artifacts.
-- I don't have a full/good build for Genshin Optimizer to base its
-  upgrade recommendations on.
-
-If so, then Artifact Sort can help you!
+Artifact Sort evaluates a Genshin Impact artifact inventory as a portfolio of
+complete five-artifact builds. Deletion and upgrade decisions use nonlinear
+scenario utility, build constraints, future-roll probabilities, and measured
+policy regret instead of assigning every artifact a standalone weighted score.
 
 ## Installation
 
-1. Clone the repo
-
-   ```sh
-   git clone https://github.com/pricyspark/ArtifactSort.git
-   cd ArtifactSort
-   ```
-
-2. <p>
-   Set up environment using:<br>
-   venv + pip (Windows)</p>
-
-   ```sh
-   python -m venv .venv
-   .venv\Scripts\activate
-   pip install -r requirements.txt
-   ```
-
-   venv + pip (macOS/Linus)
-
-   ```sh
-   python -m venv .venv
-   source .venv/bin/activate
-   pip install -r requirements.txt
-   ```
-
-   mamba
-
-   ```sh
-   mamba env create -f environment.yml
-   mamba activate artifact_sort
-   ```
-
-   conda
-
-   ```sh
-   conda env create -f environment.yml
-   conda activate artifact_sort
-   ```
-
-3. Compile GUI elements
-
-   ```bash
-   bash install.sh
-   ```
-
-   Alternatively, you can make the script executable and run it
-   directly:
-
-   ```bash
-   chmod +x install.sh
-   ./install.sh
-   ```
-
-## Usage
-
-Disclaimer: This project is in active development. There are guaranteed
-to be bugs and unaccounted for edge cases. Improper usage will likely
-crash the program or cause en error. This is fine, simply close the
-window and relaunch.
-
-1. Export in-game artifacts using a scanner.
-
-   For best results, scan with Irminsul and Inventory Kamera. Irminsul
-   captures extra data to ensure maximum accuracy. Inventory Kamera
-   keeps track of scan order, so artifacts can be presented in the same
-   order as they are in game. Otherwise finding specific artifacts becomes
-   a big hassle. This is a surprisingly rare trait, for example Irminsul
-   and AdeptiScanner don't maintain order. Mileage may vary for others.
-
-   Note: Even in-game, Genshin doesn't seem to have a concrete ordering,
-   and there can be variations in the order even when the inventory
-   doesn't change. To guarantee order correctness, analyze immediately after
-   scanning. Sorting by order obtained gives consistent ordering every
-   time, but Inventory Kamera automatically disables this.
-
-2. <p>Run:<br>
-
-   ```sh
-   python gui.py
-   ```
-
-3. In the opened window, select your scan(s). If you only have one scan
-   (Irminsul), select it as the main scan. If you have two scans, select
-   the ordered scan as the main scan, and the second one as the
-   additional scan. Click "calculate".
-
-4. Wait for the analysis to finish. The first time you run this, will
-   take several minutes. Subsequent calculations will be faster. There
-   is a progress bar in rendered on the command line. The GUI window
-   will freeze during this time, and is normal.
-
-5. Check results in other tabs.
-
-   The ***upgrade tab*** recommends ~20 artifacts most likely to
-   become your best  for some target. (Targets for corresponding sets
-   are listed in targets.py). This is likely not very useful however, as
-   recommendations don't favor traditional optimization targets, so
-   "weird" artifacts will get mixed in.
-
-   The ***lock tab*** gives recommendations on what you should lock and
-   unlock. Its locking strategy is "lock everything except your worst
-   100 artifacts." Any artifacts that don't follow this scheme are
-   listed. It is recommended to use the auto-locking feature in-game to
-   lock ALL 5* artifacts by default, and use the lock tab to unlock
-   accordingly. This is very conservative and ensures you only trash
-   your absolute worst artifacts.
-
-   The ***define and reshape tab*** provides insight for resin efficiency.
-   Select a set and optimization target, and it will return expected
-   resin requirements to farm improvements of at least 0%, 1%, and 5%.
-   It also returns how much resin you save on average if you instead
-   define or reshape an artifact. Scoring is performed using a weighted
-   sum of an artifact's stats. Optimization targets define the weights.
-   Currently, if you use a target that isn't cached, this will run very
-   slowly. For examples of cached properly formatted optimization
-   targets, look in targets.py. (Warning: it's a mess in there)
-
-   Example optimization target:
-
-   ```
-   {'atk_': 6, 'atk': 2, 'crit_': 8}
-   ```
-
-## Cleanup
-
-venv + pip
+Python 3.11 or newer is required.
 
 ```sh
-deactivate
-rm -rf .venv
+python -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
+pip install -e .
 ```
 
-conda
+Alternatively, create the pinned Conda environment:
 
 ```sh
-conda deactivate
-conda env remove -n artifact_sort
+conda env create -f environment.yml
+conda activate artifact_sort
+pip install -e . --no-deps
 ```
 
-## Roadmap
+## Quick start
 
-- [X] GUI
-- [X] Analysis for defining
-- [X] Analysis for reshaping
-- [X] Saving cache to disk
-- [ ] Automatic locking/unlocking
-- [ ] Packaging to .exe
-- [ ] Smarter caching
-- [ ] Multiprocess/multithread (curse you GIL)
-- [ ] Improve GUI, add more customization and info
+Start with a GOOD v3 artifact export and one or more scenario files:
+
+```sh
+artifact-sort delete scan.json \
+  --scenarios scenarios/example.json \
+  --free 100
+
+artifact-sort upgrades scan.json \
+  --scenarios scenarios/example.json
+
+artifact-sort benchmark-policy scan.json \
+  --scenarios scenarios/example.json \
+  --free 100 \
+  --trials 20
+```
+
+Other commands:
+
+```sh
+artifact-sort import-go TEAM_EXPORT.json --output go-scenarios.json
+artifact-sort import-akasha SNAPSHOT.json --output akasha-scenarios.json
+artifact-sort farm scan.json --scenarios scenarios/example.json --increase 0.05
+artifact-sort materials scan.json
+```
+
+Deletion output is deliberately marked `unvalidated` until the selected policy
+has been benchmarked against relevant calibration and held-out scenarios.
+
+## How it works
+
+- Artifacts use an immutable NumPy structure-of-arrays representation with
+  separate main-stat fields and exact integer substat roll coefficients.
+- Scenarios describe utility formulas, set requirements, allowed main stats,
+  stat thresholds, and current-versus-speculative priority.
+- Build search Pareto-prunes compatible artifacts, preserves nonlinear
+  threshold directions, and reevaluates complete candidate builds with the
+  scenario evaluator.
+- Exact-size deletion uses a binary MILP and then reruns build optimization to
+  verify the retained inventory.
+- Upgrade analysis enumerates exact roll outcomes and reports expected
+  portfolio gain plus 0.1%, 1%, and 5% usefulness sensitivity.
+- Policy benchmarks use shared hidden upgrade tapes, reproducible seeds,
+  bootstrap confidence intervals, and a clairvoyant upper bound.
+
+See [the backend guide](docs/backend.md) for scenario formats, GO adapter
+protocol, Akasha snapshot schema, simulation assumptions, and caching details.
+
+## Development
+
+```sh
+conda env create -f environment_dev.yml
+conda activate dev
+pip install -e . --no-deps
+pytest -q
+```

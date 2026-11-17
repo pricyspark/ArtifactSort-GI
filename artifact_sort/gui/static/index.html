@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#172c3b">
+    <title>Artifact Sort</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <a class="brand" href="#" aria-label="Artifact Sort home">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 48 48"><path d="M24 4 35 12l5 13-7 14H15L8 25l5-13L24 4Z"/><path d="m24 12 7 7-3 10h-8l-3-10 7-7Z"/></svg>
+          </span>
+          <span><strong>Artifact</strong><small>SORT</small></span>
+        </a>
+
+        <nav class="main-nav" aria-label="Main navigation">
+          <button class="nav-item active" data-view="inventory">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5 12 3l8 4.5v9L12 21l-8-4.5v-9Z"/><path d="m4 7.5 8 4.5 8-4.5M12 12v9"/></svg>
+            Inventory
+          </button>
+          <button class="nav-item" data-view="upgrades" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.4 5.1L20 9l-4 4 .9 5.7L12 16l-4.9 2.7L8 13 4 9l5.6-.9L12 3Z"/></svg>
+            Upgrades
+          </button>
+          <button class="nav-item" data-view="cleanup" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M9 7V4h6v3m3 0-1 14H7L6 7m4 4v6m4-6v6"/></svg>
+            Cleanup
+          </button>
+        </nav>
+
+        <div class="local-note"><span></span> Runs locally</div>
+      </aside>
+
+      <main>
+        <header class="topbar">
+          <button class="mobile-brand" aria-label="Open navigation">
+            <span class="brand-mark"><svg viewBox="0 0 48 48"><path d="M24 4 35 12l5 13-7 14H15L8 25l5-13L24 4Z"/><path d="m24 12 7 7-3 10h-8l-3-10 7-7Z"/></svg></span>
+            Artifact Sort
+          </button>
+          <div id="accountStatus" class="account-status hidden">
+            <span class="status-dot"></span>
+            <span><strong id="accountSource">Inventory ready</strong><small id="accountFile"></small></span>
+            <button id="replaceFiles" class="text-button">Replace</button>
+          </div>
+        </header>
+
+        <div class="content">
+          <section id="importView" class="view import-view active">
+            <div class="welcome-copy">
+              <span class="eyebrow">Genshin Impact artifact analysis</span>
+              <h1>Know what to upgrade.<br><em>Know what to clear.</em></h1>
+              <p>Upload your latest scan. Artifact Sort compares complete five-piece builds and turns the results into a practical review list.</p>
+            </div>
+
+            <div class="import-card">
+              <div class="step-label"><span>1</span> Update your inventory</div>
+              <h2>Drop in your scan</h2>
+              <p class="subtle">Use a GOOD v3 JSON export from Inventory Kamera, Irminsul, or Genshin Optimizer.</p>
+              <label id="dropzone" class="dropzone" for="fileInput">
+                <input id="fileInput" type="file" accept=".json,application/json" multiple>
+                <span class="upload-icon">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14v5h14v-5"/></svg>
+                </span>
+                <strong>Choose your JSON file</strong>
+                <span>or drag it here</span>
+              </label>
+              <button id="pasteGoButton" class="paste-button" type="button">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5h6m-5-2h4l1 3H9l1-3Z"/><path d="M8 5H6v16h12V5h-2"/></svg>
+                Paste GO database
+              </button>
+              <div id="pastePanel" class="paste-panel hidden">
+                <label for="pasteInput">Paste the database copied from GO</label>
+                <textarea id="pasteInput" rows="5" spellcheck="false" placeholder="Click here, then press Ctrl+V"></textarea>
+                <div>
+                  <button id="cancelPaste" class="text-button" type="button">Cancel</button>
+                  <button id="usePaste" class="primary-button" type="button">Use pasted database</button>
+                </div>
+                <p id="pasteError" class="form-error hidden" role="alert"></p>
+              </div>
+              <div class="drop-hint">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Zm0-13v5m0 3h.01"/></svg>
+                A full GO database is recognized automatically and adds your team targets.
+              </div>
+              <div id="fileQueue" class="file-queue hidden"></div>
+              <button id="importButton" class="primary-button hidden">Open my inventory</button>
+              <p id="importError" class="form-error hidden" role="alert"></p>
+              <small class="local-processing">Processed on this device. Nothing is sent to a remote service.</small>
+            </div>
+
+            <div class="how-it-works">
+              <span>How it works</span>
+              <div><b>01</b><p><strong>Scan</strong><small>Export from your scanner</small></p></div>
+              <i></i>
+              <div><b>02</b><p><strong>Analyze</strong><small>We compare full builds</small></p></div>
+              <i></i>
+              <div><b>03</b><p><strong>Review</strong><small>You make the final call</small></p></div>
+            </div>
+          </section>
+
+          <section id="inventoryView" class="view dashboard-view">
+            <div class="page-heading">
+              <div><span class="eyebrow">Inventory overview</span><h1>Your artifact room</h1><p>A quick health check from your latest scan.</p></div>
+              <button class="secondary-button replace-trigger">Update scan</button>
+            </div>
+
+            <div id="noticeArea"></div>
+
+            <div class="metric-grid">
+              <article class="metric-card featured"><span>Total artifacts</span><strong id="metricTotal">—</strong><small id="metricSource">Latest scan</small><i id="capacityRing"></i></article>
+              <article class="metric-card"><span>Level 20</span><strong id="metricMaxed">—</strong><small>Ready for builds</small></article>
+              <article class="metric-card"><span>Still growing</span><strong id="metricUnfinished">—</strong><small>Protected by potential</small></article>
+              <article class="metric-card"><span>Protected from cleanup</span><strong id="metricProtected">—</strong><small>Equipped, marked, or used by GO</small></article>
+            </div>
+
+            <div class="dashboard-grid">
+              <article class="panel">
+                <div class="panel-heading"><div><span class="kicker">Distribution</span><h2>Artifacts by slot</h2></div><span id="setCount" class="soft-chip">— sets</span></div>
+                <div id="slotChart" class="slot-chart"></div>
+              </article>
+              <article class="panel next-step-panel">
+                <span class="kicker">Recommended next</span>
+                <div class="orb-icon"><svg viewBox="0 0 48 48"><path d="M24 5 35 12l4 12-6 13H15L9 24l4-12L24 5Z"/><path d="m24 14 6 5-2 9h-8l-2-9 6-5Z"/></svg></div>
+                <h2>Find your next upgrade</h2>
+                <p>See which unfinished artifacts have the best chance to improve a complete build.</p>
+                <button class="primary-button" data-go="upgrades">Find upgrades <span>→</span></button>
+              </article>
+            </div>
+
+            <article class="panel set-panel">
+              <div class="panel-heading"><div><span class="kicker">Collection</span><h2>Largest sets</h2></div><button class="text-button" data-go="cleanup">Make room →</button></div>
+              <div id="setList" class="set-list"></div>
+            </article>
+          </section>
+
+          <section id="upgradesView" class="view analysis-view">
+            <div class="page-heading">
+              <div><span class="eyebrow">Upgrade guide</span><h1>Promising pieces</h1><p>Potential measured by the complete builds each artifact could unlock.</p></div>
+              <button id="runUpgrades" class="primary-button">Analyze upgrades</button>
+            </div>
+            <div id="upgradeEmpty" class="empty-state">
+              <span class="large-icon"><svg viewBox="0 0 48 48"><path d="m24 5 5.2 11 12 1.8-8.7 8.7 2.1 12.2L24 33l-10.6 5.7 2.1-12.2-8.7-8.7 12-1.8L24 5Z"/></svg></span>
+              <h2>Find the pieces worth investing in</h2>
+              <p>We’ll test possible roll outcomes and rank unfinished 5-star artifacts. No settings required.</p>
+              <button class="secondary-button run-upgrade-trigger">Start analysis</button>
+            </div>
+            <div id="upgradeResults" class="hidden">
+              <div id="upgradeNotices"></div>
+              <div class="results-toolbar"><p><strong id="upgradeResultCount">0</strong> opportunities found</p><label class="search-box"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m16 16 4 4"/></svg><input id="upgradeSearch" type="search" placeholder="Search artifacts"></label></div>
+              <div id="upgradeList" class="artifact-grid"></div>
+            </div>
+          </section>
+
+          <section id="cleanupView" class="view analysis-view">
+            <div class="page-heading">
+              <div><span class="eyebrow">Cleanup planner</span><h1>Make room, thoughtfully</h1><p>Create a review list while protecting equipped, marked, and promising pieces.</p></div>
+            </div>
+            <div id="cleanupSetup" class="cleanup-layout">
+              <article class="panel cleanup-control">
+                <span class="kicker">Space to make</span>
+                <h2>How much room do you need?</h2>
+                <p>We’ll find exactly this many artifacts for you to review.</p>
+                <div class="number-control">
+                  <button id="freeMinus" aria-label="Decrease by ten">−</button>
+                  <label><input id="freeCount" type="number" min="1" value="100"><span>artifacts</span></label>
+                  <button id="freePlus" aria-label="Increase by ten">+</button>
+                </div>
+                <input id="freeSlider" class="range" type="range" min="1" max="100" value="100">
+                <div class="range-labels"><span>Just a few</span><span id="availableLabel">— available</span></div>
+                <label>Analysis source <select id="cleanupEngine"><option value="library">Authored scenario library</option><option value="legacy">Previous analyzer</option></select></label>
+                <div id="libraryInputs">
+                  <p>Load your scenario library and matching mechanics manifest. The analysis produces independent established and combined lists.</p>
+                  <label>Scenario library <input id="scenarioLibraryFile" type="file" accept=".json,application/json"></label>
+                  <label>Mechanics manifest <input id="mechanicsFile" type="file" accept=".json,application/json"></label>
+                  <label>Research sidecar (optional) <input id="researchFile" type="file" accept=".json,application/json"></label>
+                  <label><input id="allowDraftLibrary" type="checkbox"> Allow draft scenario inputs for diagnostics</label>
+                  <details><summary>Computation settings</summary>
+                    <label><input id="libraryReuse" type="checkbox" checked> Reuse cached computations</label>
+                    <label>Upgrade trials <input id="libraryTrials" type="number" min="1" value="16"></label>
+                    <label>Samples per slot <input id="libraryPopulation" type="number" min="1" value="1000"></label>
+                    <label>Time budget (seconds) <input id="libraryTime" type="number" min="1" value="180"></label>
+                  </details>
+                </div>
+                <button id="runCleanup" class="primary-button full-button">Build my review list</button>
+              </article>
+              <aside class="protection-card">
+                <span class="shield-icon"><svg viewBox="0 0 24 24"><path d="M12 3 19 6v5c0 4.6-2.8 8.1-7 10-4.2-1.9-7-5.4-7-10V6l7-3Z"/><path d="m9 12 2 2 4-4"/></svg></span>
+                <div><strong>Protected automatically</strong><p>Equipped and starred artifacts stay off the list. Ordinary locks confer no protection. The scenario-library analyzer reports coverage gaps; unsupported cases can block a list. The previous analyzer also protects matched GO optimizer artifacts.</p></div>
+              </aside>
+            </div>
+            <div id="libraryCleanupResults" class="hidden">
+              <div id="libraryCleanupNotices"></div>
+              <div class="results-toolbar"><p>Review both independent lists and their coverage gaps.</p><button id="exportLibraryJson" class="secondary-button">Export analysis JSON</button><button id="editLibraryAnalysis" class="secondary-button">Change inputs</button></div>
+              <div id="libraryReviewLists"></div>
+            </div>
+            <div id="cleanupResults" class="hidden">
+              <div id="cleanupNotices"></div>
+              <div class="result-summary panel"><div><span class="result-number" id="cleanupResultCount">0</span><p><strong>artifacts to review</strong><small id="cleanupLoss">Estimated build impact</small></p></div><div class="result-actions"><button id="exportJson" class="secondary-button">Export JSON</button><button id="exportCsv" class="primary-button">Export CSV</button></div></div>
+              <div class="order-explanation"><strong>How this list is ordered</strong><p id="cleanupOrder"></p></div>
+              <div class="results-toolbar"><p>Nothing is deleted automatically. Open a row for supporting details.</p><label class="search-box"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m16 16 4 4"/></svg><input id="cleanupSearch" type="search" placeholder="Search review list"></label></div>
+              <div class="table-wrap"><table><thead><tr><th>#</th><th>Artifact</th><th>Why it is on the list</th><th>Top builds</th><th>Future chance</th><th>Level</th></tr></thead><tbody id="cleanupTable"></tbody></table></div>
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
+
+    <div id="jobOverlay" class="job-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="jobTitle">
+      <div class="job-card">
+        <div class="working-orb"><i></i><svg viewBox="0 0 48 48"><path d="M24 5 35 12l4 12-6 13H15L9 24l4-12L24 5Z"/><path d="m24 14 6 5-2 9h-8l-2-9 6-5Z"/></svg></div>
+        <span class="eyebrow">Inventory analysis</span>
+        <h2 id="jobTitle">Comparing complete builds</h2>
+        <p id="jobMessage">This can take a few minutes for a large inventory.</p>
+        <div class="progress-track"><i id="jobProgress"></i></div>
+        <small id="jobPercent">0%</small>
+      </div>
+    </div>
+
+    <div id="toast" class="toast" role="status"></div>
+    <script src="/app.js" defer></script>
+  </body>
+</html>

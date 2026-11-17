@@ -7,10 +7,15 @@ name = "artifact-sort-gi"
 version = "0.1.0"
 description = "Portfolio-based Genshin Impact artifact analysis"
 requires-python = ">=3.11"
-dependencies = ["numpy>=2.3,<3", "scipy>=1.16,<2"]
+dependencies = ["numpy>=2.3,<3", "scipy>=1.16,<2", "jsonschema>=4.10,<5"]
 
 [project.scripts]
 artifact-sort = "artifact_sort.cli:main"
+artifact-sort-gui = "artifact_sort.gui.app:main"
 
 [tool.setuptools.packages.find]
 include = ["artifact_sort*"]
+
+[tool.setuptools.package-data]
+"artifact_sort" = ["scenario-library.schema.json", "artifact-main-stats.json", "artifact-sampling-rules.json"]
+"artifact_sort.gui" = ["static/*"]

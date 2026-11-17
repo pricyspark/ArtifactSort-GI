@@ -14,5 +14,14 @@ dist/
 *.pkl
 *.npy
 *.json
+!scenarios/scenario-library.schema.json
+!scenarios/library.example.json
+!scenarios/library.example.research.json
+!scenarios/library.pilot.json
+!scenarios/library.pilot.research.json
 scans/
 outputs/
+
+!artifact_sort/scenario-library.schema.json
+!artifact_sort/artifact-main-stats.json
+!artifact_sort/artifact-sampling-rules.json

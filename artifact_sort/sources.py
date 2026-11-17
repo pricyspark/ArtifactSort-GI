@@ -14,7 +14,13 @@ import numpy as np
 from numpy.typing import NDArray
 
 from .model import SLOT_INDEX, STAT_INDEX, STAT_KEYS
-from .scenarios import Evaluator, Scenario, _stat_vector, scenario_from_mapping
+from .scenarios import (
+    Evaluator,
+    Scenario,
+    SetStrategy,
+    _stat_vector,
+    scenario_from_mapping,
+)
 
 
 GO_IMPORT_VERSION = "go-database-v1"
@@ -191,6 +197,59 @@ def _set_counts(artifacts: Sequence[Mapping[str, Any]]) -> dict[str, int]:
         if effective >= 2 or (effective == 1 and set_key.startswith("PrayersFor")):
             result[set_key] = effective
     return result
+
+
+def _generated_set_strategies(
+    opt_config: Mapping[str, Any],
+    generated_lists: Mapping[str, Mapping[str, Any]],
+    artifacts: Mapping[str, Mapping[str, Any]],
+) -> tuple[
+    tuple[SetStrategy, ...],
+    tuple[str, ...],
+    tuple[Mapping[str, Any], ...],
+    int,
+]:
+    list_id = opt_config.get("generatedBuildListId")
+    if not isinstance(list_id, str) or list_id not in generated_lists:
+        return (), (), (), 0
+    raw_builds = generated_lists[list_id].get("builds")
+    if not isinstance(raw_builds, list):
+        return (), (), (), 0
+
+    patterns: dict[tuple[tuple[str, int], ...], int] = {}
+    reference_ids: tuple[str, ...] = ()
+    reference_artifacts: tuple[Mapping[str, Any], ...] = ()
+    resolved_count = 0
+    for raw_build in raw_builds:
+        if not isinstance(raw_build, Mapping):
+            continue
+        raw_ids = raw_build.get("artifactIds")
+        if not isinstance(raw_ids, Mapping):
+            continue
+        artifact_ids = tuple(
+            str(artifact_id)
+            for artifact_id in raw_ids.values()
+            if isinstance(artifact_id, str) and artifact_id in artifacts
+        )
+        if len(artifact_ids) != 5:
+            continue
+        selected = [artifacts[artifact_id] for artifact_id in artifact_ids]
+        requirements = tuple(sorted(_set_counts(selected).items()))
+        patterns[requirements] = patterns.get(requirements, 0) + 1
+        resolved_count += 1
+        if not reference_ids:
+            reference_ids = artifact_ids
+            reference_artifacts = tuple(selected)
+
+    strategies = tuple(
+        SetStrategy(
+            requirements,
+            source="go-generated-builds",
+            evidence_count=count,
+        )
+        for requirements, count in patterns.items()
+    )
+    return strategies, reference_ids, reference_artifacts, resolved_count
 
 
 def _derived_theorycraft_build(
@@ -394,6 +453,11 @@ def import_go_database(path: str | Path) -> GOImportResult:
     opt_configs = _record_index(raw, "optConfigs")
     builds = _record_index(raw, "builds")
     theorycraft_builds = _record_index(raw, "buildTcs")
+    generated_lists = (
+        _record_index(raw, "generatedBuildList")
+        if "generatedBuildList" in raw
+        else {}
+    )
     artifacts = _record_index(raw, "artifacts")
     weapons = _record_index(raw, "weapons")
     characters = _record_index(raw, "characters", id_key="key")
@@ -411,6 +475,7 @@ def import_go_database(path: str | Path) -> GOImportResult:
             "teamchars": len(team_characters),
             "builds": len(builds),
             "buildTcs": len(theorycraft_builds),
+            "generatedBuildList": len(generated_lists),
             "artifacts": len(artifacts),
             "weapons": len(weapons),
             "characters": len(characters),
@@ -519,6 +584,18 @@ def import_go_database(path: str | Path) -> GOImportResult:
                 json.dumps(identity, sort_keys=True).encode()
             ).hexdigest()[:12]
             objective_probe: Mapping[str, Any] = {"targets": targets}
+            (
+                set_strategies,
+                reference_artifact_ids,
+                reference_artifacts,
+                generated_build_count,
+            ) = _generated_set_strategies(opt_config, generated_lists, artifacts)
+            build_origin = resolved["selected_build"].get("type")
+            explicit_sets = (
+                _set_requirements(build)
+                if build_origin == "tc" and not set_strategies
+                else ()
+            )
             metadata = {
                 "adapter_required": True,
                 "adapter_reason": "GO formula paths require the pinned GO calculation engine",
@@ -529,13 +606,23 @@ def import_go_database(path: str | Path) -> GOImportResult:
                 "team_character_id": resolved["team_character_id"],
                 "character": character,
                 "build_name": build.get("name", "Selected build"),
-                "build_origin": resolved["selected_build"].get("type"),
+                "build_origin": build_origin,
                 "targets": targets,
                 "custom_multi_target": custom_target,
                 "theorycraft_build": build,
                 "opt_config": opt_config,
                 "focus_loadout": resolved,
                 "team_context": team_context,
+                "set_strategy_source": (
+                    "go-generated-builds"
+                    if set_strategies
+                    else "theorycraft"
+                    if explicit_sets
+                    else "none"
+                ),
+                "generated_build_count": generated_build_count,
+                "reference_artifact_ids": reference_artifact_ids,
+                "reference_artifacts": reference_artifacts,
                 "source_path": str(source_path),
             }
             scenarios.append(
@@ -548,7 +635,8 @@ def import_go_database(path: str | Path) -> GOImportResult:
                     scaling_stat=_scaling_stat(build),  # type: ignore[arg-type]
                     damage_stat=_damage_stat(build),
                     constraints=_constraints(opt_config),
-                    required_sets=_set_requirements(build),
+                    required_sets=explicit_sets,
+                    set_strategies=set_strategies,
                     allowed_main_stats=_allowed_mains(opt_config),
                     source="genshin-optimizer",
                     metadata=metadata,

@@ -23,6 +23,27 @@ class CountingEvaluator(BuiltinEvaluator):
         return super().evaluate_batch(artifact_stats, scenario)
 
 
+def test_upgrade_analysis_reports_candidate_and_scenario_progress(small_batch):
+    levels = small_batch.levels.copy()
+    levels[:2] = 16
+    unfinished = small_batch.with_states(levels=levels)
+    updates = []
+
+    UpgradeAnalyzer(
+        BuildOptimizer(unfinished, candidate_limit=10),
+        [Scenario(id="upgrade", tier="current")],
+        complement_pool_size=4,
+    ).analyze(
+        max_candidates=2,
+        progress=lambda value, message: updates.append((value, message)),
+    )
+
+    assert len(updates) == 3
+    assert [value for value, _ in updates] == sorted(value for value, _ in updates)
+    assert updates[-1][0] == 1.0
+    assert "artifact 2 of 2" in updates[-1][1]
+
+
 def test_artifact_outcomes_are_cached_by_state_not_inventory(tmp_path):
     first_artifact = good_artifact(0, "flower", level=16)
     first = from_good_data(

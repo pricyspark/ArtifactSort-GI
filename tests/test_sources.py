@@ -6,7 +6,12 @@ import sys
 import numpy as np
 
 from artifact_sort.model import STAT_INDEX
-from artifact_sort.scenarios import Scenario
+from artifact_sort.scenarios import (
+    Scenario,
+    SetStrategy,
+    scenario_from_mapping,
+    scenario_to_mapping,
+)
 from artifact_sort.sources import (
     GOEvaluator,
     akasha_scenarios,
@@ -173,8 +178,69 @@ def test_go_database_import_derives_selected_real_build(tmp_path):
     scenario = import_go(path)[0]
     assert scenario.metadata["build_origin"] == "real"
     assert scenario.damage_stat == "electro_dmg_"
-    assert scenario.set_requirements == {"EmblemOfSeveredFate": 4}
+    assert scenario.set_requirements == {}
     assert len(scenario.metadata["focus_loadout"]["selected_build"]["artifacts"]) == 5
+
+
+def test_go_import_uses_generated_optimizer_sets_instead_of_selected_build(tmp_path):
+    export = _go_database()
+    slots = ("flower", "plume", "sands", "goblet", "circlet")
+    export["artifacts"] = [
+        {
+            "id": f"artifact_{index}",
+            "setKey": "GoldenTroupe",
+            "slotKey": slot,
+            "level": 20,
+            "rarity": 5,
+            "mainStatKey": {"flower": "hp", "plume": "atk"}.get(slot, "atk_"),
+            "substats": [{"key": "critRate_", "value": 7.8}],
+        }
+        for index, slot in enumerate(slots)
+    ]
+    export["generatedBuildList"] = [
+        {
+            "id": "generated_0",
+            "builds": [
+                {
+                    "artifactIds": {
+                        slot: f"artifact_{index}" for index, slot in enumerate(slots)
+                    }
+                }
+            ],
+        }
+    ]
+    export["optConfigs"][0]["generatedBuildListId"] = "generated_0"
+    path = tmp_path / "go-database.json"
+    path.write_text(json.dumps(export))
+
+    scenario = import_go(path)[0]
+
+    assert scenario.set_requirements == {}
+    assert [strategy.requirements for strategy in scenario.set_strategies] == [
+        {"GoldenTroupe": 4}
+    ]
+    assert scenario.metadata["set_strategy_source"] == "go-generated-builds"
+    assert scenario.metadata["reference_artifact_ids"] == tuple(
+        f"artifact_{index}" for index in range(5)
+    )
+    assert len(scenario.metadata["reference_artifacts"]) == 5
+
+
+def test_set_strategies_round_trip_through_scenario_mapping():
+    scenario = Scenario(
+        id="alternative-sets",
+        set_strategies=(
+            SetStrategy((("GoldenTroupe", 4),), source="go", evidence_count=4),
+            SetStrategy(
+                (("GladiatorsFinale", 2), ("GoldenTroupe", 2)),
+                source="go",
+            ),
+        ),
+    )
+
+    restored = scenario_from_mapping(scenario_to_mapping(scenario))
+
+    assert restored.set_strategies == scenario.set_strategies
 
 
 def test_go_import_rejects_individual_team_export(tmp_path):

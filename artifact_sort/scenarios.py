@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 import json
 from pathlib import Path
 import tomllib
-from typing import Any, Literal, Mapping, Protocol
+from typing import Any, Literal, Mapping, Protocol, Sequence
 
 import numpy as np
 from numpy.typing import NDArray
@@ -25,6 +25,29 @@ def _stat_vector(values: Mapping[str, float] | None) -> NDArray[np.float64]:
             raise ValueError(f"unknown scenario stat {key!r}") from exc
     result.setflags(write=False)
     return result
+
+
+@dataclass(frozen=True, slots=True)
+class SetStrategy:
+    """One acceptable set composition for a scenario."""
+
+    required_sets: tuple[tuple[str, int], ...]
+    source: str = "configured"
+    evidence_count: int = 1
+
+    def __post_init__(self) -> None:
+        if any(not key or count not in (1, 2, 4) for key, count in self.required_sets):
+            raise ValueError("set strategy requirements must use valid 1/2/4-piece counts")
+        if len({key for key, _ in self.required_sets}) != len(self.required_sets):
+            raise ValueError("set strategy cannot contain duplicate sets")
+        if sum(count for _, count in self.required_sets) > 5:
+            raise ValueError("set strategy cannot require more than five artifacts")
+        if self.evidence_count < 1:
+            raise ValueError("set strategy evidence_count must be positive")
+
+    @property
+    def requirements(self) -> dict[str, int]:
+        return dict(self.required_sets)
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,6 +72,7 @@ class Scenario:
     bonus_stats: NDArray[np.float64] = field(default_factory=lambda: _stat_vector(None))
     constraints: tuple[tuple[int, float], ...] = ()
     required_sets: tuple[tuple[str, int], ...] = ()
+    set_strategies: tuple[SetStrategy, ...] = ()
     allowed_main_stats: tuple[tuple[int, tuple[int, ...]], ...] = ()
     multiplier: float = 1.0
     reaction_multiplier: float = 1.0
@@ -64,6 +88,8 @@ class Scenario:
             raise ValueError("base_stats has invalid shape")
         if self.bonus_stats.shape != (len(STAT_KEYS),):
             raise ValueError("bonus_stats has invalid shape")
+        if self.required_sets and self.set_strategies:
+            raise ValueError("use required_sets or set_strategies, not both")
 
     @property
     def allowed_mains(self) -> dict[int, tuple[int, ...]]:
@@ -72,6 +98,14 @@ class Scenario:
     @property
     def set_requirements(self) -> dict[str, int]:
         return dict(self.required_sets)
+
+    @property
+    def set_requirement_options(self) -> tuple[dict[str, int], ...]:
+        if self.set_strategies:
+            return tuple(strategy.requirements for strategy in self.set_strategies)
+        if self.required_sets:
+            return (dict(self.required_sets),)
+        return ({},)
 
 
 class Evaluator(Protocol):
@@ -234,6 +268,20 @@ def scenario_from_mapping(raw: Mapping[str, Any], *, source: str = "file") -> Sc
     required_sets = tuple(
         sorted((str(key), int(value)) for key, value in raw.get("required_sets", {}).items())
     )
+    set_strategies = tuple(
+        SetStrategy(
+            tuple(
+                sorted(
+                    (str(key), int(value))
+                    for key, value in strategy.get("required_sets", {}).items()
+                )
+            ),
+            source=str(strategy.get("source", "file")),
+            evidence_count=int(strategy.get("evidence_count", 1)),
+        )
+        for strategy in raw.get("set_strategies", ())
+        if isinstance(strategy, Mapping)
+    )
     allowed: list[tuple[int, tuple[int, ...]]] = []
     for slot, stats in raw.get("allowed_main_stats", {}).items():
         allowed.append((SLOT_INDEX[slot], tuple(STAT_INDEX[stat] for stat in stats)))
@@ -256,6 +304,7 @@ def scenario_from_mapping(raw: Mapping[str, Any], *, source: str = "file") -> Sc
         bonus_stats=_stat_vector(raw.get("bonus_stats")),
         constraints=constraints,
         required_sets=required_sets,
+        set_strategies=set_strategies,
         allowed_main_stats=tuple(sorted(allowed)),
         multiplier=float(raw.get("multiplier", 1.0)),
         reaction_multiplier=float(raw.get("reaction_multiplier", 1.0)),
@@ -299,6 +348,14 @@ def scenario_to_mapping(scenario: Scenario) -> dict[str, Any]:
             STAT_KEYS[index]: value for index, value in scenario.constraints
         },
         "required_sets": dict(scenario.required_sets),
+        "set_strategies": [
+            {
+                "required_sets": strategy.requirements,
+                "source": strategy.source,
+                "evidence_count": strategy.evidence_count,
+            }
+            for strategy in scenario.set_strategies
+        ],
         "allowed_main_stats": {
             next(key for key, index in SLOT_INDEX.items() if index == slot): [
                 STAT_KEYS[stat] for stat in stats

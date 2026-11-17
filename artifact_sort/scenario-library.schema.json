@@ -1,0 +1,383 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {"type": "string", "minLength": 1},
+    "format": {"const": "artifact-sort-scenario-library"},
+    "version": {"const": 4},
+    "revision": {"type": "string", "minLength": 1},
+    "mechanics": {"type": "string", "minLength": 1},
+    "scoring_formulas": {
+      "type": "object",
+      "propertyNames": {"type": "string", "minLength": 1},
+      "additionalProperties": {"$ref": "#/$defs/scoring_formula"},
+      "minProperties": 1
+    },
+    "established": {"type": "array", "items": {"$ref": "#/$defs/scenario"}},
+    "parameter_variations": {"type": "array", "items": {"$ref": "#/$defs/variant"}},
+    "structural_variations": {"type": "array", "items": {"$ref": "#/$defs/scenario"}},
+    "components": {
+      "type": "object",
+      "propertyNames": {"type": "string", "minLength": 1},
+      "additionalProperties": {"$ref": "#/$defs/component"}
+    },
+    "effects": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+    "channels": {
+      "type": "object",
+      "propertyNames": {"type": "string", "minLength": 1},
+      "additionalProperties": {"$ref": "#/$defs/channel"}
+    }
+  },
+  "required": [
+    "format",
+    "version",
+    "revision",
+    "mechanics",
+    "scoring_formulas",
+    "established",
+    "parameter_variations",
+    "structural_variations",
+    "components",
+    "effects",
+    "channels"
+  ],
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Artifact Sort encoded scenario library (draft v4, decimal ratios)",
+  "$defs": {
+    "stat": {
+      "enum": [
+        "hp",
+        "atk",
+        "def",
+        "hp_",
+        "atk_",
+        "def_",
+        "enerRech_",
+        "eleMas",
+        "critRate_",
+        "critDMG_",
+        "pyro_dmg_",
+        "electro_dmg_",
+        "cryo_dmg_",
+        "hydro_dmg_",
+        "dendro_dmg_",
+        "anemo_dmg_",
+        "geo_dmg_",
+        "physical_dmg_",
+        "heal_"
+      ]
+    },
+    "stats": {
+      "description": "GOOD stat keys with percentage values normalized to decimal ratios (46.6% = 0.466; 100% ER = 1.0). Flat stats are unchanged.",
+      "type": "object",
+      "propertyNames": {"$ref": "#/$defs/stat"},
+      "additionalProperties": {"type": "number"}
+    },
+    "sets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "propertyNames": {"type": "string", "minLength": 1},
+        "additionalProperties": {"type": "integer", "minimum": 1, "maximum": 5}
+      },
+      "uniqueItems": true,
+      "minItems": 1
+    },
+    "conditions": {
+      "type": "object",
+      "propertyNames": {"type": "string", "minLength": 1},
+      "additionalProperties": {"type": ["string", "number", "boolean"]}
+    },
+    "mains": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "flower": {"type": "array", "items": {"$ref": "#/$defs/stat"}, "uniqueItems": true, "minItems": 1},
+        "plume": {"type": "array", "items": {"$ref": "#/$defs/stat"}, "uniqueItems": true, "minItems": 1},
+        "sands": {"type": "array", "items": {"$ref": "#/$defs/stat"}, "uniqueItems": true, "minItems": 1},
+        "goblet": {"type": "array", "items": {"$ref": "#/$defs/stat"}, "uniqueItems": true, "minItems": 1},
+        "circlet": {"type": "array", "items": {"$ref": "#/$defs/stat"}, "uniqueItems": true, "minItems": 1}
+      }
+    },
+    "scoring_formula": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {"unit": {"$ref": "#/$defs/unit"}, "expression": {"$ref": "#/$defs/expression"}},
+      "required": ["unit", "expression"]
+    },
+    "scenario": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "family": {"type": "string", "minLength": 1, "pattern": "\\S"},
+        "characters": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+        "scoring_formula": {"type": "string", "minLength": 1},
+        "base": {"$ref": "#/$defs/stats"},
+        "buffs": {"$ref": "#/$defs/stats"},
+        "minimums": {"$ref": "#/$defs/stats"},
+        "maximums": {"$ref": "#/$defs/stats"},
+        "sets": {"$ref": "#/$defs/sets"},
+        "conditions": {"$ref": "#/$defs/conditions"},
+        "mains": {"$ref": "#/$defs/mains"},
+        "parameters": {
+          "type": "object",
+          "propertyNames": {"type": "string", "minLength": 1},
+          "additionalProperties": {"type": "number"}
+        },
+        "effects": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true}
+      },
+      "required": ["id", "scoring_formula", "base", "sets"]
+    },
+    "changes": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "base": {
+          "type": "object",
+          "propertyNames": {"$ref": "#/$defs/stat"},
+          "additionalProperties": {"type": ["number", "null"]}
+        },
+        "buffs": {
+          "type": "object",
+          "propertyNames": {"$ref": "#/$defs/stat"},
+          "additionalProperties": {"type": ["number", "null"]}
+        },
+        "minimums": {
+          "type": "object",
+          "propertyNames": {"$ref": "#/$defs/stat"},
+          "additionalProperties": {"type": ["number", "null"]}
+        },
+        "maximums": {
+          "type": "object",
+          "propertyNames": {"$ref": "#/$defs/stat"},
+          "additionalProperties": {"type": ["number", "null"]}
+        },
+        "conditions": {
+          "type": "object",
+          "propertyNames": {"type": "string", "minLength": 1},
+          "additionalProperties": {"type": ["string", "number", "boolean", "null"]}
+        },
+        "mains": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "flower": {
+              "anyOf": [
+                {"type": "null"},
+                {
+                  "type": "array",
+                  "items": {"$ref": "#/$defs/stat"},
+                  "uniqueItems": true,
+                  "minItems": 1
+                }
+              ]
+            },
+            "plume": {
+              "anyOf": [
+                {"type": "null"},
+                {
+                  "type": "array",
+                  "items": {"$ref": "#/$defs/stat"},
+                  "uniqueItems": true,
+                  "minItems": 1
+                }
+              ]
+            },
+            "sands": {
+              "anyOf": [
+                {"type": "null"},
+                {
+                  "type": "array",
+                  "items": {"$ref": "#/$defs/stat"},
+                  "uniqueItems": true,
+                  "minItems": 1
+                }
+              ]
+            },
+            "goblet": {
+              "anyOf": [
+                {"type": "null"},
+                {
+                  "type": "array",
+                  "items": {"$ref": "#/$defs/stat"},
+                  "uniqueItems": true,
+                  "minItems": 1
+                }
+              ]
+            },
+            "circlet": {
+              "anyOf": [
+                {"type": "null"},
+                {
+                  "type": "array",
+                  "items": {"$ref": "#/$defs/stat"},
+                  "uniqueItems": true,
+                  "minItems": 1
+                }
+              ]
+            }
+          }
+        },
+        "parameters": {
+          "type": "object",
+          "propertyNames": {"type": "string", "minLength": 1},
+          "additionalProperties": {"type": ["number", "null"]}
+        }
+      },
+      "minProperties": 1
+    },
+    "variant": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "extends": {"type": "string", "minLength": 1},
+        "changes": {"$ref": "#/$defs/changes"}
+      },
+      "required": ["id", "extends", "changes"]
+    },
+    "unit": {
+      "type": "string",
+      "pattern": "^(?:scalar|atk|hp|def|em|damage|healing|shield)(?:[*/](?:scalar|atk|hp|def|em|damage|healing|shield))*$"
+    },
+    "expression": {
+      "oneOf": [
+        {"type": "number"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {"value": {"type": "number"}, "unit": {"$ref": "#/$defs/unit"}},
+          "required": ["value", "unit"]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {"stat": {"$ref": "#/$defs/stat"}, "stage": {"enum": ["base", "raw", "effective"]}},
+          "required": ["stat", "stage"]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {"ref": {"type": "string", "minLength": 1}},
+          "required": ["ref"]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {"channel": {"type": "string", "minLength": 1}},
+          "required": ["channel"]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {"parameter": {"type": "string", "minLength": 1}},
+          "required": ["parameter"]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {"condition": {"type": "string", "minLength": 1}},
+          "required": ["condition"]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "op": {"enum": ["add", "multiply", "min", "max"]},
+            "args": {"type": "array", "items": {"$ref": "#/$defs/expression"}, "minItems": 2}
+          },
+          "required": ["op", "args"]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "op": {"enum": ["subtract", "divide"]},
+            "args": {"type": "array", "items": {"$ref": "#/$defs/expression"}, "minItems": 2, "maxItems": 2}
+          },
+          "required": ["op", "args"]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "op": {"enum": ["clamp"]},
+            "args": {"type": "array", "items": {"$ref": "#/$defs/expression"}, "minItems": 3, "maxItems": 3}
+          },
+          "required": ["op", "args"]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "op": {"const": "extension"},
+            "name": {"type": "string", "minLength": 1},
+            "version": {"type": "string", "minLength": 1},
+            "args": {"type": "array", "items": {"$ref": "#/$defs/expression"}, "minItems": 0}
+          },
+          "required": ["op", "name", "version", "args"]
+        }
+      ]
+    },
+    "predicate": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "condition": {"type": "string", "minLength": 1},
+            "equals": {"type": ["string", "number", "boolean"]}
+          },
+          "required": ["condition", "equals"]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "set": {"type": "string", "minLength": 1},
+            "pieces": {"type": "integer", "minimum": 1, "maximum": 5}
+          },
+          "required": ["set", "pieces"]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {"all": {"type": "array", "items": {"$ref": "#/$defs/predicate"}, "minItems": 1}},
+          "required": ["all"]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {"any": {"type": "array", "items": {"$ref": "#/$defs/predicate"}, "minItems": 1}},
+          "required": ["any"]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {"not": {"$ref": "#/$defs/predicate"}},
+          "required": ["not"]
+        }
+      ]
+    },
+    "component": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "stage": {"enum": ["static", "conversion", "bonus", "score"]},
+        "unit": {"$ref": "#/$defs/unit"},
+        "expression": {"$ref": "#/$defs/expression"},
+        "contributes_to": {"type": "string", "pattern": "^(stats|channels)\\.[A-Za-z][A-Za-z0-9_]*$"},
+        "when": {"$ref": "#/$defs/predicate"}
+      },
+      "required": ["stage", "unit", "expression"],
+      "dependentRequired": {"when": ["contributes_to"]}
+    },
+    "channel": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {"unit": {"$ref": "#/$defs/unit"}, "combine": {"enum": ["add", "multiply"]}},
+      "required": ["unit", "combine"]
+    }
+  }
+}

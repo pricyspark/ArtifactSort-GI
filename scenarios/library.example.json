@@ -1,0 +1,189 @@
+{
+  "$schema": "./scenario-library.schema.json",
+  "format": "artifact-sort-scenario-library",
+  "version": 4,
+  "revision": "example-5",
+  "mechanics": "example-unimplemented",
+  "scoring_formulas": {
+    "atk-cryo-crit": {
+      "unit": "atk",
+      "expression": {
+        "op": "multiply",
+        "args": [
+          {"stat": "atk", "stage": "effective"},
+          {
+            "op": "add",
+            "args": [
+              1,
+              {
+                "op": "add",
+                "args": [{"stat": "cryo_dmg_", "stage": "effective"}, {"channel": "common_dmg_bonus"}]
+              }
+            ]
+          },
+          {"ref": "average-crit"}
+        ]
+      }
+    },
+    "hp-cryo-crit": {
+      "unit": "hp",
+      "expression": {
+        "op": "multiply",
+        "args": [
+          {"stat": "hp", "stage": "effective"},
+          {
+            "op": "add",
+            "args": [
+              1,
+              {
+                "op": "add",
+                "args": [{"stat": "cryo_dmg_", "stage": "effective"}, {"channel": "common_dmg_bonus"}]
+              }
+            ]
+          },
+          {"ref": "average-crit"}
+        ]
+      }
+    },
+    "atk-hp-added-cryo": {
+      "unit": "damage",
+      "expression": {
+        "op": "multiply",
+        "args": [
+          {
+            "op": "add",
+            "args": [
+              {
+                "op": "multiply",
+                "args": [{"stat": "atk", "stage": "effective"}, {"value": 1, "unit": "damage/atk"}]
+              },
+              {"ref": "example-hp-flat-damage"}
+            ]
+          },
+          {
+            "op": "add",
+            "args": [
+              1,
+              {
+                "op": "add",
+                "args": [{"stat": "cryo_dmg_", "stage": "effective"}, {"channel": "common_dmg_bonus"}]
+              }
+            ]
+          },
+          {"ref": "average-crit"}
+        ]
+      }
+    }
+  },
+  "established": [
+    {
+      "id": "atk-cryo-freeze",
+      "characters": [],
+      "scoring_formula": "atk-cryo-crit",
+      "base": {"atk": 800, "critRate_": 0.05, "critDMG_": 0.5, "enerRech_": 1.0},
+      "buffs": {"atk_": 0.2},
+      "minimums": {"enerRech_": 1.4},
+      "sets": [{"BlizzardStrayer": 4}],
+      "conditions": {"enemy_state": "frozen", "damage_type": "skill"},
+      "mains": {
+        "sands": ["atk_", "enerRech_"],
+        "goblet": ["cryo_dmg_"],
+        "circlet": ["critRate_", "critDMG_"]
+      }
+    }
+  ],
+  "parameter_variations": [
+    {
+      "id": "atk-cryo-freeze-higher-er",
+      "extends": "atk-cryo-freeze",
+      "changes": {"minimums": {"enerRech_": 1.8}}
+    }
+  ],
+  "structural_variations": [
+    {
+      "id": "hp-cryo-freeze",
+      "characters": [],
+      "scoring_formula": "hp-cryo-crit",
+      "base": {"hp": 12000, "critRate_": 0.05, "critDMG_": 0.5, "enerRech_": 1.0},
+      "minimums": {"enerRech_": 1.4},
+      "sets": [{"BlizzardStrayer": 4}],
+      "conditions": {"enemy_state": "frozen", "damage_type": "skill"},
+      "mains": {"sands": ["hp_", "enerRech_"], "goblet": ["cryo_dmg_"], "circlet": ["critRate_", "critDMG_"]}
+    },
+    {
+      "id": "speculative-atk-hp-cryo-flat",
+      "characters": [],
+      "scoring_formula": "atk-hp-added-cryo",
+      "base": {"atk": 800, "critRate_": 0.05, "critDMG_": 0.5, "enerRech_": 1.0, "hp": 14000},
+      "buffs": {"atk_": 0.2},
+      "minimums": {"enerRech_": 1.4},
+      "sets": [{"BlizzardStrayer": 4}],
+      "conditions": {"enemy_state": "frozen", "damage_type": "skill"},
+      "mains": {
+        "sands": ["atk_", "enerRech_"],
+        "goblet": ["cryo_dmg_"],
+        "circlet": ["critRate_", "critDMG_"]
+      },
+      "parameters": {"hp_flat_coefficient": 0.01}
+    }
+  ],
+  "components": {
+    "average-crit": {
+      "stage": "score",
+      "unit": "scalar",
+      "expression": {
+        "op": "add",
+        "args": [
+          1,
+          {
+            "op": "multiply",
+            "args": [
+              {"op": "clamp", "args": [{"stat": "critRate_", "stage": "effective"}, 0, 1]},
+              {"op": "max", "args": [{"stat": "critDMG_", "stage": "effective"}, 0]}
+            ]
+          }
+        ]
+      }
+    },
+    "emblem-er": {
+      "stage": "static",
+      "unit": "scalar",
+      "expression": 0.2,
+      "contributes_to": "stats.enerRech_",
+      "when": {"set": "EmblemOfSeveredFate", "pieces": 2}
+    },
+    "emblem-burst-bonus": {
+      "stage": "bonus",
+      "unit": "scalar",
+      "expression": {
+        "op": "min",
+        "args": [{"op": "multiply", "args": [{"stat": "enerRech_", "stage": "effective"}, 0.25]}, 0.75]
+      },
+      "contributes_to": "channels.burst_dmg_bonus",
+      "when": {
+        "all": [
+          {"set": "EmblemOfSeveredFate", "pieces": 4},
+          {"condition": "damage_type", "equals": "burst"}
+        ]
+      }
+    },
+    "example-hp-flat-damage": {
+      "stage": "bonus",
+      "unit": "damage",
+      "expression": {
+        "op": "multiply",
+        "args": [
+          {"stat": "hp", "stage": "effective"},
+          {"parameter": "hp_flat_coefficient"},
+          {"value": 1, "unit": "damage/hp"}
+        ]
+      }
+    }
+  },
+  "channels": {
+    "common_dmg_bonus": {"unit": "scalar", "combine": "add"},
+    "skill_dmg_bonus": {"unit": "scalar", "combine": "add"},
+    "burst_dmg_bonus": {"unit": "scalar", "combine": "add"}
+  },
+  "effects": ["emblem-er", "emblem-burst-bonus"]
+}

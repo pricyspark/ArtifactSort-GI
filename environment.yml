@@ -6,3 +6,4 @@ dependencies:
   - numpy
   - scipy
   - pytest
+  - jsonschema>=4.10,<5

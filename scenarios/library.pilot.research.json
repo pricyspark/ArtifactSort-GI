@@ -1,0 +1,318 @@
+{
+  "library_revision": "research-pilot-2026-10-02-3",
+  "created_with": "Codex assistance",
+  "sources": {
+    "fischl-guide": {
+      "url": "https://keqingmains.com/q/fischl-quickguide/",
+      "title": "KQM Fischl Quick Guide",
+      "locator": "Artifacts: ER Requirements, Artifact Stats, Artifact Sets",
+      "retrieved_at": "2026-10-02"
+    },
+    "fischl-stats": {
+      "url": "https://library.keqingmains.com/characters/electro/fischl",
+      "title": "KQM TCL Fischl",
+      "locator": "Base Stats: A6 level 90; relevant ascension passives",
+      "retrieved_at": "2026-10-02"
+    },
+    "xingqiu-guide": {
+      "url": "https://keqingmains.com/q/xingqiu-quickguide/",
+      "title": "KQM Xingqiu Quick Guide",
+      "locator": "Artifacts: ER Requirements, Artifact Stats, Artifact Sets",
+      "retrieved_at": "2026-10-02"
+    },
+    "xingqiu-stats": {
+      "url": "https://library.keqingmains.com/characters/hydro/xingqiu",
+      "title": "KQM TCL Xingqiu",
+      "locator": "Base Stats: A6 level 90; relevant ascension passives",
+      "retrieved_at": "2026-10-02"
+    },
+    "barbara-guide": {
+      "url": "https://keqingmains.com/q/barbara-quickguide/",
+      "title": "KQM Barbara Quick Guide",
+      "locator": "Artifacts: ER Requirements, Artifact Stats, Artifact Sets",
+      "retrieved_at": "2026-10-02"
+    },
+    "barbara-stats": {
+      "url": "https://library.keqingmains.com/characters/hydro/barbara",
+      "title": "KQM TCL Barbara",
+      "locator": "Base Stats: A6 level 90; relevant ascension passives",
+      "retrieved_at": "2026-10-02"
+    },
+    "zhongli-guide": {
+      "url": "https://keqingmains.com/q/zhongli-quickguide/",
+      "title": "KQM Zhongli Quick Guide",
+      "locator": "Artifacts: ER Requirements, Artifact Stats, Artifact Sets",
+      "retrieved_at": "2026-10-02"
+    },
+    "zhongli-stats": {
+      "url": "https://library.keqingmains.com/characters/geo/zhongli",
+      "title": "KQM TCL Zhongli",
+      "locator": "Base Stats: A6 level 90; relevant ascension passives",
+      "retrieved_at": "2026-10-02"
+    },
+    "crescent": {
+      "url": "https://library.keqingmains.com/equipment/weapons/bows",
+      "title": "KQM TCL Bows",
+      "locator": "Prototype Crescent: A6 level 90",
+      "retrieved_at": "2026-10-02"
+    },
+    "favonius": {
+      "url": "https://library.keqingmains.com/equipment/weapons/swords",
+      "title": "KQM TCL Swords",
+      "locator": "Favonius Sword: A6 level 90",
+      "retrieved_at": "2026-10-02"
+    },
+    "ttds": {
+      "url": "https://library.keqingmains.com/equipment/weapons/catalysts",
+      "title": "KQM TCL Catalysts",
+      "locator": "Thrilling Tales of Dragon Slayers: A6 level 90",
+      "retrieved_at": "2026-10-02"
+    },
+    "tassel": {
+      "url": "https://library.keqingmains.com/equipment/weapons/polearms",
+      "title": "KQM TCL Polearms",
+      "locator": "Black Tassel: A6 level 90",
+      "retrieved_at": "2026-10-02"
+    },
+    "sets": {
+      "url": "https://library.keqingmains.com/equipment/artifacts",
+      "title": "KQM TCL Artifacts",
+      "locator": "Golden Troupe, Emblem, Maiden, Ocean-Hued Clam, Tenacity, Vourukasha, Husk",
+      "retrieved_at": "2026-10-02"
+    },
+    "kqm-set-formulas": {
+      "url": "https://library.keqingmains.com/equipment/artifacts",
+      "title": "KQM TCL Artifacts",
+      "locator": "Emblem of Severed Fate",
+      "retrieved_at": "2026-10-02"
+    }
+  },
+  "scenarios": {
+    "fischl-offfield-skill-no-quicken": {
+      "status": "draft",
+      "sources": ["fischl-guide", "fischl-stats", "crescent", "sets"],
+      "notes": [
+        "Level 90 Fischl with level 90 Prototype Crescent, weak-point passive inactive: base ATK 244 + 510 = 754; fixed ATK ratio 0.24 + 0.413 = 0.653.",
+        "Guide supports ATK/Electro/crit, Golden Troupe, and 120-140% ER for off-field Burst every rotation; 120 is the lower endpoint.",
+        "Skill-only, non-Quicken ranking proxy. Off-field bonus assumed active for evaluated hits; transition hits and Burst damage excluded."
+      ],
+      "blockers": [
+        "No pinned executable mechanics release.",
+        "Verify skill-specific bonuses, off-field activation, snapshots, and independent build rankings before deletion use."
+      ],
+      "checks": []
+    },
+    "xingqiu-c0-favonius-burst": {
+      "status": "draft",
+      "sources": ["xingqiu-guide", "xingqiu-stats", "favonius", "sets"],
+      "notes": [
+        "Level 90 C0 Xingqiu with level 90 Favonius Sword: base ATK 202 + 454 = 656; ascension ATK ratio 0.24; weapon ER addition 0.613.",
+        "A4 Hydro DMG ratio 0.20 is a fixed bonus. Guide supports ER/ATK sands, Hydro goblet, crit circlet, and Emblem.",
+        "190% ER selects the lower endpoint of the guide's C0-C5 Favonius range, assuming reliable procs and unspecified average team energy.",
+        "Burst-only ranking proxy; excludes Skill damage and team defensive utility."
+      ],
+      "blockers": [
+        "No pinned executable mechanics release.",
+        "Resolve team/rotation and Favonius proc reliability; verify ER-dependent Burst bonus and cap, then compare complete build rankings."
+      ],
+      "checks": []
+    },
+    "barbara-skill-healing-maiden": {
+      "status": "draft",
+      "sources": ["barbara-guide", "barbara-stats", "ttds", "sets"],
+      "notes": [
+        "Level 90 Barbara with level 90 TTDS: base HP 9787; fixed HP ratio 0.24 + 0.352 = 0.592. TTDS buffs the next teammate, not Barbara's ATK.",
+        "Guide supports HP/HP/healing and Maiden for pure healing; no per-rotation Burst requirement.",
+        "Healing proxy omits talent flat healing and coefficients; active Maiden incoming-healing effect is distinct from outgoing healing bonus."
+      ],
+      "blockers": [
+        "No pinned executable mechanics release.",
+        "Current proxy expression omits received healing and talent flat terms; encode those contributions and their sourced coefficients; do not treat this as a validated Maiden-vs-other-set comparison."
+      ],
+      "checks": []
+    },
+    "barbara-skill-healing-mixed": {
+      "status": "draft",
+      "sources": ["barbara-guide", "barbara-stats", "ttds", "sets"],
+      "notes": [
+        "Same level, weapon, and fixed stats as Barbara Maiden case; documented two-piece healing/HP alternatives are separate established coverage.",
+        "Only healing is targeted; Ocean-Hued Clam four-piece damage and its cap are outside this scenario."
+      ],
+      "blockers": [
+        "No pinned executable mechanics release.",
+        "Verify flat healing terms and reference rankings; cannot compare team damage or four-piece Clam utility."
+      ],
+      "checks": []
+    },
+    "zhongli-shield-double-hp": {
+      "status": "draft",
+      "sources": ["zhongli-guide", "zhongli-stats", "tassel", "sets"],
+      "notes": [
+        "Level 90 Zhongli with level 90 Black Tassel: base HP 14695; weapon HP ratio 0.469. Burst not required each rotation.",
+        "Guide supports HP/HP/HP and two HP sets for shield health; maps to Tenacity plus Vourukasha.",
+        "HP-only shield proxy excludes talent flat absorption, Fortify, shield-strength effects, and teammate support value."
+      ],
+      "blockers": [
+        "No pinned executable mechanics release.",
+        "Validate shield absorption and active-character shield strength; support sets need a different objective."
+      ],
+      "checks": []
+    },
+    "fischl-offfield-skill-er140": {
+      "status": "draft",
+      "sources": ["fischl-guide"],
+      "notes": [
+        "Upper endpoint of the documented 120-140% range; speculative energy sensitivity within the same role, not a new character build."
+      ],
+      "blockers": ["Inherits parent blockers; exact team energy still unspecified."],
+      "checks": []
+    },
+    "xingqiu-c0-favonius-er220": {
+      "status": "draft",
+      "sources": ["xingqiu-guide"],
+      "notes": [
+        "Upper endpoint of the documented 190-220% C0-C5 Favonius range; samples an uncertain team-energy case."
+      ],
+      "blockers": ["Inherits parent blockers."],
+      "checks": []
+    },
+    "fischl-offfield-skill-flat-atk-buff": {
+      "status": "draft",
+      "sources": [],
+      "notes": [
+        "500 flat ATK is deliberately assumed sensitivity input, not a sourced Bennett value or another named teammate buff."
+      ],
+      "blockers": ["Inherits parent blockers; validate sensitivity across more than one buff level."],
+      "checks": []
+    },
+    "speculative-hp-electro-skill-golden": {
+      "status": "draft",
+      "sources": ["sets"],
+      "notes": [
+        "Hypothetical HP-scaling off-field Electro Skill archetype using existing Golden Troupe activation rules.",
+        "HP 14000, HP ratio 0.30, and ER 1.20 are explicit assumed sample values; no future character is predicted."
+      ],
+      "blockers": [
+        "No pinned executable mechanics release; no character kit supports these assumed numbers.",
+        "Review plausible parameter bounds and independent rankings before retention use."
+      ],
+      "checks": []
+    },
+    "speculative-def-geo-skill-husk": {
+      "status": "draft",
+      "sources": ["sets"],
+      "notes": [
+        "Hypothetical pure DEF-scaling Geo Skill archetype with four Husk stacks.",
+        "DEF 800 and ER 1.20 are assumed sample values. This is not a Noelle/Itto conversion model or a full Albedo simulation."
+      ],
+      "blockers": [
+        "No pinned executable mechanics release; verify stack acquisition and persistence.",
+        "Review numerical bounds and independent rankings."
+      ],
+      "checks": []
+    }
+  },
+  "coverage_gaps": [
+    {
+      "use": "EM reaction triggers and mixed ATK/EM damage",
+      "reason": "Current formula definitions cannot represent reaction level scaling, EM passives, or mixed scaling. Research Raiden/Kuki Hyperbloom and Nahida Deepwood/Gilded next; do not substitute ATK-only scoring."
+    },
+    {
+      "use": "Team support sets",
+      "reason": "Tenacity, Noblesse, Deepwood, and Viridescent team value needs teammate utility and activation conditions, not only holder damage/healing."
+    },
+    {
+      "use": "Clam damage and incoming-healing sets",
+      "reason": "Healing amount, accumulation windows, received healing, and damage caps need additional formula support."
+    },
+    {
+      "use": "Executable expression engine and full set-effect coverage",
+      "reason": "v4 encodes arithmetic and activation only. Runtime compilation, unit checking, and most set/character effects are not implemented; no deletion integration or full damage simulation is implied."
+    }
+  ],
+  "components": {
+    "average-crit": {
+      "status": "draft",
+      "description": "Expected crit multiplier with crit rate capped at 100%; crit damage is nonnegative.",
+      "sources": [],
+      "checks": [
+        {
+          "kind": "encoding-reference",
+          "inputs": {"critRate_": 0.5, "critDMG_": 1.0},
+          "expected": 1.5,
+          "observed": 1.5
+        },
+        {
+          "kind": "encoding-reference",
+          "inputs": {"critRate_": 1.2, "critDMG_": 2.0},
+          "expected": 3,
+          "observed": 3
+        }
+      ]
+    },
+    "emblem-er": {
+      "status": "draft",
+      "description": "At two pieces, add 0.20 ER before conversions and bonus evaluation.",
+      "sources": ["kqm-set-formulas"],
+      "checks": []
+    },
+    "emblem-burst-bonus": {
+      "status": "draft",
+      "description": "At four pieces, Burst DMG bonus is one quarter of effective ER, capped at 0.75 (75%).",
+      "sources": ["kqm-set-formulas"],
+      "checks": [
+        {
+          "kind": "encoding-reference",
+          "inputs": {"enerRech_": 2.0},
+          "expected": 0.5,
+          "observed": 0.5
+        },
+        {
+          "kind": "encoding-reference",
+          "inputs": {"enerRech_": 4.0},
+          "expected": 0.75,
+          "observed": 0.75
+        }
+      ]
+    }
+  },
+  "scoring_formulas": {
+    "atk-electro-crit": {
+      "status": "draft",
+      "description": "Explicit encoded approximation preserving the previous numerical proxy; output unit follows its primary scaling stat.",
+      "sources": [],
+      "checks": []
+    },
+    "atk-hydro-crit": {
+      "status": "draft",
+      "description": "Explicit encoded approximation preserving the previous numerical proxy; output unit follows its primary scaling stat.",
+      "sources": [],
+      "checks": []
+    },
+    "hp-healing": {
+      "status": "draft",
+      "description": "Explicit encoded approximation preserving the previous numerical proxy; output unit follows its primary scaling stat.",
+      "sources": [],
+      "checks": []
+    },
+    "hp-shield": {
+      "status": "draft",
+      "description": "Explicit encoded approximation preserving the previous numerical proxy; output unit follows its primary scaling stat.",
+      "sources": [],
+      "checks": []
+    },
+    "hp-electro-crit": {
+      "status": "draft",
+      "description": "Explicit encoded approximation preserving the previous numerical proxy; output unit follows its primary scaling stat.",
+      "sources": [],
+      "checks": []
+    },
+    "def-geo-crit": {
+      "status": "draft",
+      "description": "Explicit encoded approximation preserving the previous numerical proxy; output unit follows its primary scaling stat.",
+      "sources": [],
+      "checks": []
+    }
+  },
+  "unit_convention": "All machine-readable percentage stats and bonuses are decimal ratios. Source prose may use % notation; normalize it once before authoring numerical entries."
+}

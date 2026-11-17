@@ -5,7 +5,7 @@ from hashlib import sha256
 import heapq
 from itertools import product
 import json
-from typing import Iterable, Sequence
+from typing import Callable, Iterable, Sequence
 
 import numpy as np
 from numpy.typing import NDArray
@@ -222,6 +222,11 @@ class BuildOptimizer:
         weights = np.max(directions, axis=0)
         scores = screen_scores(stats, directions)
         allowed_mains = scenario.allowed_mains
+        strategy_sets = {
+            set_key
+            for requirements in scenario.set_requirement_options
+            for set_key in requirements
+        }
         output: list[NDArray[np.int64]] = []
 
         for slot in range(5):
@@ -236,16 +241,32 @@ class BuildOptimizer:
                 indices = self._pareto_prune(indices, stats, weights)
             if forced_index is None and len(indices) > self.candidate_limit:
                 global_best = indices[
-                    np.argpartition(scores[indices], -self.candidate_limit)[-self.candidate_limit :]
+                    np.argpartition(scores[indices], -self.candidate_limit)[
+                        -self.candidate_limit :
+                    ]
                 ]
                 preserved: list[int] = []
-                for set_key in np.unique(self.batch.set_keys[indices]):
+                preserve_sets = (
+                    sorted(strategy_sets)
+                    if strategy_sets
+                    else np.unique(self.batch.set_keys[indices]).tolist()
+                )
+                for set_key in preserve_sets:
                     group = indices[self.batch.set_keys[indices] == set_key]
-                    take = min(self.per_set_limit, len(group))
+                    take = min(
+                        self.candidate_limit if strategy_sets else self.per_set_limit,
+                        len(group),
+                    )
+                    if take == 0:
+                        continue
                     preserved.extend(
                         group[np.argpartition(scores[group], -take)[-take:]].tolist()
                     )
-                indices = np.unique(np.concatenate((global_best, np.asarray(preserved))))
+                indices = np.unique(
+                    np.concatenate(
+                        (global_best, np.asarray(preserved, dtype=np.int64))
+                    )
+                )
             if len(indices) == 0:
                 return []
             indices = indices[np.argsort(scores[indices])[::-1]]
@@ -282,11 +303,11 @@ class BuildOptimizer:
         return np.asarray(retained, dtype=np.int64)
 
     def _legal_sets(self, indices: Sequence[int], scenario: Scenario) -> bool:
-        requirements = scenario.set_requirements
-        if not requirements:
-            return True
         sets = self.batch.set_keys[np.asarray(indices)]
-        return all(np.count_nonzero(sets == key) >= count for key, count in requirements.items())
+        return any(
+            all(np.count_nonzero(sets == key) >= count for key, count in requirements.items())
+            for requirements in scenario.set_requirement_options
+        )
 
     def _candidate_builds(
         self,
@@ -488,11 +509,14 @@ class DeletionAnalyzer:
         self.scenarios = tuple(scenarios)
         self.loadouts_per_scenario = loadouts_per_scenario
 
-    def _loadout_pool(self) -> tuple[list[BuildResult], list[list[int]], list[float]]:
+    def _loadout_pool(
+        self, progress: Callable[[float, str], None] | None = None
+    ) -> tuple[list[BuildResult], list[list[int]], list[float]]:
         builds: list[BuildResult] = []
         groups: list[list[int]] = []
         baselines: list[float] = []
-        for scenario in self.scenarios:
+        scenario_count = len(self.scenarios)
+        for scenario_number, scenario in enumerate(self.scenarios, start=1):
             results = self.optimizer.optimize(
                 scenario, top_k=self.loadouts_per_scenario
             )
@@ -504,6 +528,11 @@ class DeletionAnalyzer:
                 builds.append(result)
             groups.append(group)
             baselines.append(results[0].utility)
+            if progress is not None:
+                progress(
+                    0.5 * scenario_number / scenario_count,
+                    f"Compared builds for target {scenario_number} of {scenario_count}",
+                )
         return builds, groups, baselines
 
     def _solve_milp(
@@ -514,6 +543,7 @@ class DeletionAnalyzer:
         baselines: Sequence[float],
         protected: NDArray[np.bool_],
         option_values: NDArray[np.float64],
+        progress: Callable[[float, str], None] | None = None,
     ) -> NDArray[np.bool_]:
         from scipy.optimize import Bounds, LinearConstraint, milp
         from scipy.sparse import lil_matrix
@@ -564,7 +594,17 @@ class DeletionAnalyzer:
             LinearConstraint(matrix.tocsr(), lower, upper)
         ]
 
-        def solve(objective: NDArray[np.float64]):
+        has_current = any(scenario.tier == "current" for scenario in self.scenarios)
+        has_speculative = has_current and any(
+            scenario.tier == "speculative" for scenario in self.scenarios
+        )
+        solve_count = 3 if has_speculative else 2
+        completed_solves = 0
+
+        def solve(objective: NDArray[np.float64], message: str):
+            nonlocal completed_solves
+            if progress is not None:
+                progress(0.5 + 0.2 * completed_solves / solve_count, message)
             result = milp(
                 objective,
                 integrality=integrality,
@@ -574,21 +614,26 @@ class DeletionAnalyzer:
             )
             if not result.success or result.x is None:
                 raise RuntimeError(f"deletion MILP failed: {result.message}")
+            completed_solves += 1
+            if progress is not None:
+                progress(
+                    0.5 + 0.2 * completed_solves / solve_count,
+                    message,
+                )
             return result
 
-        has_current = any(scenario.tier == "current" for scenario in self.scenarios)
         objective = np.zeros(variables)
         objective[r_current if has_current else r_speculative] = 1.0
-        first = solve(objective)
+        first = solve(objective, "Balancing current account targets")
         first_var = r_current if has_current else r_speculative
         lock = lil_matrix((1, variables), dtype=np.float64)
         lock[0, first_var] = 1.0
         constraints.append(LinearConstraint(lock.tocsr(), -np.inf, first.x[first_var] + 1e-9))
 
-        if has_current and any(s.tier == "speculative" for s in self.scenarios):
+        if has_speculative:
             objective = np.zeros(variables)
             objective[r_speculative] = 1.0
-            second = solve(objective)
+            second = solve(objective, "Balancing future account targets")
             lock = lil_matrix((1, variables), dtype=np.float64)
             lock[0, r_speculative] = 1.0
             constraints.append(
@@ -599,7 +644,7 @@ class DeletionAnalyzer:
         invested = self.optimizer.batch.invested_exp.astype(np.float64)
         invested /= max(1.0, invested.max(initial=0.0))
         objective[:n_artifacts] = option_values + invested * 1e-6
-        final = solve(objective)
+        final = solve(objective, "Choosing the lowest-cost review list")
         return final.x[:n_artifacts] > 0.5
 
     def analyze(
@@ -608,6 +653,7 @@ class DeletionAnalyzer:
         *,
         pinned_ids: Iterable[str] = (),
         option_values: NDArray[np.float64] | None = None,
+        progress: Callable[[float, str], None] | None = None,
     ) -> DeletionResult:
         if free < 0:
             raise ValueError("free must be non-negative")
@@ -619,15 +665,26 @@ class DeletionAnalyzer:
         if option_values.shape != (len(self.optimizer.batch),):
             raise ValueError("option_values has invalid shape")
 
-        builds, groups, baselines = self._loadout_pool()
+        if progress is not None:
+            progress(0.0, "Comparing candidate builds")
+        builds, groups, baselines = self._loadout_pool(progress)
         deleted = self._solve_milp(
-            free, builds, groups, baselines, protected, option_values
+            free,
+            builds,
+            groups,
+            baselines,
+            protected,
+            option_values,
+            progress,
         )
 
         available = ~deleted
         regrets: list[ScenarioRegret] = []
         verified = True
-        for scenario, baseline in zip(self.scenarios, baselines):
+        scenario_count = len(self.scenarios)
+        for scenario_number, (scenario, baseline) in enumerate(
+            zip(self.scenarios, baselines), start=1
+        ):
             base_build = self.optimizer.optimize(scenario, top_k=1)[0]
             retained = self.optimizer.optimize(scenario, available=available, top_k=1)
             if retained:
@@ -653,6 +710,11 @@ class DeletionAnalyzer:
                     retained_indices,
                 )
             )
+            if progress is not None:
+                progress(
+                    0.7 + 0.3 * scenario_number / scenario_count,
+                    f"Verified target {scenario_number} of {scenario_count}",
+                )
 
         indices = tuple(int(i) for i in np.flatnonzero(deleted))
         return DeletionResult(

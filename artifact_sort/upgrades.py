@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from hashlib import sha256
-from typing import Sequence
+from typing import Callable, Sequence
 
 import numpy as np
 from numpy.typing import NDArray
@@ -229,16 +229,31 @@ class UpgradeAnalyzer:
         ]
         return selected[np.argsort(scores[selected])[::-1]].astype(np.int64)
 
-    def analyze(self, *, max_candidates: int | None = 24) -> list[UpgradeRecommendation]:
+    def analyze(
+        self,
+        *,
+        max_candidates: int | None = 24,
+        progress: Callable[[float, str], None] | None = None,
+    ) -> list[UpgradeRecommendation]:
         batch = self.optimizer.batch
         current_stats = batch.final_stats()
+        candidates = self._screen(max_candidates)
+        scenario_count = len(self.scenarios)
+        total_steps = scenario_count * (len(candidates) + 1)
+        completed_steps = 0
         baselines: dict[str, float] = {}
-        for scenario in self.scenarios:
+        for scenario_number, scenario in enumerate(self.scenarios, start=1):
             result = self.optimizer.optimize(scenario, top_k=1)
             baselines[scenario.id] = result[0].utility if result else -np.inf
+            completed_steps += 1
+            if progress is not None:
+                progress(
+                    completed_steps / total_steps,
+                    f"Prepared target {scenario_number} of {scenario_count}",
+                )
 
         recommendations: list[UpgradeRecommendation] = []
-        for index in self._screen(max_candidates):
+        for candidate_number, index in enumerate(candidates, start=1):
             distribution = cached_final_outcomes(
                 batch, int(index), self.optimizer.cache
             )
@@ -250,7 +265,7 @@ class UpgradeAnalyzer:
             scenario_results: list[ScenarioPotential] = []
             gains: list[float] = []
             usefulness: list[float] = []
-            for scenario in self.scenarios:
+            for scenario_number, scenario in enumerate(self.scenarios, start=1):
                 pools = self.optimizer.optimize(
                     scenario,
                     stats=current_stats,
@@ -270,6 +285,16 @@ class UpgradeAnalyzer:
                 scenario_results.append(potential)
                 gains.append(potential.expected_relative_gain)
                 usefulness.append(potential.useful_probability)
+                completed_steps += 1
+                if progress is not None:
+                    progress(
+                        completed_steps / total_steps,
+                        (
+                            f"Testing artifact {candidate_number} of "
+                            f"{len(candidates)} · target {scenario_number} of "
+                            f"{scenario_count}"
+                        ),
+                    )
 
             level = int(batch.levels[index])
             checkpoint = _next_checkpoint(level)

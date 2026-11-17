@@ -7,11 +7,15 @@ import json
 from pathlib import Path
 import shlex
 import sys
+from time import monotonic
 from typing import Any, Mapping, Sequence
 
 import numpy as np
 
 from .cache import ResultCache, cache_key
+from .inventory import MAIN_STAT_REVISION, load_inventory
+from .library import load_library, load_mechanics
+from .library_search import search_builds
 from .farming import (
     DefinitionSpec,
     FarmConfig,
@@ -68,9 +72,7 @@ def _jsonable(value: object) -> object:
     return value
 
 
-def _emit(
-    value: object, output: str | None = None, *, sort_keys: bool = True
-) -> None:
+def _emit(value: object, output: str | None = None, *, sort_keys: bool = True) -> None:
     payload = json.dumps(_jsonable(value), indent=2, sort_keys=sort_keys)
     if output:
         Path(output).write_text(payload + "\n", encoding="utf-8")
@@ -99,11 +101,15 @@ def _scenario_inputs(values: Sequence[str] | None) -> list[Scenario]:
 def _evaluator_and_scenarios(
     scenarios: Sequence[Scenario], adapter_command: str | None
 ) -> tuple[BuiltinEvaluator | GOEvaluator, list[Scenario], list[str]]:
-    exact_go = [scenario for scenario in scenarios if scenario.metadata.get("adapter_required")]
+    exact_go = [
+        scenario for scenario in scenarios if scenario.metadata.get("adapter_required")
+    ]
     warnings: list[str] = []
     if adapter_command:
         if len(exact_go) != len(scenarios):
-            raise ValueError("a GO adapter run cannot currently mix GO and built-in scenarios")
+            raise ValueError(
+                "a GO adapter run cannot currently mix GO and built-in scenarios"
+            )
         return GOEvaluator(shlex.split(adapter_command)), list(scenarios), warnings
     exact_ids = {id(scenario) for scenario in exact_go}
     enabled = [scenario for scenario in scenarios if id(scenario) not in exact_ids]
@@ -180,7 +186,9 @@ def _command_import_akasha(args: argparse.Namespace) -> None:
     )
 
 
-def _analysis(args: argparse.Namespace) -> tuple[object, dict[str, Any], list[Scenario], object, list[str]]:
+def _analysis(
+    args: argparse.Namespace,
+) -> tuple[object, dict[str, Any], list[Scenario], object, list[str]]:
     batch, data = load_good(args.good)
     requested = _scenario_inputs(args.scenarios)
     evaluator, scenarios, warnings = _evaluator_and_scenarios(
@@ -250,6 +258,107 @@ def _command_delete(args: argparse.Namespace) -> None:
     )
 
 
+def _command_library_builds(args: argparse.Namespace) -> None:
+    """Diagnostic integration path; never emits deletion recommendations."""
+    inventory = load_inventory(args.good)
+    library = load_library(args.library)
+    compiled = library.compile(
+        load_mechanics(args.mechanics),
+        allow_draft=args.allow_draft,
+        scenario_ids=args.scenario,
+    )
+    selected = compiled.select(include_speculative=args.include_speculative)
+    if not selected:
+        raise ValueError("no scenarios selected")
+    if args.time_limit <= 0 or not np.isfinite(args.time_limit):
+        raise ValueError("time limit must be finite and positive")
+    deadline = monotonic() + args.time_limit
+    reports = []
+    for scenario in selected:
+        remaining = deadline - monotonic()
+        if remaining <= 0:
+            reports.append(
+                {
+                    "scenario": scenario.definition.id,
+                    "family": scenario.definition.family,
+                    "status": "timed_out",
+                    "builds": [],
+                }
+            )
+            continue
+        result = search_builds(
+            inventory,
+            scenario,
+            top_k=args.top_k,
+            max_evaluations=args.max_evaluations,
+            time_limit=remaining,
+            seed=args.seed,
+        )
+        reports.append(
+            {
+                "scenario": scenario.definition.id,
+                "family": scenario.definition.family,
+                "status": result.status,
+                "provenInfeasible": result.proven_infeasible,
+                "evaluated": result.evaluated,
+                "combinations": result.combinations,
+                "builds": [
+                    {
+                        "artifactIds": item.build.artifact_ids,
+                        "score": item.evaluation.score,
+                        "setCounts": dict(item.build.set_counts),
+                        "mainStats": dict(item.build.main_stats),
+                        "effectiveStats": dict(item.evaluation.effective_stats),
+                    }
+                    for item in result.builds
+                ],
+            }
+        )
+    _emit(
+        {
+            "kind": "library-build-diagnostics",
+            "inventoryFingerprint": inventory.fingerprint(),
+            "libraryFingerprint": compiled.fingerprint,
+            "mainStatRevision": MAIN_STAT_REVISION,
+            "formulaValidation": {
+                "draft": compiled.draft,
+                "limitations": compiled.limitations,
+            },
+            "coverage": "selected scenarios only; not a declaration of complete role coverage",
+            "futureModel": "not evaluated by this current-build command",
+            "results": reports,
+        },
+        args.output,
+    )
+
+
+def _command_library_delete(args: argparse.Namespace) -> None:
+    from .artifact_sampling import sampling_rules
+    from .library_analysis import deletion_report
+
+    inventory = load_inventory(args.good)
+    library = load_library(args.library).compile(
+        load_mechanics(args.mechanics),
+        allow_draft=args.allow_draft,
+        scenario_ids=args.scenario,
+    )
+    result = deletion_report(
+        inventory,
+        library,
+        sampling_rules(),
+        args.free,
+        pinned_ids=args.pin,
+        trial_count=args.trials,
+        population_size=args.population,
+        max_evaluations=args.max_evaluations,
+        time_limit=args.time_limit,
+        seed=args.seed,
+        cache=ResultCache(args.cache) if args.cache else None,
+        reuse=not args.no_reuse,
+    )
+    _emit(result, args.output)
+
+
 def _command_upgrades(args: argparse.Namespace) -> None:
     batch, _, scenarios, evaluator, warnings = _analysis(args)
     cache = ResultCache(args.cache) if args.cache else None
@@ -289,9 +398,7 @@ def _command_farm(args: argparse.Namespace) -> None:
         DefinitionSpec(values[0], values[1], values[2], (values[3], values[4]))
         for values in args.define
     ]
-    reshapes = [
-        ReshapeSpec(values[0], int(values[1])) for values in args.reshape
-    ]
+    reshapes = [ReshapeSpec(values[0], int(values[1])) for values in args.reshape]
     result = simulate_farming(
         batch,
         scenarios,
@@ -397,6 +504,48 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="artifact-sort")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
+    library_builds = subparsers.add_parser(
+        "library-builds",
+        help="diagnose legal current builds using an encoded scenario library",
+    )
+    library_builds.add_argument("good")
+    library_builds.add_argument("library")
+    library_builds.add_argument("--mechanics", required=True)
+    library_builds.add_argument("--allow-draft", action="store_true")
+    library_builds.add_argument("--scenario", action="append")
+    library_builds.add_argument("--include-speculative", action="store_true")
+    library_builds.add_argument("--top-k", type=int, default=20)
+    library_builds.add_argument("--max-evaluations", type=int, default=100_000)
+    library_builds.add_argument("--time-limit", type=float, default=180.0)
+    library_builds.add_argument("--seed", type=int, default=0)
+    library_builds.add_argument("--output")
+    library_builds.set_defaults(func=_command_library_builds)
+
+    library_delete = subparsers.add_parser(
+        "library-delete",
+        help="joint deletion diagnostics using the encoded scenario library",
+    )
+    library_delete.add_argument("good")
+    library_delete.add_argument("library")
+    library_delete.add_argument("--mechanics", required=True)
+    library_delete.add_argument("--allow-draft", action="store_true")
+    library_delete.add_argument("--scenario", action="append")
+    library_delete.add_argument("--free", type=int, required=True)
+    library_delete.add_argument("--pin", action="append", default=[])
+    library_delete.add_argument("--trials", type=int, default=16)
+    library_delete.add_argument("--population", type=int, default=1000)
+    library_delete.add_argument("--max-evaluations", type=int, default=100_000)
+    library_delete.add_argument("--time-limit", type=float, default=180)
+    library_delete.add_argument("--seed", type=int, default=0)
+    library_delete.add_argument("--cache", default=".artifact-sort/cache.sqlite")
+    library_delete.add_argument("--output")
+    library_delete.add_argument(
+        "--no-reuse",
+        action="store_true",
+        help="disable report and intermediate reuse for comparison runs",
+    )
+    library_delete.set_defaults(func=_command_library_delete)
+
     import_go_parser = subparsers.add_parser(
         "import-go",
         help="create scenarios from a complete Genshin Optimizer database download",
@@ -447,7 +596,9 @@ def build_parser() -> argparse.ArgumentParser:
     farm_parser.add_argument("good")
     _add_scenarios(farm_parser)
     farm_parser.add_argument("--increase", type=float, required=True)
-    farm_parser.add_argument("--domain-set", nargs=2, default=("DomainSetA", "DomainSetB"))
+    farm_parser.add_argument(
+        "--domain-set", nargs=2, default=("DomainSetA", "DomainSetB")
+    )
     farm_parser.add_argument("--trials", type=int, default=100)
     farm_parser.add_argument("--seed", type=int, default=0)
     farm_parser.add_argument("--max-resin", type=int, default=100_000)
@@ -479,7 +630,9 @@ def build_parser() -> argparse.ArgumentParser:
     benchmark_parser.add_argument("good")
     _add_scenarios(benchmark_parser)
     benchmark_parser.add_argument("--heldout", nargs="+")
-    benchmark_parser.add_argument("--kind", choices=("deletion", "upgrade"), default="deletion")
+    benchmark_parser.add_argument(
+        "--kind", choices=("deletion", "upgrade"), default="deletion"
+    )
     benchmark_parser.add_argument("--free", type=int, default=20)
     benchmark_parser.add_argument("--increase", type=float, default=0.05)
     benchmark_parser.add_argument("--trials", type=int, default=20)

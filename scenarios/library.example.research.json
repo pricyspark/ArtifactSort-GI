@@ -1,0 +1,156 @@
+{
+  "library_revision": "example-5",
+  "created_with": "Codex assistance",
+  "sources": {
+    "kqm-ayaka": {
+      "url": "https://keqingmains.com/ayaka/",
+      "title": "KQM Ayaka Guide",
+      "retrieved_at": "2026-10-02"
+    },
+    "kqm-set-formulas": {
+      "url": "https://library.keqingmains.com/equipment/artifacts",
+      "title": "KQM TCL Artifacts",
+      "locator": "Emblem of Severed Fate",
+      "retrieved_at": "2026-10-02"
+    }
+  },
+  "scenarios": {
+    "atk-cryo-freeze": {
+      "status": "draft",
+      "sources": ["kqm-ayaka"],
+      "notes": [
+        "The guide supports distinguishing Frozen from Affected by Cryo conditions.",
+        "All numerical values are illustrative, not extracted or validated character recommendations.",
+        "No characters are assigned until the numerical assumptions have been checked for them.",
+        "The simplified model is not a complete character rotation calculation."
+      ],
+      "checks": []
+    },
+    "atk-cryo-freeze-higher-er": {
+      "status": "draft",
+      "sources": [],
+      "notes": [
+        "Illustrates a parameter sensitivity case; 180% ER is an assumed example, not a sourced requirement."
+      ],
+      "checks": []
+    },
+    "hp-cryo-freeze": {
+      "status": "draft",
+      "sources": [],
+      "notes": [
+        "Hypothetical HP-scaling archetype using an existing set condition; not a prediction of a future character.",
+        "Numerical inputs are illustrative and need a bounded, justified coverage policy."
+      ],
+      "checks": []
+    },
+    "speculative-atk-hp-cryo-flat": {
+      "status": "draft",
+      "sources": [],
+      "notes": [
+        "All coefficients and base stats are assumed solely to demonstrate component composition; no character or future kit is asserted."
+      ],
+      "checks": []
+    }
+  },
+  "components": {
+    "average-crit": {
+      "status": "draft",
+      "description": "Expected crit multiplier with crit rate capped at 100%; crit damage is nonnegative.",
+      "sources": [],
+      "checks": [
+        {
+          "kind": "encoding-reference",
+          "inputs": {"critRate_": 0.5, "critDMG_": 1.0},
+          "expected": 1.5,
+          "observed": 1.5
+        },
+        {
+          "kind": "encoding-reference",
+          "inputs": {"critRate_": 1.2, "critDMG_": 2.0},
+          "expected": 3,
+          "observed": 3
+        }
+      ]
+    },
+    "emblem-er": {
+      "status": "draft",
+      "description": "At two pieces, add 0.20 ER before conversions and bonus evaluation.",
+      "sources": ["kqm-set-formulas"],
+      "checks": []
+    },
+    "emblem-burst-bonus": {
+      "status": "draft",
+      "description": "At four pieces, Burst DMG bonus is one quarter of effective ER, capped at 0.75 (75%).",
+      "sources": ["kqm-set-formulas"],
+      "checks": [
+        {
+          "kind": "encoding-reference",
+          "inputs": {"enerRech_": 2.0},
+          "expected": 0.5,
+          "observed": 0.5
+        },
+        {
+          "kind": "encoding-reference",
+          "inputs": {"enerRech_": 4.0},
+          "expected": 0.75,
+          "observed": 0.75
+        }
+      ]
+    },
+    "example-hp-flat-damage": {
+      "status": "draft",
+      "description": "Illustrative additive base damage proportional to effective HP; coefficient is an explicit scenario parameter, not a real kit claim.",
+      "sources": [],
+      "checks": [
+        {
+          "kind": "encoding-reference",
+          "inputs": {"hp": 20000, "hp_flat_coefficient": 0.01},
+          "expected": 200,
+          "observed": 200
+        }
+      ]
+    }
+  },
+  "scoring_formulas": {
+    "atk-cryo-crit": {
+      "status": "draft",
+      "description": "Explicit encoded approximation preserving the previous numerical proxy; output unit follows its primary scaling stat.",
+      "sources": [],
+      "checks": []
+    },
+    "hp-cryo-crit": {
+      "status": "draft",
+      "description": "Explicit encoded approximation preserving the previous numerical proxy; output unit follows its primary scaling stat.",
+      "sources": [],
+      "checks": []
+    },
+    "atk-hp-added-cryo": {
+      "status": "draft",
+      "description": "Illustrates base ATK damage plus an HP-derived additive term before ordinary bonus and crit factors.",
+      "sources": [],
+      "checks": [
+        {
+          "kind": "encoding-reference",
+          "inputs": {
+            "atk": 1000,
+            "hp": 20000,
+            "cryo_dmg_": 0.5,
+            "critRate_": 0.5,
+            "critDMG_": 1.0,
+            "hp_flat_coefficient": 0.01,
+            "common_dmg_bonus": 0.0
+          },
+          "expected": 2700,
+          "observed": 2700
+        }
+      ]
+    }
+  },
+  "coverage_gaps": [
+    {
+      "use": "Executable expression engine and full set-effect coverage",
+      "reason": "v4 encodes arithmetic and activation only. Runtime compilation, unit checking, and most set/character effects are not implemented; no deletion integration or full damage simulation is implied."
+    }
+  ],
+  "unit_convention": "All machine-readable percentage stats and bonuses are decimal ratios. Source prose may use % notation; normalize it once before authoring numerical entries."
+}

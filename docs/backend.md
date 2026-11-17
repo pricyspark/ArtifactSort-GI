@@ -30,6 +30,19 @@ speculative regret. Artifact-stat finite differences are used only for Pareto
 pruning and search order; every accepted build is evaluated with the nonlinear
 utility.
 
+Use `set_strategies` when more than one composition is acceptable. For example,
+this allows either a four-piece set or a particular two-plus-two combination:
+
+```json
+"set_strategies": [
+  {"required_sets": {"GoldenTroupe": 4}},
+  {"required_sets": {"GoldenTroupe": 2, "GladiatorsFinale": 2}}
+]
+```
+
+`required_sets` remains the concise form for one mandatory composition; it
+cannot be combined with `set_strategies` in the same scenario.
+
 ## GO
 
 Download the complete current database from GO's **Settings > Database >
@@ -50,9 +63,27 @@ The resolved team context, representative build, stat filters, selected custom
 multi-target, individual target weights, enemy settings, reactions, and bonus
 stats are preserved. Real and equipped builds are converted into aggregate
 theorycraft baselines for build screening while their exact weapon and artifact
-records remain in the scenario metadata for the GO evaluator. Character formula
-paths are marked `adapter_required`; the built-in evaluator disables them rather
-than silently approximating them.
+records remain in the scenario metadata for the GO evaluator.
+
+When an optimization configuration links to a saved `generatedBuildList`, the
+importer resolves its GO-ranked artifact builds and records their distinct set
+compositions as alternative `set_strategies`. These strategies already reflect
+the set choices made by GO's exact calculation at the time that optimizer result
+was generated. The first ranked build's artifact IDs are retained as reference
+artifacts. If no generated result exists, an explicit theorycraft set definition
+is used as the fallback. A merely equipped or saved real set is not treated as a
+hard constraint.
+
+Candidate search reserves full screening depth for every set named by a strategy
+and accepts a build when it satisfies any strategy. This allows four-piece and
+two-plus-two options to compete within one character target while still allowing
+a global off-piece. Re-run optimization in GO before exporting if its saved
+generated build lists are stale.
+
+Character formula paths are marked `adapter_required`; the built-in evaluator
+disables them rather than silently approximating them. The GUI explicitly uses
+the imported set strategies as a local screening approximation. It does not
+claim to recalculate the set effects themselves.
 
 The optional `--go-adapter "node path/to/adapter.js"` command starts one pinned
 local process. Communication is newline-delimited JSON:

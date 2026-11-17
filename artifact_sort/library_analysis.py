@@ -22,7 +22,7 @@ from .library_cache import AnalysisCache
 from .reference_contexts import generate_reference_contexts
 from .reference_profiles import ReferenceProfiles, generate_reference_profiles
 
-ANALYSIS_VERSION = "encoded-deletion-3"
+ANALYSIS_VERSION = "encoded-deletion-4"
 
 
 @dataclass(frozen=True, slots=True)

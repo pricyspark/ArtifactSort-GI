@@ -21,6 +21,10 @@ Json: TypeAlias = None | bool | int | float | str | list["Json"] | dict[str, "Js
 Scalar: TypeAlias = bool | float | str
 Dimension: TypeAlias = tuple[tuple[str, int], ...]
 Stats: TypeAlias = Mapping[str, float]
+BatchValue: TypeAlias = float | NDArray[np.float64]
+BatchStats: TypeAlias = Mapping[str, BatchValue]
+# Python 3.12+ uses compensated floating-point summation in sum().
+_COMPENSATED_SUM = sum([1e16, 1.0, -1e16]) == 1.0
 STAGES = {"static": 0, "conversion": 1, "bonus": 2, "score": 3}
 STAT_STAGES = {"base": 0, "raw": 1, "effective": 2}
 
@@ -214,6 +218,61 @@ class Program:
     stat_reads: frozenset[tuple[int, str]]
     channel_reads: frozenset[str]
     component_reads: frozenset[str]
+
+    def evaluate_batch(
+        self,
+        stats: tuple[BatchStats, BatchStats, BatchStats],
+        channels: BatchStats,
+        count: int,
+    ) -> NDArray[np.float64]:
+        """Execute the same instruction stream on arrays of candidate values."""
+        values = []
+        with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
+            for instruction in self.instructions:
+                op = instruction.op
+                if op == "constant":
+                    result = instruction.value
+                elif op == "stat":
+                    try:
+                        result = stats[instruction.stage][instruction.key]
+                    except KeyError as error:
+                        raise EvaluationError(f"missing stat {instruction.key!r}") from error
+                elif op == "channel":
+                    result = channels[instruction.key]
+                else:
+                    args = [values[i] for i in instruction.args]
+                    if op == "add" and _COMPENSATED_SUM and len(args) > 2:
+                        high = np.zeros(count)
+                        low = np.zeros(count)
+                        for arg in args:
+                            updated = high + arg
+                            low += np.where(np.abs(high) >= np.abs(arg),
+                                            (high - updated) + arg,
+                                            (arg - updated) + high)
+                            high = updated
+                        result = high + low
+                    elif op in ("add", "multiply", "min", "max"):
+                        result = args[0]
+                        operation = {"add": np.add, "multiply": np.multiply,
+                                     "min": np.minimum, "max": np.maximum}[op]
+                        for arg in args[1:]:
+                            result = operation(result, arg)
+                    elif op == "subtract":
+                        result = np.subtract(*args)
+                    elif op == "divide":
+                        if np.any(np.asarray(args[1]) == 0):
+                            raise EvaluationError("division by zero")
+                        result = np.divide(*args)
+                    elif op == "clamp":
+                        if np.any(np.asarray(args[1]) > args[2]):
+                            raise EvaluationError("reversed clamp bounds")
+                        result = np.minimum(np.maximum(args[0], args[1]), args[2])
+                    else:
+                        raise EvaluationError(f"unsupported operation {op!r}")
+                if not np.all(np.isfinite(result)):
+                    raise EvaluationError(f"nonfinite value in {op}")
+                values.append(result)
+        return np.broadcast_to(values[self.result], (count,))
 
     def evaluate(self, stats: tuple[Stats, Stats, Stats], channels: Stats) -> float:
         values: list[float] = []

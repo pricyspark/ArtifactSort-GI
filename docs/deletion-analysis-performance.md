@@ -364,3 +364,47 @@ do not validate expanded joint deletion quality or future-value preservation.
 No additional algorithmic optimization or independent future-upgrade simulation
 was implemented as part of this findings update. Increasing sampling or budgets
 further is not the recommended next diagnostic step.
+
+## Batched evaluation and greedy screening, 2026-11-17
+
+The normal encoded search now precomputes artifact vectors and evaluates builds
+in NumPy batches, including staged effects and constraints. It reconstructs full
+build objects only for retained score/context witnesses. Larger candidate products
+use local gradient-derived dot-product shortlists within each set/main stratum,
+with extra constraint extremes and conversion dependencies. Starts explicitly
+include optional set-effect thresholds: merely ranking individual pieces can
+miss a four-piece activation requiring several simultaneous replacements.
+Small products still enumerate every combination. The 31 future patterns and
+joint deletion objectives remain unchanged.
+
+A synthetic 600-artifact comparison, using the pre-change search source and a
+crit/ER/set-bonus formula, measured 1.44 seconds and 20,000 evaluations before,
+0.15 seconds and 18,356 evaluations with batching and no screening, and 0.11
+seconds and 3,478 evaluations with screening. All found the same best score.
+These compare complete algorithms, including changed starting builds and restart
+counts, rather than isolating a single operation. Early screening experiments
+lost a substantial set-bonus opportunity; explicit activation seeds corrected
+that case. Neither matching scores nor those seeds prove global optimality.
+
+The reproducible current-version benchmark is:
+
+```sh
+python -m scripts.benchmark_library_search --rows 10000 --seeds 3
+```
+
+On the bundled `atk-cryo-freeze` example with 1,000 legally sampled artifacts,
+10,000 already-assembled formula evaluations took 0.502 seconds scalar versus
+0.0073 seconds batched. Across three search seeds, unscreened batch searches
+took 0.159–0.184 seconds and 18,479–18,716 evaluations; screened searches took
+0.141–0.148 seconds and 4,587–4,931 evaluations. Screened best scores matched
+or exceeded the corresponding unscreened results in this sample. This is limited
+search-quality evidence, not a bound on pruning error. Cheap formulas can make
+screening overhead significant despite fewer formula evaluations.
+
+Scalar/batch parity tests cover conversions, conditional activation, caps,
+channels, arithmetic errors, threshold tolerance, and cancellation. Existing
+exact-search, joint-selection, and cache tests also exercise the new path. The
+checkout lacks `scenarios/library.pilot.json`, `scenarios/library.json`, and the
+authoring-schema copy, preventing the pre-existing full research-library suite
+from running. No real-inventory end-to-end speedup is established by these
+synthetic/example measurements.

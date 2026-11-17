@@ -16,11 +16,28 @@ sampling and game coverage remain unvalidated.
 - `assemble_build` requires five distinct artifacts, one per slot, and computes
   aggregate additions, actual set counts, and main assignments. `evaluate_build`
   passes these through the compiled scenario evaluator.
-- `search_builds` exactly enumerates small candidate products. Larger products
-  use reproducible multi-start coordinate search with exact replacement scoring.
+- `search_builds` exactly enumerates small candidate products in batches of up
+  to 512 builds. Larger products use reproducible multi-start coordinate search
+  with local dot-product candidate screening and full-formula batch scoring.
+  Screening keeps at least `max(12, top_k)` artifacts per slot/set/main-stat
+  group, the current piece, and two extremes in each direction for constrained
+  stats and their stat-conversion dependencies. Weights refresh with the local
+  build; repeated shortlists are reused. Screening is approximate, not dominance
+  pruning. `candidate_limit=None` disables screening for comparisons. Starts
+  include allowed set strategies and optional set-effect activation thresholds;
+  normally at most 16 starts are used, increasing for strategy coverage up to 64.
+  Artifact arrays are prepared once per search, and detailed build/evaluation
+  objects are reconstructed only for pool and context witnesses.
   Results distinguish exact, approximate, and timed-out searches. Only an exact
   search with no qualifying build establishes infeasibility within that selected
   scenario and inventory.
+- `batch_evaluation.evaluate_batch` executes compiled arithmetic over NumPy
+  candidate arrays, including staged conversions, actual set counts, masked
+  conditional effects, additive/multiplicative channels, caps, and requirements.
+  Inactive rows do not execute an effect's arithmetic. The checked scalar
+  evaluator remains the correctness reference. Intermediate-search and report
+  fingerprints distinguish the new evaluator/search behavior; unchanged upgrade
+  outcomes and sampled populations remain reusable.
 - `CompiledScenario.linearize` differentiates the complete active numerical
   calculation, including primary stat scaling, conversions, and additive or
   multiplicative channels. It returns an evaluation, weights in decimal units,

@@ -8,15 +8,18 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import heapq
-from itertools import product
+from itertools import islice, product
 import math
 import random
 from time import monotonic
 from typing import TYPE_CHECKING, Iterable, Literal
 
+import numpy as np
+
+from .batch_evaluation import evaluate_batch
 from .inventory import MAIN_STATS, Artifact, Build, Inventory, assemble_build
 from .library_runtime import CompiledScenario, Evaluation
-from .model import SLOT_KEYS
+from .model import SLOT_KEYS, STAT_KEYS
 
 if TYPE_CHECKING:
     from .library_cache import AnalysisCache
@@ -46,35 +49,6 @@ class SearchResult:
         return self.status == "exact" and not self.builds
 
 
-def _feasibility_rank(
-    result: ScoredBuild, scenario: CompiledScenario
-) -> tuple[bool, int, float, float, tuple[str, ...]]:
-    """Guide infeasible starts without replacing the scenario's score objective."""
-    definition = scenario.definition
-    evaluation = result.evaluation
-    deficit = sum(
-        max(0.0, value - evaluation.effective_stats[key]) / max(abs(value), 1.0)
-        for key, value in definition.minimums.items()
-    ) + sum(
-        max(0.0, evaluation.effective_stats[key] - value) / max(abs(value), 1.0)
-        for key, value in definition.maximums.items()
-    )
-    missing_set_pieces = min(
-        sum(
-            max(0, count - result.build.set_counts.get(key, 0))
-            for key, count in strategy.items()
-        )
-        for strategy in definition.sets
-    )
-    return (
-        not evaluation.feasible,
-        missing_set_pieces,
-        deficit,
-        -evaluation.score,
-        result.build.artifact_ids,
-    )
-
-
 def search_builds(
     inventory: Inventory,
     scenario: CompiledScenario,
@@ -85,18 +59,25 @@ def search_builds(
     time_limit: float | None = None,
     seed: int = 0,
     collect_contexts: bool = False,
+    candidate_limit: int | None = 12,
     cache: AnalysisCache | None = None,
 ) -> SearchResult:
     """Search actual current stats; unfinished pieces get no fictitious growth.
 
     Exhaustively enumerate when the full candidate product fits the budget.
-    Otherwise use reproducible random starts and exact single-slot swaps.
+    Otherwise use reproducible starts, local dot-product shortlists, and
+    batched full-formula single-slot swaps. Shortlisting is approximate.
+    candidate_limit retains at least that many pieces per set/main stratum
+    (and at least top_k), plus constraint extremes and the current piece.
+    None disables shortlisting for comparisons; it does not force enumeration.
     Approximate failure to find a qualifying build is never called infeasible.
     """
     if type(top_k) is not int or top_k <= 0:
         raise ValueError("top_k must be a positive integer")
     if type(max_evaluations) is not int or max_evaluations <= 0:
         raise ValueError("max_evaluations must be a positive integer")
+    if candidate_limit is not None and (type(candidate_limit) is not int or candidate_limit <= 0):
+        raise ValueError("candidate_limit must be a positive integer or None")
     if time_limit is not None and (not math.isfinite(time_limit) or time_limit <= 0):
         raise ValueError("time_limit must be finite and positive")
     pieces = inventory.select(available_ids)
@@ -121,7 +102,8 @@ def search_builds(
     key = None
     if cache is not None:
         key = cache.search_key(
-            scenario, candidates, top_k, max_evaluations, seed, collect_contexts
+            scenario, candidates, top_k, max_evaluations, seed, collect_contexts,
+            candidate_limit,
         )
         cached = cache.get_search(key)
         if cached is not None:
@@ -134,16 +116,28 @@ def search_builds(
         return empty
     deadline = math.inf if time_limit is None else monotonic() + time_limit
     exact = combinations <= max_evaluations
-    seen: dict[tuple[str, ...], ScoredBuild] = {}
+    # Artifact stats/main values and set encodings are prepared once, rather than
+    # reconstructed and validated for every five-piece combination.
+    flat = tuple(a for group in candidates for a in group)
+    groups = []
+    offset = 0
+    for group in candidates:
+        groups.append(tuple(range(offset, offset + len(group))))
+        offset += len(group)
+    stat_maps = [a.stats for a in flat]
+    vectors = np.array([[stats.get(key, 0.0) for key in STAT_KEYS] for stats in stat_maps])
+    set_names = tuple(sorted({a.set_key for a in flat}))
+    set_codes = np.array([set_names.index(a.set_key) for a in flat])
+    main_names = np.array([a.main_stat for a in flat])
     evaluated = 0
     heap: list[tuple[float, tuple[str, ...], ScoredBuild]] = []
     retained_ids: set[tuple[str, ...]] = set()
-    contexts: dict[
-        tuple[tuple[str, ...], tuple[bool, ...], tuple[int, ...]], ScoredBuild
-    ] = {}
+    contexts = {}
     status: Literal["exact", "approximate", "timed_out"] = (
         "exact" if exact else "approximate"
     )
+    # A restart's memo stores compact ranks, not full evaluated build objects.
+    seen = {}
 
     def exhausted() -> bool:
         nonlocal status
@@ -152,96 +146,222 @@ def search_builds(
             return True
         return evaluated >= max_evaluations
 
-    def evaluate(loadout: tuple[Artifact, ...]) -> ScoredBuild:
+    def identities(loadout):
+        return tuple(flat[index].id for index in loadout)
+
+    def evaluate_many(loadouts):
         nonlocal evaluated
-        identity = tuple(a.id for a in loadout)
-        if identity in seen:
-            return seen[identity]
-        build = assemble_build(loadout)
-        evaluation = scenario.evaluate(
-            build.stats, build.set_counts, main_stats=build.main_stats
-        )
-        result = ScoredBuild(build, evaluation)
-        evaluated += 1
-        if not exact:
-            seen[identity] = result
-        if collect_contexts and evaluation.feasible:
-            key = (
-                tuple(build.main_stats[slot] for slot in SLOT_KEYS),
-                tuple(
-                    effect.when is None
-                    or effect.when.evaluate(
-                        scenario.definition.conditions, build.set_counts
-                    )
-                    for effect in scenario.effects
-                ),
-                tuple(
-                    index
-                    for index, strategy in enumerate(scenario.definition.sets)
-                    if all(
-                        build.set_counts.get(name, 0) >= count
-                        for name, count in strategy.items()
-                    )
-                ),
+        loadouts = list(dict.fromkeys(loadouts))
+        fresh = [loadout for loadout in loadouts if loadout not in seen]
+        fresh = fresh[:max_evaluations - evaluated]
+        if not fresh:
+            return
+        indexes = np.asarray(fresh, dtype=np.int64)
+        # Explicit left-to-right accumulation agrees with scalar build assembly.
+        additions = np.zeros((len(fresh), len(STAT_KEYS)))
+        for slot in range(5):
+            additions += vectors[indexes[:, slot]]
+        codes = set_codes[indexes]
+        counts = {key: np.sum(codes == i, axis=1) for i, key in enumerate(set_names)}
+        mains = {slot: main_names[indexes[:, i]] for i, slot in enumerate(SLOT_KEYS)}
+        batch = evaluate_batch(scenario, additions, counts, main_stats=mains)
+        evaluated += len(fresh)
+        for i, loadout in enumerate(fresh):
+            seen[loadout] = (
+                not bool(batch.feasible[i]), int(batch.missing_set_pieces[i]),
+                float(batch.deficit[i]), -float(batch.scores[i]), identities(loadout),
             )
-            previous = contexts.get(key)
-            if previous is None or (result.evaluation.score, identity) > (
-                previous.evaluation.score,
-                previous.build.artifact_ids,
-            ):
-                contexts[key] = result
-        if evaluation.feasible and identity not in retained_ids:
-            item = evaluation.score, identity, result
-            if len(heap) < top_k:
-                heapq.heappush(heap, item)
+
+        materialized = {}
+
+        def materialize(i):
+            if i not in materialized:
+                build = assemble_build(flat[index] for index in fresh[i])
+                materialized[i] = ScoredBuild(build, batch.row(i))
+            return materialized[i]
+
+        feasible = np.flatnonzero(batch.feasible)
+        # Only reconstruct the best rows, including deterministic identity ties.
+        contenders = feasible
+        if len(contenders) > top_k:
+            cutoff = np.partition(batch.scores[contenders], -top_k)[-top_k]
+            contenders = contenders[batch.scores[contenders] >= cutoff]
+        contenders = sorted(contenders, key=lambda i: (
+            float(batch.scores[i]), identities(fresh[i])), reverse=True)[:top_k]
+        for i in contenders:
+            identity = identities(fresh[i])
+            score = float(batch.scores[i])
+            if identity in retained_ids:
+                continue
+            if len(heap) < top_k or (score, identity) > heap[0][:2]:
+                item = score, identity, materialize(i)
+                if len(heap) < top_k:
+                    heapq.heappush(heap, item)
+                else:
+                    removed = heapq.heapreplace(heap, item)
+                    retained_ids.remove(removed[1])
                 retained_ids.add(identity)
-            elif item[:2] > heap[0][:2]:
-                removed = heapq.heapreplace(heap, item)
-                retained_ids.remove(removed[1])
-                retained_ids.add(identity)
-        return result
+        if collect_contexts:
+            # Group structural regimes cheaply before reconstructing witnesses.
+            # The activation predicates are constant within a set composition.
+            regimes = {}
+            for i in feasible:
+                signature = (tuple(mains[slot][i] for slot in SLOT_KEYS), tuple(codes[i]))
+                previous = regimes.get(signature)
+                if previous is None or (batch.scores[i], identities(fresh[i])) > (
+                    batch.scores[previous], identities(fresh[previous])):
+                    regimes[signature] = i
+            for i in regimes.values():
+                sets = {key: int(value[i]) for key, value in counts.items()}
+                signature = (
+                    tuple(mains[slot][i] for slot in SLOT_KEYS),
+                    tuple(effect.when is None or effect.when.evaluate(
+                        scenario.definition.conditions, sets) for effect in scenario.effects),
+                    tuple(j for j, strategy in enumerate(scenario.definition.sets)
+                          if all(sets.get(key, 0) >= n for key, n in strategy.items())),
+                )
+                previous = contexts.get(signature)
+                if previous is None or (batch.scores[i], identities(fresh[i])) > (
+                    previous.evaluation.score, previous.build.artifact_ids):
+                    contexts[signature] = materialize(i)
 
     if exact:
-        for loadout in product(*candidates):
-            if exhausted():
+        iterator = product(*groups)
+        while not exhausted():
+            chunk = list(islice(iterator, min(512, max_evaluations - evaluated)))
+            if not chunk:
                 break
-            evaluate(loadout)
+            evaluate_many(chunk)
+            seen.clear()
     else:
         rng = random.Random(seed)
-        # More starts can recover different set/constraint regimes. Coordinate
-        # swaps can miss coordinated improvements; this mode stays approximate.
-        starts = max(1, min(64, max_evaluations // max(1, sum(map(len, candidates)))))
+        seed_strategies = list(scenario.definition.sets)
+        # A bonus can be optional rather than a hard set requirement. Seed its
+        # activation explicitly, since single-slot moves can get stuck below it.
+        def activation_thresholds(predicate):
+            if predicate is None:
+                return set()
+            if predicate.op == "set":
+                return {(predicate.key, predicate.pieces)}
+            return set().union(*(activation_thresholds(child) for child in predicate.args))
+
+        thresholds = set().union(*(activation_thresholds(effect.when) for effect in scenario.effects))
+        for key, n in sorted(thresholds):
+            if key not in set_names:
+                continue
+            for strategy in scenario.definition.sets:
+                proposal = {**strategy, key: max(n, strategy.get(key, 0))}
+                if sum(proposal.values()) <= 5 and proposal not in seed_strategies:
+                    seed_strategies.append(proposal)
+        # Greedy, set-aware seeds reduce the need for many blind restarts. Keep
+        # enough starts to visit each authored strategy, capped at 64.
+        start_cap = min(64, max(16, len(seed_strategies)))
+        # Constrained stats and their conversion dependencies supply additional
+        # screening directions. Keep both ends: upper bounds and excess stats
+        # make positive-only screening unsafe even as a heuristic.
+        constrained = set(scenario.definition.minimums) | set(scenario.definition.maximums)
+        required = set(constrained)
+        changed = True
+        while changed:
+            before = len(required)
+            for key in tuple(required & {"hp", "atk", "def"}):
+                required.add(f"{key}_")
+            for effect in scenario.effects:
+                kind, target = effect.target.split(".", 1)
+                if kind == "stats" and target in required:
+                    required.update(key for _, key in effect.program.stat_reads)
+            changed = len(required) != before
+        constraint_columns = [i for i, key in enumerate(STAT_KEYS) if key in required]
+        strata = []
+        constraint_keeps = []
+        for group in groups:
+            partitions = {}
+            for index in group:
+                a = flat[index]
+                partitions.setdefault((a.set_key, a.main_stat), []).append(index)
+            partitions = tuple(np.asarray(partition, dtype=np.int64) for partition in partitions.values())
+            strata.append(partitions)
+            keep = set()
+            for partition in partitions:
+                for column in constraint_columns:
+                    ordered = partition[np.argsort(vectors[partition, column], kind="stable")]
+                    keep.update(ordered[:2])
+                    keep.update(ordered[-2:])
+            constraint_keeps.append(keep)
+
+        sweep_size = sum(map(len, groups)) if candidate_limit is None else sum(
+            min(len(group), len(extra) + sum(min(len(partition), max(candidate_limit, top_k))
+                                           for partition in partitions))
+            for group, extra, partitions in zip(groups, constraint_keeps, strata)
+        )
+        starts = max(1, min(start_cap, max_evaluations // max(1, sweep_size)))
+
+        shortlist_cache = {}
+
+        def shortlists(loadout):
+            if candidate_limit is None:
+                return groups
+            if loadout in shortlist_cache:
+                return shortlist_cache[loadout]
+            build = assemble_build(flat[index] for index in loadout)
+            weights = scenario.linearize(build.stats, build.set_counts,
+                                         main_stats=build.main_stats).weights
+            with np.errstate(over="ignore", invalid="ignore"):
+                scores = vectors @ np.array([weights.get(key, 0) for key in STAT_KEYS])
+            if not np.all(np.isfinite(scores)):
+                return groups
+            selected = []
+            for slot, partitions in enumerate(strata):
+                keep = constraint_keeps[slot] | {loadout[slot]}
+                for partition in partitions:
+                    ordered = partition[np.argsort(scores[partition], kind="stable")][::-1]
+                    keep.update(ordered[:max(candidate_limit, top_k)])
+                selected.append(tuple(sorted(keep, key=lambda index: (scores[index], index), reverse=True)))
+            if len(shortlist_cache) < 256:
+                shortlist_cache[loadout] = selected
+            return selected
+
         for start in range(starts):
             if exhausted():
                 break
-            # Keep only one start's swap cache. Exact enumeration needs no cache;
-            # retaining every full stat snapshot would make large scans costly.
             seen.clear()
-            loadout = tuple(
-                group[0] if start == 0 else rng.choice(group) for group in candidates
+            loadout = tuple(group[0] if start == 0 else rng.choice(group) for group in groups)
+            evaluate_many([loadout])
+            # A greedy start for each allowed set strategy supplies coordinated
+            # set assignments before individual-slot improvement begins.
+            choices = shortlists(loadout)
+            strategy = seed_strategies[start % len(seed_strategies)]
+            reserved = {}
+            for set_key, n in strategy.items():
+                eligible = [slot for slot, group in enumerate(choices)
+                            if slot not in reserved and any(flat[i].set_key == set_key for i in group)]
+                rng.shuffle(eligible)
+                for slot in eligible[:n]:
+                    reserved[slot] = set_key
+            seed_loadout = tuple(
+                next((i for i in choices[slot] if flat[i].set_key == reserved[slot]), loadout[slot])
+                if slot in reserved else choices[slot][0] for slot in range(5)
             )
-            current = evaluate(loadout)
-            changed = True
-            while changed and not exhausted():
-                changed = False
-                for slot, group in enumerate(candidates):
-                    best = current
-                    best_loadout = loadout
-                    for artifact in group:
-                        if exhausted():
-                            break
-                        swapped = loadout[:slot] + (artifact,) + loadout[slot + 1 :]
-                        result = evaluate(swapped)
-                        if _feasibility_rank(result, scenario) < _feasibility_rank(
-                            best, scenario
-                        ):
-                            best = result
-                            best_loadout = swapped
-                    if best_loadout != loadout:
-                        loadout, current = best_loadout, best
-                        changed = True
+            evaluate_many([seed_loadout])
+            if seed_loadout in seen and seen[seed_loadout] < seen[loadout]:
+                loadout = seed_loadout
+            improved = True
+            while improved and not exhausted():
+                improved = False
+                choices = shortlists(loadout)
+                for slot, group in enumerate(choices):
                     if exhausted():
                         break
+                    proposals = [loadout[:slot] + (index,) + loadout[slot + 1:] for index in group]
+                    for offset in range(0, len(proposals), 512):
+                        if exhausted():
+                            break
+                        evaluate_many(proposals[offset:offset + 512])
+                    best = min((proposal for proposal in proposals if proposal in seen),
+                               key=seen.__getitem__)
+                    if seen[best] < seen[loadout]:
+                        loadout = best
+                        improved = True
     builds = tuple(
         item[2] for item in sorted(heap, key=lambda item: item[:2], reverse=True)
     )

@@ -86,6 +86,12 @@ flowchart TD
 - Gradients may order swaps and candidates. Exact-evaluate retained candidates;
   refresh local weights as contexts change. Explore multiple starting builds,
   set strategies, threshold regimes, and coordinated swaps.
+- Prioritize practical per-scenario optimization and diverse artifact-identity
+  alternatives for joint inventory selection over proving individual optima.
+  The normal larger-inventory search uses cheap batched dot-product shortlists
+  before full-formula batch evaluation. Preserve set/main alternatives and
+  constraint directions during screening, and report that screening is
+  approximate. Exhaustive small searches remain a comparison oracle.
 - Do not reuse positive-weight dominance pruning without proving it valid for
   the particular formulas, constraints, and identity needs.
 - Provide a bounded mode taking at most several minutes and an optional longer

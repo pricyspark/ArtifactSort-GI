@@ -23,7 +23,7 @@ from .formulas import (
 )
 from .model import STAT_KEYS
 
-EVALUATOR_VERSION = "encoded-arithmetic-2"
+EVALUATOR_VERSION = "encoded-arithmetic-3"
 PRIMARY_STATS = ("hp", "atk", "def")
 INTRINSIC_STATS = frozenset((*PRIMARY_STATS, "enerRech_", "critRate_", "critDMG_"))
 LEGAL_MAINS = {

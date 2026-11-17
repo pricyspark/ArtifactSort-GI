@@ -171,6 +171,7 @@ class AnalysisCache:
         max_evaluations: int,
         seed: int,
         collect_contexts: bool,
+        candidate_limit: int | None = 12,
     ) -> str:
         scenario_hash = self._fingerprint(scenario, scenario)
         pieces = [
@@ -189,6 +190,7 @@ class AnalysisCache:
                 max_evaluations,
                 seed,
                 collect_contexts,
+                candidate_limit,
             ]
         )
 
